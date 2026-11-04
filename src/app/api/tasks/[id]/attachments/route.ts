@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
+import { validateFileIntegrity, isPathContained, MAX_ATTACHMENT_SIZE } from "@/lib/fileSecurity";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
@@ -94,28 +95,32 @@ export async function POST(
       return NextResponse.json({ error: "ფაილი არ არის არჩეული" }, { status: 400 });
     }
 
-    if (file.size > 25 * 1024 * 1024) {
+    if (file.size > MAX_ATTACHMENT_SIZE) {
       return NextResponse.json({ error: "ფაილის მაქსიმალური ზომაა 25MB" }, { status: 400 });
     }
 
-    // Reject dangerous file extensions
-    const ext = path.extname(file.name).toLowerCase();
-    const dangerousExtensions = [".exe", ".bat", ".cmd", ".sh", ".php", ".vbs", ".msi", ".jar", ".ps1", ".scr", ".dll", ".com", ".pif"];
-    if (dangerousExtensions.includes(ext)) {
-      return NextResponse.json({ error: "ამ ტიპის ფაილის ატვირთვა აკრძალულია უსაფრთხოების მიზნით" }, { status: 400 });
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Deep file integrity & signature validation
+    const integrityCheck = validateFileIntegrity(buffer, file.name, file.type || "");
+    if (!integrityCheck.isValid) {
+      return NextResponse.json(
+        { error: integrityCheck.error || "ფაილის ფორმატი დაუშვებელია" },
+        { status: 400 }
+      );
     }
 
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
 
+    const ext = path.extname(file.name).toLowerCase();
     const safeExtension = ext.replace(/[^a-z0-9.]/g, "") || ".bin";
     const storedFileName = `${crypto.randomUUID()}${safeExtension}`;
-    const destinationPath = path.normalize(path.join(UPLOAD_DIR, storedFileName));
+    const destinationPath = path.resolve(UPLOAD_DIR, storedFileName);
 
-    if (!destinationPath.startsWith(path.normalize(UPLOAD_DIR))) {
+    if (!isPathContained(destinationPath, UPLOAD_DIR)) {
       return NextResponse.json({ error: "არასწორი ფაილის გზა" }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
     await fs.writeFile(destinationPath, buffer);
 
     const attachment = await prisma.attachment.create({

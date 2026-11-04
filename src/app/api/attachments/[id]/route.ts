@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
+import { isPathContained } from "@/lib/fileSecurity";
 import path from "path";
 import fs from "fs/promises";
 
@@ -28,9 +29,9 @@ export async function GET(
     }
 
     const safeStoredName = path.basename(attachment.storedName);
-    const filePath = path.normalize(path.join(UPLOAD_DIR, safeStoredName));
+    const filePath = path.resolve(UPLOAD_DIR, safeStoredName);
 
-    if (!filePath.startsWith(path.normalize(UPLOAD_DIR))) {
+    if (!isPathContained(filePath, UPLOAD_DIR)) {
       return NextResponse.json({ error: "არასწორი ფაილის გზა" }, { status: 400 });
     }
 
@@ -40,6 +41,8 @@ export async function GET(
         headers: {
           "Content-Type": attachment.mimeType,
           "Content-Disposition": `inline; filename="${encodeURIComponent(attachment.originalName)}"`,
+          "X-Content-Type-Options": "nosniff",
+          "Content-Security-Policy": "default-src 'none'; img-src 'self' data:; sandbox",
         },
       });
     } catch {

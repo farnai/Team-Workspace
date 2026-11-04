@@ -3,30 +3,67 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { format, addDays, subDays, startOfDay, endOfDay, isSameDay } from "date-fns";
 import { TaskType, Prisma } from "@prisma/client";
+import {
+  getGeorgianHolidaysForYear,
+  isDateWorkingDay,
+  formatDateKey,
+} from "@/lib/calendar";
 
 export async function GET(req: NextRequest) {
   try {
     await requireAuth();
 
     const { searchParams } = new URL(req.url);
-    const centerDateStr = searchParams.get("date"); // e.g. "2026-11-04"
+    const centerDateStr = searchParams.get("date"); // e.g. "2026-11-05"
+    const startDateParam = searchParams.get("startDate"); // optional explicit start
+    const endDateParam = searchParams.get("endDate"); // optional explicit end
     const rangeDays = parseInt(searchParams.get("days") || "14", 10);
     const mode = searchParams.get("mode") || "schedule"; // "schedule" or "activity"
     const projectId = searchParams.get("projectId") || undefined;
     const assigneeId = searchParams.get("assigneeId") || undefined;
     const type = (searchParams.get("type") as TaskType) || undefined;
 
-    const centerDate = centerDateStr ? new Date(centerDateStr) : new Date();
-    const startDate = startOfDay(subDays(centerDate, Math.floor(rangeDays / 2)));
-    const endDate = endOfDay(addDays(centerDate, Math.ceil(rangeDays / 2)));
+    let startDate: Date;
+    let endDate: Date;
+    let centerDate: Date;
 
-    // Load working calendar
+    if (startDateParam && endDateParam) {
+      const partsStart = startDateParam.split("-").map(Number);
+      const partsEnd = endDateParam.split("-").map(Number);
+      startDate = startOfDay(new Date(partsStart[0], partsStart[1] - 1, partsStart[2]));
+      endDate = endOfDay(new Date(partsEnd[0], partsEnd[1] - 1, partsEnd[2]));
+      centerDate = new Date(startDate.getTime() + (endDate.getTime() - startDate.getTime()) / 2);
+    } else {
+      if (centerDateStr) {
+        const parts = centerDateStr.split("-").map(Number);
+        centerDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      } else {
+        centerDate = new Date();
+      }
+      startDate = startOfDay(subDays(centerDate, Math.floor(rangeDays / 2)));
+      endDate = endOfDay(addDays(centerDate, Math.ceil(rangeDays / 2)));
+    }
+
+    // Load working calendar from DB
     const workingDays = await prisma.workingCalendar.findMany();
     const workingDaysMap = new Map<number, boolean>();
     workingDays.forEach((w) => workingDaysMap.set(w.dayOfWeek, w.isWorking));
 
-    // Load holidays in range
-    const holidays = await prisma.holiday.findMany({
+    // Combine algorithmic Georgian holidays and DB custom holidays
+    const startYear = startDate.getFullYear();
+    const endYear = endDate.getFullYear();
+    const holidaysMap = new Map<string, string>();
+
+    // 1. Official algorithmic Georgian public holidays (fixed + Orthodox Easter)
+    for (let y = startYear; y <= endYear; y++) {
+      const yearHolidays = getGeorgianHolidaysForYear(y);
+      for (const h of yearHolidays) {
+        holidaysMap.set(h.dateStr, h.name);
+      }
+    }
+
+    // 2. Custom holidays stored in database
+    const dbHolidays = await prisma.holiday.findMany({
       where: {
         date: {
           gte: startDate,
@@ -34,6 +71,9 @@ export async function GET(req: NextRequest) {
         },
       },
     });
+    for (const h of dbHolidays) {
+      holidaysMap.set(formatDateKey(new Date(h.date)), h.name);
+    }
 
     interface TimelineDateEntry {
       date: string;
@@ -51,17 +91,19 @@ export async function GET(req: NextRequest) {
     const dates: TimelineDateEntry[] = [];
     let cur = new Date(startDate);
     while (cur <= endDate) {
-      const dayOfWeek = cur.getDay();
-      const isWorking = workingDaysMap.get(dayOfWeek) ?? (dayOfWeek !== 0 && dayOfWeek !== 6);
-      const holiday = holidays.find((h) => isSameDay(new Date(h.date), cur));
+      const { isWorking, isWeekend, holidayName } = isDateWorkingDay(
+        cur,
+        workingDaysMap,
+        holidaysMap
+      );
 
       dates.push({
         date: format(cur, "yyyy-MM-dd"),
         dateObj: new Date(cur),
-        dayOfWeek,
-        isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
-        isWorking: holiday ? false : isWorking,
-        holidayName: holiday?.name || null,
+        dayOfWeek: cur.getDay(),
+        isWeekend,
+        isWorking,
+        holidayName,
         isToday: isSameDay(cur, new Date()),
         tasks: [],
         activities: [],
@@ -94,6 +136,11 @@ export async function GET(req: NextRequest) {
               startDate: { gte: startDate, lte: endDate },
               deadline: null,
             },
+            {
+              startDate: null,
+              deadline: null,
+              createdAt: { gte: startDate, lte: endDate },
+            },
           ],
         },
         include: {
@@ -101,6 +148,16 @@ export async function GET(req: NextRequest) {
           assignments: {
             include: {
               user: { select: { id: true, name: true, avatarUrl: true } },
+            },
+          },
+          stages: {
+            orderBy: { position: "asc" },
+            include: {
+              assignments: {
+                include: {
+                  user: { select: { id: true, name: true, avatarUrl: true } },
+                },
+              },
             },
           },
           subtasks: {
@@ -111,16 +168,25 @@ export async function GET(req: NextRequest) {
 
       // Project each task onto its relevant timeline dates
       for (const t of tasks) {
-        const taskStart = t.startDate ? startOfDay(new Date(t.startDate)) : (t.deadline ? startOfDay(new Date(t.deadline)) : null);
-        const taskEnd = t.deadline ? endOfDay(new Date(t.deadline)) : (t.startDate ? endOfDay(new Date(t.startDate)) : null);
+        const rawStart = t.startDate || t.deadline || t.createdAt;
+        const rawEnd = t.deadline || t.startDate || t.createdAt;
+        const taskStart = startOfDay(new Date(rawStart));
+        const taskEnd = endOfDay(new Date(rawEnd));
 
-        if (!taskStart || !taskEnd) continue;
+        // Find active stage
+        const activeStage = t.stages.find((s) => s.isActive && !s.isCompleted);
+        const stageResponsible = activeStage?.assignments.map((a) => a.user) || [];
+        const responsibleUsers =
+          stageResponsible.length > 0
+            ? stageResponsible
+            : t.assignments.map((a) => a.user);
 
         for (const d of dates) {
           const dayDate = d.dateObj;
-          if (dayDate >= startOfDay(taskStart) && dayDate <= endOfDay(taskEnd)) {
-            // Check if overdue relative to today
-            const isOverdue = t.deadline && new Date() > new Date(t.deadline) && t.status !== "DONE";
+          if (dayDate >= taskStart && dayDate <= taskEnd) {
+            const isOverdue = Boolean(
+              t.deadline && new Date() > new Date(t.deadline) && t.status !== "DONE"
+            );
 
             d.tasks.push({
               id: t.id,
@@ -132,10 +198,23 @@ export async function GET(req: NextRequest) {
               progress: t.progress,
               startDate: t.startDate,
               deadline: t.deadline,
+              deadlineLocked: t.deadlineLocked,
               isOverdue,
               assignees: t.assignments.map((a) => a.user),
+              responsibleUsers,
+              activeStage: activeStage
+                ? {
+                    id: activeStage.id,
+                    title: activeStage.title,
+                    position: activeStage.position,
+                    assignees: stageResponsible,
+                  }
+                : null,
               totalSubtasks: t.subtasks.length,
               doneSubtasks: t.subtasks.filter((s) => s.status === "DONE").length,
+              isSpanStart: isSameDay(dayDate, taskStart),
+              isSpanEnd: isSameDay(dayDate, taskEnd),
+              isMultiDay: !isSameDay(taskStart, taskEnd),
             });
           }
         }
@@ -169,7 +248,18 @@ export async function GET(req: NextRequest) {
         const eventDate = format(new Date(a.createdAt), "yyyy-MM-dd");
         const targetDate = dates.find((d) => d.date === eventDate);
         if (targetDate) {
-          targetDate.activities.push(a);
+          targetDate.activities.push({
+            id: a.id,
+            action: a.action,
+            entityType: a.entityType,
+            entityId: a.entityId,
+            createdAt: a.createdAt,
+            actor: a.actor,
+            task: a.task,
+            oldValues: a.oldValues,
+            newValues: a.newValues,
+            reason: a.reason,
+          });
         }
       }
     }

@@ -42,7 +42,9 @@ export default function WorkspacePage() {
 
   // Navigation & View State
   const [currentView, setCurrentView] = useState<NavView>("timeline");
-  const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-11-04T00:00:00Z"));
+  const [currentDate, setCurrentDate] = useState<Date>(
+    () => new Date("2026-11-05T00:00:00Z")
+  );
   const [searchQuery, setSearchQuery] = useState("");
 
   // Projects & Users State
@@ -308,6 +310,19 @@ export default function WorkspacePage() {
                   isLoading={isTimelineLoading}
                   onToggleBacklog={() => setIsBacklogOpen(true)}
                   isBacklogOpen={isBacklogOpen}
+                  currentDate={currentDate}
+                  onDateChange={setCurrentDate}
+                  onPrev={() => {
+                    const d = new Date(currentDate);
+                    d.setDate(d.getDate() - 7);
+                    setCurrentDate(d);
+                  }}
+                  onNext={() => {
+                    const d = new Date(currentDate);
+                    d.setDate(d.getDate() + 7);
+                    setCurrentDate(d);
+                  }}
+                  onToday={() => setCurrentDate(new Date())}
                 />
               </div>
 
