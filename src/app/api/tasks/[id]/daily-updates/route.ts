@@ -8,6 +8,33 @@ const createDailyUpdateSchema = z.object({
   content: z.string().min(1, "ჩანაწერი არ შეიძლება იყოს ცარიელი"),
 });
 
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireAuth();
+    const { id: taskId } = await params;
+
+    const dailyUpdates = await prisma.dailyUpdate.findMany({
+      where: { taskId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: { select: { id: true, name: true, avatarUrl: true } },
+      },
+    });
+
+    return NextResponse.json({ success: true, dailyUpdates });
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
+    }
+    console.error("GET /api/tasks/[id]/daily-updates error:", error);
+    return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

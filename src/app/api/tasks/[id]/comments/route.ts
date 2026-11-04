@@ -8,6 +8,33 @@ const createCommentSchema = z.object({
   content: z.string().min(1, "კომენტარი არ შეიძლება იყოს ცარიელი"),
 });
 
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireAuth();
+    const { id: taskId } = await params;
+
+    const comments = await prisma.comment.findMany({
+      where: { taskId },
+      orderBy: { createdAt: "asc" },
+      include: {
+        user: { select: { id: true, name: true, avatarUrl: true } },
+      },
+    });
+
+    return NextResponse.json({ success: true, comments });
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
+    }
+    console.error("GET /api/tasks/[id]/comments error:", error);
+    return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -52,6 +52,18 @@ export function formatGeorgianDate(dateInput: Date | string | null | undefined):
   return `${day} ${month}, ${year}`;
 }
 
+export function formatGeorgianDateTime(dateInput: Date | string | null | undefined): string {
+  if (!dateInput) return "-";
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return "-";
+
+  const day = format(date, "dd");
+  const month = GEORGIAN_MONTHS[date.getMonth()];
+  const time = format(date, "HH:mm");
+
+  return `${day} ${month}, ${time}`;
+}
+
 export function formatGeorgianDateShort(dateInput: Date | string | null | undefined): string {
   if (!dateInput) return "-";
   const date = new Date(dateInput);
