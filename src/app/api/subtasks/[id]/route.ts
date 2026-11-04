@@ -8,10 +8,13 @@ import { z } from "zod";
 
 const updateSubtaskSchema = z.object({
   title: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
   status: z.nativeEnum(SubtaskStatus).optional(),
   startDate: z.string().nullable().optional(),
   deadline: z.string().nullable().optional(),
   assigneeIds: z.array(z.string()).optional(),
+  position: z.number().optional(),
+  stageId: z.string().nullable().optional(),
   rescheduleReason: z.string().optional(),
 });
 
@@ -74,6 +77,11 @@ export async function PATCH(
 
     const dataToUpdate: Prisma.SubtaskUpdateInput = {};
     if (data.title !== undefined) dataToUpdate.title = data.title;
+    if (data.description !== undefined) dataToUpdate.description = data.description;
+    if (data.position !== undefined) dataToUpdate.position = data.position;
+    if (data.stageId !== undefined) {
+      dataToUpdate.stage = data.stageId ? { connect: { id: data.stageId } } : { disconnect: true };
+    }
     if (incomingStart !== undefined) dataToUpdate.startDate = incomingStart;
     if (incomingDeadline !== undefined) dataToUpdate.deadline = incomingDeadline;
 
@@ -179,6 +187,50 @@ export async function PATCH(
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("PATCH /api/subtasks/[id] error:", error);
+    return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await requireAuth();
+    const { id: subtaskId } = await params;
+
+    const existing = await prisma.subtask.findUnique({
+      where: { id: subtaskId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "საბტასკი ვერ მოიძებნა" }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.subtask.delete({ where: { id: subtaskId } });
+
+      await logAuditEvent({
+        taskId: existing.taskId,
+        actorId: user.id,
+        action: "SUBTASK_COMPLETED",
+        entityType: "SUBTASK",
+        entityId: subtaskId,
+        oldValues: { title: existing.title, status: existing.status },
+        reason: "საბტასკის წაშლა",
+        tx,
+      });
+    });
+
+    const newProgress = await calculateAndSyncTaskProgress(existing.taskId);
+
+    return NextResponse.json({ success: true, progress: newProgress });
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
+    }
+    console.error("DELETE /api/subtasks/[id] error:", error);
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
   }
 }

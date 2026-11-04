@@ -12,6 +12,8 @@ const updateStageSchema = z.object({
   startDate: z.string().nullable().optional(),
   deadline: z.string().nullable().optional(),
   assigneeIds: z.array(z.string()).optional(),
+  position: z.number().optional(),
+  isActive: z.boolean().optional(),
   rescheduleReason: z.string().optional(),
 });
 
@@ -77,6 +79,8 @@ export async function PATCH(
     if (data.description !== undefined) dataToUpdate.description = data.description;
     if (incomingStart !== undefined) dataToUpdate.startDate = incomingStart;
     if (incomingDeadline !== undefined) dataToUpdate.deadline = incomingDeadline;
+    if (data.position !== undefined) dataToUpdate.position = data.position;
+    if (data.isActive !== undefined) dataToUpdate.isActive = data.isActive;
 
     // Lock deadline if deadline is set and stage is assigned
     if (
@@ -124,6 +128,20 @@ export async function PATCH(
         });
       }
 
+      if (data.position !== undefined && data.position !== existing.position) {
+        await logAuditEvent({
+          taskId: existing.taskId,
+          actorId: user.id,
+          action: "STAGE_REORDERED",
+          entityType: "STAGE",
+          entityId: stageId,
+          oldValues: { position: existing.position },
+          newValues: { position: data.position },
+          reason: "სამუშაო ეტაპის რიგითობის შეცვლა",
+          tx,
+        });
+      }
+
       return updated;
     });
 
@@ -134,6 +152,63 @@ export async function PATCH(
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("PATCH /api/stages/[id] error:", error);
+    return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await requireAuth();
+    const { id: stageId } = await params;
+
+    const existing = await prisma.workflowStage.findUnique({
+      where: { id: stageId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "სამუშაო ეტაპი ვერ მოიძებნა" }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.workflowStage.delete({ where: { id: stageId } });
+
+      // Re-index remaining stages for consistency
+      const remainingStages = await tx.workflowStage.findMany({
+        where: { taskId: existing.taskId },
+        orderBy: { position: "asc" },
+      });
+
+      for (let i = 0; i < remainingStages.length; i++) {
+        if (remainingStages[i].position !== i) {
+          await tx.workflowStage.update({
+            where: { id: remainingStages[i].id },
+            data: { position: i },
+          });
+        }
+      }
+
+      await logAuditEvent({
+        taskId: existing.taskId,
+        actorId: user.id,
+        action: "STAGE_REORDERED",
+        entityType: "STAGE",
+        entityId: stageId,
+        oldValues: { title: existing.title, position: existing.position },
+        reason: "სამუშაო ეტაპის წაშლა",
+        tx,
+      });
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
+    }
+    console.error("DELETE /api/stages/[id] error:", error);
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
   }
 }

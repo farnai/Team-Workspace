@@ -7,6 +7,7 @@ import { Sidebar, NavView } from "@/components/Sidebar";
 import { VerticalTimeline, TimelineDateItem } from "@/components/VerticalTimeline";
 import { SharedBacklog, BacklogTask } from "@/components/SharedBacklog";
 import { TaskModal, ProjectOption, UserOption } from "@/components/TaskModal";
+import { TaskDetailsDrawer } from "@/components/TaskDetailsDrawer";
 import { TaskStatus } from "@prisma/client";
 import {
   Loader2,
@@ -53,6 +54,7 @@ export default function WorkspacePage() {
   const [isBacklogOpen, setIsBacklogOpen] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<BacklogTask | null>(null);
 
   // Notifications & Metrics
@@ -239,11 +241,7 @@ export default function WorkspacePage() {
 
   const handleSelectTask = (taskId: string) => {
     setSelectedTaskId(taskId);
-    const foundTask = tasks.find((t) => t.id === taskId);
-    if (foundTask) {
-      setEditingTask(foundTask);
-      setIsEditModalOpen(true);
-    }
+    setIsDrawerOpen(true);
   };
 
   if (isAuthLoading) {
@@ -404,6 +402,21 @@ export default function WorkspacePage() {
           mode="create"
           currentUser={currentUser}
           projects={projects}
+          users={users}
+        />
+      )}
+
+      {/* Task Details Drawer */}
+      {isDrawerOpen && selectedTaskId && (
+        <TaskDetailsDrawer
+          taskId={selectedTaskId}
+          isOpen={isDrawerOpen}
+          onClose={() => {
+            setIsDrawerOpen(false);
+            setSelectedTaskId(null);
+          }}
+          onTaskUpdated={handleTaskSaved}
+          currentUser={currentUser}
           users={users}
         />
       )}
