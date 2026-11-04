@@ -60,3 +60,4 @@ test("Deadline lock: omitting deadline during other updates is allowed for non-a
 
   assert.strictEqual(result.allowed, true);
 });
+

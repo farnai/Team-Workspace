@@ -7,6 +7,7 @@ import {
   Filter,
   CheckCircle2,
   AlertCircle,
+  Layers,
 } from "lucide-react";
 import {
   formatGeorgianDate,
@@ -58,6 +59,8 @@ interface TimelineProps {
   mode: "schedule" | "activity";
   onModeChange: (mode: "schedule" | "activity") => void;
   isLoading?: boolean;
+  onToggleBacklog?: () => void;
+  isBacklogOpen?: boolean;
 }
 
 export function VerticalTimeline({
@@ -67,6 +70,8 @@ export function VerticalTimeline({
   mode,
   onModeChange,
   isLoading,
+  onToggleBacklog,
+  isBacklogOpen,
 }: TimelineProps) {
   const [viewUnit, setViewUnit] = useState<"day" | "week" | "month">("day");
   const [filterType, setFilterType] = useState<string>("ALL");
@@ -135,8 +140,19 @@ export function VerticalTimeline({
           </div>
         </div>
 
-        {/* Filter Toggle */}
+        {/* Filter Toggle & Backlog Toggle */}
         <div className="flex items-center gap-2">
+          {onToggleBacklog && !isBacklogOpen && (
+            <button
+              onClick={onToggleBacklog}
+              className="flex items-center gap-1.5 px-3 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-full text-xs font-semibold transition-colors cursor-pointer"
+              title="საერთო ბექლოგის გახსნა"
+            >
+              <Layers size={13} className="text-orange-600" />
+              <span>ბექლოგი</span>
+            </button>
+          )}
+
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}

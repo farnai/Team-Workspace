@@ -5,7 +5,18 @@ import { useRouter } from "next/navigation";
 import { Header, HeaderNotification } from "@/components/Header";
 import { Sidebar, NavView } from "@/components/Sidebar";
 import { VerticalTimeline, TimelineDateItem } from "@/components/VerticalTimeline";
-import { Loader2, Layers, Calendar, BarChart2, UserCheck, History, Users, Settings } from "lucide-react";
+import { SharedBacklog, BacklogTask } from "@/components/SharedBacklog";
+import { TaskModal, ProjectOption, UserOption } from "@/components/TaskModal";
+import { TaskStatus } from "@prisma/client";
+import {
+  Loader2,
+  Calendar,
+  BarChart2,
+  UserCheck,
+  History,
+  Users,
+  Settings,
+} from "lucide-react";
 
 interface CurrentUser {
   id: string;
@@ -33,6 +44,17 @@ export default function WorkspacePage() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-11-04T00:00:00Z"));
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Projects & Users State
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [users, setUsers] = useState<UserOption[]>([]);
+
+  // Backlog & Modals State
+  const [tasks, setTasks] = useState<BacklogTask[]>([]);
+  const [isBacklogOpen, setIsBacklogOpen] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<BacklogTask | null>(null);
+
   // Notifications & Metrics
   const [notifications, setNotifications] = useState<HeaderNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -48,15 +70,21 @@ export default function WorkspacePage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isTimelineLoading, setIsTimelineLoading] = useState(false);
 
+  // Initial Load: Authenticate and Fetch Workspace Data
   useEffect(() => {
     let active = true;
-    async function loadWorkspaceData() {
+
+    async function initializeWorkspace() {
       try {
-        const [userRes, metricsRes, notifRes] = await Promise.all([
-          fetch("/api/auth/me"),
-          fetch("/api/overview"),
-          fetch("/api/notifications"),
-        ]);
+        const [userRes, metricsRes, notifRes, projRes, usersRes, tasksRes] =
+          await Promise.all([
+            fetch("/api/auth/me"),
+            fetch("/api/overview"),
+            fetch("/api/notifications"),
+            fetch("/api/projects"),
+            fetch("/api/users"),
+            fetch("/api/tasks"),
+          ]);
 
         if (!userRes.ok) {
           router.push("/login");
@@ -72,20 +100,31 @@ export default function WorkspacePage() {
         if (active) {
           setCurrentUser(userData.user);
           setIsAuthLoading(false);
-        }
 
-        if (metricsRes.ok) {
-          const metricsData = await metricsRes.json();
-          if (active && metricsData.metrics) {
-            setMetrics(metricsData.metrics);
+          if (metricsRes.ok) {
+            const m = await metricsRes.json();
+            if (m.metrics) setMetrics(m.metrics);
           }
-        }
 
-        if (notifRes.ok) {
-          const notifData = await notifRes.json();
-          if (active) {
-            setNotifications(notifData.notifications || []);
-            setUnreadCount(notifData.unreadCount || 0);
+          if (notifRes.ok) {
+            const n = await notifRes.json();
+            setNotifications(n.notifications || []);
+            setUnreadCount(n.unreadCount || 0);
+          }
+
+          if (projRes.ok) {
+            const p = await projRes.json();
+            setProjects(p.projects || []);
+          }
+
+          if (usersRes.ok) {
+            const u = await usersRes.json();
+            setUsers(u.users || []);
+          }
+
+          if (tasksRes.ok) {
+            const t = await tasksRes.json();
+            setTasks(t.tasks || []);
           }
         }
       } catch {
@@ -96,21 +135,24 @@ export default function WorkspacePage() {
       }
     }
 
-    loadWorkspaceData();
+    initializeWorkspace();
     return () => {
       active = false;
     };
   }, [router]);
 
+  // Load Timeline when date or mode changes
   useEffect(() => {
-    if (!currentUser || currentView !== "timeline") return;
-
+    if (!currentUser) return;
     let active = true;
+
     async function loadTimeline() {
       setIsTimelineLoading(true);
       try {
         const dateParam = currentDate.toISOString().split("T")[0];
-        const res = await fetch(`/api/timeline?date=${dateParam}&mode=${timelineMode}&days=14`);
+        const res = await fetch(
+          `/api/timeline?date=${dateParam}&mode=${timelineMode}&days=14`
+        );
         if (res.ok) {
           const data = await res.json();
           if (active) {
@@ -130,7 +172,50 @@ export default function WorkspacePage() {
     return () => {
       active = false;
     };
-  }, [currentUser, currentView, currentDate, timelineMode]);
+  }, [currentUser, currentDate, timelineMode]);
+
+  // Synchronization Callback when task is created or updated
+  const handleTaskSaved = async () => {
+    try {
+      const dateParam = currentDate.toISOString().split("T")[0];
+      const [tasksRes, timelineRes, metricsRes] = await Promise.all([
+        fetch("/api/tasks"),
+        fetch(`/api/timeline?date=${dateParam}&mode=${timelineMode}&days=14`),
+        fetch("/api/overview"),
+      ]);
+
+      if (tasksRes.ok) {
+        const data = await tasksRes.json();
+        setTasks(data.tasks || []);
+      }
+      if (timelineRes.ok) {
+        const data = await timelineRes.json();
+        setTimelineDates(data.dates || []);
+      }
+      if (metricsRes.ok) {
+        const data = await metricsRes.json();
+        if (data.metrics) setMetrics(data.metrics);
+      }
+    } catch (e) {
+      console.error("Failed to refresh workspace data:", e);
+    }
+  };
+
+  // Quick Status Transition from Backlog Card
+  const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        await handleTaskSaved();
+      }
+    } catch (e) {
+      console.error("Failed to update task status:", e);
+    }
+  };
 
   // Logout Handler
   const handleLogout = async () => {
@@ -144,7 +229,21 @@ export default function WorkspacePage() {
   };
 
   const handleOpenNewTask = () => {
-    setCurrentView("backlog");
+    setIsCreateModalOpen(true);
+  };
+
+  const handleEditTask = (task: BacklogTask) => {
+    setEditingTask(task);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSelectTask = (taskId: string) => {
+    setSelectedTaskId(taskId);
+    const foundTask = tasks.find((t) => t.id === taskId);
+    if (foundTask) {
+      setEditingTask(foundTask);
+      setIsEditModalOpen(true);
+    }
   };
 
   if (isAuthLoading) {
@@ -152,7 +251,9 @@ export default function WorkspacePage() {
       <div className="min-h-screen w-full flex items-center justify-center bg-[#F8F7F4]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 size={24} className="animate-spin text-orange-600" />
-          <span className="text-xs font-semibold text-stone-600">იტვირთება სამუშაო სივრცე...</span>
+          <span className="text-xs font-semibold text-stone-600">
+            იტვირთება სამუშაო სივრცე...
+          </span>
         </div>
       </div>
     );
@@ -175,44 +276,60 @@ export default function WorkspacePage() {
         unreadCount={unreadCount}
       />
 
-      {/* Main Workspace: Sidebar + Center Content */}
+      {/* Main Workspace: Sidebar + Workspace Panels */}
       <div className="flex-1 flex overflow-hidden">
         {/* Navigation Sidebar */}
         <Sidebar
           currentView={currentView}
-          onSelectView={setCurrentView}
+          onSelectView={(view) => {
+            setCurrentView(view);
+            if (view === "backlog") {
+              setIsBacklogOpen(true);
+            }
+          }}
           isAdmin={currentUser.role === "ADMIN"}
           metrics={metrics}
         />
 
         {/* View Content Area */}
         <main className="flex-1 flex overflow-hidden">
-          {currentView === "timeline" ? (
-            <VerticalTimeline
-              dates={timelineDates}
-              onSelectTask={setSelectedTaskId}
-              selectedTaskId={selectedTaskId}
-              mode={timelineMode}
-              onModeChange={setTimelineMode}
-              isLoading={isTimelineLoading}
-            />
-          ) : currentView === "backlog" ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white">
-              <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-600 mb-4">
-                <Layers size={28} />
-              </div>
-              <h3 className="text-sm font-bold text-stone-900 tracking-tight">
-                საერთო ბექლოგი (Shared Backlog)
-              </h3>
-              <p className="text-xs text-stone-500 max-w-sm mt-1.5 leading-relaxed">
-                ბექლოგის სრული UI კომპონენტი, ფილტრები და სწრაფი შექმნის ფორმა რეალიზდება მომდევნო ეტაპზე (Step 3).
-              </p>
-              <button
-                onClick={() => setCurrentView("timeline")}
-                className="mt-5 px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-semibold rounded-full transition-colors cursor-pointer"
+          {currentView === "timeline" || currentView === "backlog" ? (
+            <div className="flex-1 flex overflow-hidden w-full">
+              {/* Center Panel: Vertical Timeline (~65-68% when Backlog is open, 100% when collapsed) */}
+              <div
+                className={`h-full flex flex-col transition-all duration-200 overflow-hidden ${
+                  isBacklogOpen ? "w-full lg:w-[65%] xl:w-[68%]" : "w-full"
+                }`}
               >
-                თაიმლაინზე დაბრუნება
-              </button>
+                <VerticalTimeline
+                  dates={timelineDates}
+                  onSelectTask={handleSelectTask}
+                  selectedTaskId={selectedTaskId}
+                  mode={timelineMode}
+                  onModeChange={setTimelineMode}
+                  isLoading={isTimelineLoading}
+                  onToggleBacklog={() => setIsBacklogOpen(true)}
+                  isBacklogOpen={isBacklogOpen}
+                />
+              </div>
+
+              {/* Right Panel: Shared Backlog (~32-35% on Desktop, hidden when collapsed) */}
+              {isBacklogOpen && (
+                <div className="hidden lg:flex lg:w-[35%] xl:w-[32%] h-full flex-col shrink-0 overflow-hidden animate-in slide-in-from-right-3 duration-200">
+                  <SharedBacklog
+                    tasks={tasks}
+                    onSelectTask={handleSelectTask}
+                    selectedTaskId={selectedTaskId}
+                    onOpenNewTask={handleOpenNewTask}
+                    onEditTask={handleEditTask}
+                    onStatusChange={handleStatusChange}
+                    onClose={() => setIsBacklogOpen(false)}
+                    projects={projects}
+                    users={users}
+                    isAdmin={currentUser.role === "ADMIN"}
+                  />
+                </div>
+              )}
             </div>
           ) : currentView === "my-work" ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white">
@@ -277,6 +394,36 @@ export default function WorkspacePage() {
           )}
         </main>
       </div>
+
+      {/* Task Creation Modal */}
+      {isCreateModalOpen && (
+        <TaskModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSuccess={handleTaskSaved}
+          mode="create"
+          currentUser={currentUser}
+          projects={projects}
+          users={users}
+        />
+      )}
+
+      {/* Task Quick Edit Modal */}
+      {isEditModalOpen && (
+        <TaskModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setEditingTask(null);
+          }}
+          onSuccess={handleTaskSaved}
+          mode="edit"
+          initialTask={editingTask}
+          currentUser={currentUser}
+          projects={projects}
+          users={users}
+        />
+      )}
     </div>
   );
 }

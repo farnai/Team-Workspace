@@ -28,6 +28,11 @@ export async function GET(req: NextRequest) {
     const priority = searchParams.get("priority") as Priority | null;
     const status = searchParams.get("status") as TaskStatus | null;
     const assigneeId = searchParams.get("assigneeId");
+    const unassigned = searchParams.get("unassigned") === "true";
+    const overdue = searchParams.get("overdue") === "true";
+    const unscheduled = searchParams.get("unscheduled") === "true";
+    const sortBy = searchParams.get("sortBy");
+    const sortOrder = searchParams.get("sortOrder") === "asc" ? "asc" : "desc";
     const mode = searchParams.get("mode"); // e.g. "backlog", "timeline"
 
     const where: Prisma.TaskWhereInput = {};
@@ -48,14 +53,38 @@ export async function GET(req: NextRequest) {
     if (priority) where.priority = priority;
     if (status) where.status = status;
 
-    if (assigneeId) {
+    if (unassigned) {
+      where.assignments = { none: {} };
+    } else if (assigneeId) {
       where.assignments = {
         some: { userId: assigneeId },
       };
     }
 
+    if (overdue) {
+      where.deadline = { lt: new Date() };
+      where.status = { notIn: [TaskStatus.DONE, TaskStatus.CANCELLED] };
+    } else if (unscheduled) {
+      where.deadline = null;
+    }
+
     if (mode === "backlog") {
       where.status = TaskStatus.BACKLOG;
+    }
+
+    let orderBy: Prisma.TaskOrderByWithRelationInput[] = [
+      { priority: "desc" },
+      { createdAt: "desc" },
+    ];
+
+    if (sortBy === "deadline") {
+      orderBy = [{ deadline: { sort: sortOrder, nulls: "last" } }, { createdAt: "desc" }];
+    } else if (sortBy === "createdAt") {
+      orderBy = [{ createdAt: sortOrder }];
+    } else if (sortBy === "taskNumber") {
+      orderBy = [{ taskNumber: sortOrder }];
+    } else if (sortBy === "priority") {
+      orderBy = [{ priority: sortOrder }, { createdAt: "desc" }];
     }
 
     const tasks = await prisma.task.findMany({
@@ -87,7 +116,7 @@ export async function GET(req: NextRequest) {
           select: { id: true, status: true },
         },
       },
-      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+      orderBy,
     });
 
     return NextResponse.json({ tasks });
@@ -116,6 +145,18 @@ export async function POST(req: NextRequest) {
 
     const data = result.data;
 
+    const parsedStart = data.startDate ? new Date(data.startDate) : null;
+    const parsedDeadline = data.deadline ? new Date(data.deadline) : null;
+    const hasInitialAssignees = Boolean(data.assigneeIds && data.assigneeIds.length > 0);
+
+    // Business rule: An assigned task requires an initial deadline
+    if (hasInitialAssignees && !parsedDeadline) {
+      return NextResponse.json(
+        { error: "შემსრულებლის მინიჭებისას საწყისი დედლაინის მითითება სავალდებულოა" },
+        { status: 400 }
+      );
+    }
+
     // Resolve or default project
     let projectId = data.projectId;
     if (!projectId) {
@@ -130,13 +171,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const parsedStart = data.startDate ? new Date(data.startDate) : null;
-    const parsedDeadline = data.deadline ? new Date(data.deadline) : null;
-    const hasInitialAssignees = data.assigneeIds && data.assigneeIds.length > 0;
-    const isDeadlineProvided = Boolean(parsedDeadline);
-
-    // Initial deadline lock rule: when first assigned or deadline is established
-    const shouldLockDeadline = Boolean(hasInitialAssignees && isDeadlineProvided);
+    // Initial deadline lock rule: once a deadline is established, it is locked
+    const shouldLockDeadline = Boolean(parsedDeadline);
 
     const task = await prisma.$transaction(async (tx) => {
       const created = await tx.task.create({

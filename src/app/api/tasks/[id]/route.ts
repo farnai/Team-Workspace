@@ -7,6 +7,7 @@ import { TaskType, Priority, TaskStatus, Role, Prisma } from "@prisma/client";
 import { z } from "zod";
 
 const updateTaskSchema = z.object({
+  projectId: z.string().optional(),
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   type: z.nativeEnum(TaskType).optional(),
@@ -165,6 +166,21 @@ export async function PATCH(
       );
     }
 
+    // Business rule: Assigned task requires a deadline
+    const willBeAssigned =
+      data.assigneeIds !== undefined
+        ? data.assigneeIds.length > 0
+        : existing.assignments.length > 0;
+    const effectiveDeadline =
+      incomingDeadline !== undefined ? incomingDeadline : existing.deadline;
+
+    if (willBeAssigned && !effectiveDeadline) {
+      return NextResponse.json(
+        { error: "შემსრულებლის მინიჭებისას დედლაინის მითითება სავალდებულოა" },
+        { status: 400 }
+      );
+    }
+
     const incomingStart =
       data.startDate !== undefined
         ? data.startDate === null
@@ -173,6 +189,9 @@ export async function PATCH(
         : undefined;
 
     const dataToUpdate: Prisma.TaskUpdateInput = {};
+    if (data.projectId !== undefined) {
+      dataToUpdate.project = { connect: { id: data.projectId } };
+    }
     if (data.title !== undefined) dataToUpdate.title = data.title;
     if (data.description !== undefined) dataToUpdate.description = data.description;
     if (data.type !== undefined) dataToUpdate.type = data.type;
@@ -204,12 +223,8 @@ export async function PATCH(
       }
     }
 
-    // Lock deadline if deadline is set and task is assigned
-    if (
-      !existing.deadlineLocked &&
-      ((incomingDeadline || existing.deadline) &&
-        ((data.assigneeIds && data.assigneeIds.length > 0) || existing.assignments.length > 0))
-    ) {
+    // Lock deadline if deadline is established
+    if (!existing.deadlineLocked && effectiveDeadline) {
       dataToUpdate.deadlineLocked = true;
     }
 
