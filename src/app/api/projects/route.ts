@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
+import { z } from "zod";
+
+const createProjectSchema = z.object({
+  name: z.string().min(1, "პროექტის სახელი სავალდებულოა"),
+  description: z.string().optional(),
+  color: z.string().optional(),
+});
+
+export async function GET() {
+  try {
+    await requireAuth();
+
+    const projects = await prisma.project.findMany({
+      where: { isArchived: false },
+      orderBy: { createdAt: "asc" },
+      include: {
+        _count: { select: { tasks: true } },
+      },
+    });
+
+    return NextResponse.json({ projects });
+  } catch (error: any) {
+    if (error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
+    }
+    return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    await requireAuth();
+    const body = await req.json();
+
+    const result = createProjectSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error.issues[0]?.message || "არასწორი მონაცემები" },
+        { status: 400 }
+      );
+    }
+
+    const project = await prisma.project.create({
+      data: {
+        name: result.data.name,
+        description: result.data.description,
+        color: result.data.color || "#EA580C",
+      },
+    });
+
+    return NextResponse.json({ success: true, project });
+  } catch (error: any) {
+    if (error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
+    }
+    return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
+  }
+}
