@@ -22,6 +22,9 @@ import {
   MessageSquare,
   Paperclip,
   FileText,
+  Pause,
+  Play,
+  AlertTriangle,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus, SubtaskStatus } from "@prisma/client";
 import { formatGeorgianDate, formatGeorgianDateShort } from "@/lib/dateUtils";
@@ -31,6 +34,10 @@ import { TaskDailyUpdatesSection } from "./task-details/TaskDailyUpdatesSection"
 import { TaskActivitySection } from "./task-details/TaskActivitySection";
 import { PasteConfirmModal } from "./task-details/PasteConfirmModal";
 import { ImagePreviewModal } from "./task-details/ImagePreviewModal";
+import { PauseTaskModal } from "./task-details/PauseTaskModal";
+import { BlockTaskModal } from "./task-details/BlockTaskModal";
+import { RescheduleTaskModal } from "./task-details/RescheduleTaskModal";
+import { detectTaskConflicts } from "@/lib/conflicts";
 
 export interface UserOption {
   id: string;
@@ -208,6 +215,11 @@ export function TaskDetailsDrawer({
   const [pastedFile, setPastedFile] = useState<File | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [previewImageTitle, setPreviewImageTitle] = useState<string | null>(null);
+
+  // Step 7: Workload, Pause & Reschedule Modals
+  const [isPauseModalOpen, setIsPauseModalOpen] = useState(false);
+  const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
 
   const isAdmin = currentUser.role === "ADMIN";
 
@@ -480,18 +492,136 @@ export function TaskDetailsDrawer({
   // Status Change
   const handleStatusChange = async (newStatus: TaskStatus) => {
     if (!task) return;
+    if (newStatus === TaskStatus.PAUSED) {
+      setIsPauseModalOpen(true);
+      return;
+    }
+    if (newStatus === TaskStatus.BLOCKED) {
+      setIsBlockModalOpen(true);
+      return;
+    }
     try {
       const res = await fetch(`/api/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error("სტატუსის განახლება ვერ მოხერხდა");
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "სტატუსის განახლება ვერ მოხერხდა");
+      }
       await refreshTaskDetails();
       onTaskUpdated();
     } catch (err: unknown) {
       setError((err as Error).message);
     }
+  };
+
+  // Pause Task Handler
+  const handlePauseTask = async (reason: string) => {
+    if (!task) return;
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: TaskStatus.PAUSED, pauseReason: reason }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || "დავალების შეჩერება ვერ მოხერხდა");
+    await refreshTaskDetails();
+    onTaskUpdated();
+  };
+
+  // Resume Task Handler
+  const handleResumeTask = async () => {
+    if (!task) return;
+    try {
+      setError(null);
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: TaskStatus.IN_PROGRESS }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "დავალების განახლება ვერ მოხერხდა");
+      await refreshTaskDetails();
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
+  };
+
+  // Block Task Handler
+  const handleBlockTask = async (reason: string) => {
+    if (!task) return;
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: TaskStatus.BLOCKED, blockedReason: reason }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || "დავალების დაბლოკვა ვერ მოხერხდა");
+    await refreshTaskDetails();
+    onTaskUpdated();
+  };
+
+  // Unblock Task Handler
+  const handleUnblockTask = async () => {
+    if (!task) return;
+    try {
+      setError(null);
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: TaskStatus.IN_PROGRESS }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "დავალების განბლოკვა ვერ მოხერხდა");
+      await refreshTaskDetails();
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
+  };
+
+  // Priority Change Handler
+  const handlePriorityChange = async (newPriority: Priority) => {
+    if (!task) return;
+    try {
+      setError(null);
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priority: newPriority }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "პრიორიტეტის განახლება ვერ მოხერხდა");
+      await refreshTaskDetails();
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
+  };
+
+  // Admin Reschedule Handler
+  const handleReschedule = async (
+    newStartDate: string | null,
+    newDeadline: string | null,
+    reason: string
+  ) => {
+    if (!task) return;
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        startDate: newStartDate ? new Date(newStartDate).toISOString() : null,
+        deadline: newDeadline ? new Date(newDeadline).toISOString() : null,
+        rescheduleReason: reason,
+      }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || "განრიგის განახლება ვერ მოხერხდა");
+    await refreshTaskDetails();
+    onTaskUpdated();
   };
 
   // --- File Upload Handler (Preserved for Attachments & Paste Confirm) ---
@@ -595,6 +725,9 @@ export function TaskDetailsDrawer({
     ? activeStage.assignments.map((a) => a.user)
     : task?.assignments.map((a) => a.user) || [];
 
+  // Step 7: Conflicts detection for current task
+  const taskConflicts = task ? detectTaskConflicts(task) : [];
+
   if (!isOpen) return null;
 
   return (
@@ -628,19 +761,48 @@ export function TaskDetailsDrawer({
                 </span>
               )}
 
+              {/* Priority Selector */}
+              <select
+                value={task?.priority || Priority.MEDIUM}
+                onChange={(e) => handlePriorityChange(e.target.value as Priority)}
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-md border focus:outline-none cursor-pointer transition-colors ${
+                  task?.priority === Priority.CRITICAL
+                    ? "bg-rose-50 text-rose-700 border-rose-300 font-extrabold"
+                    : task?.priority === Priority.HIGH
+                    ? "bg-orange-50 text-orange-700 border-orange-300"
+                    : task?.priority === Priority.LOW
+                    ? "bg-stone-50 text-stone-600 border-stone-200"
+                    : "bg-blue-50 text-blue-700 border-blue-200"
+                }`}
+                title="პრიორიტეტის შეცვლა"
+              >
+                <option value={Priority.LOW}>დაბალი (Low)</option>
+                <option value={Priority.MEDIUM}>საშუალო (Medium)</option>
+                <option value={Priority.HIGH}>მაღალი (High)</option>
+                <option value={Priority.CRITICAL}>კრიტიკული (Critical)</option>
+              </select>
+
               {/* Status Selector */}
               <select
                 value={task?.status || TaskStatus.BACKLOG}
                 onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
-                className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-stone-200 text-stone-800 focus:outline-none cursor-pointer"
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-md border focus:outline-none cursor-pointer ${
+                  task?.status === TaskStatus.PAUSED
+                    ? "bg-amber-100 text-amber-900 border-amber-300 font-extrabold"
+                    : task?.status === TaskStatus.BLOCKED
+                    ? "bg-rose-100 text-rose-900 border-rose-300 font-extrabold"
+                    : task?.status === TaskStatus.DONE
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200 font-bold"
+                    : "bg-white border-stone-200 text-stone-800"
+                }`}
               >
                 <option value={TaskStatus.BACKLOG}>Backlog</option>
                 <option value={TaskStatus.PLANNED}>Planned</option>
                 <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
-                <option value={TaskStatus.PAUSED}>Paused</option>
-                <option value={TaskStatus.BLOCKED}>Blocked</option>
-                <option value={TaskStatus.DONE}>Done</option>
-                <option value={TaskStatus.CANCELLED}>Cancelled</option>
+                <option value={TaskStatus.PAUSED}>Paused (შეჩერებული)</option>
+                <option value={TaskStatus.BLOCKED}>Blocked (დაბლოკილი)</option>
+                <option value={TaskStatus.DONE}>Done (დასრულებული)</option>
+                <option value={TaskStatus.CANCELLED}>Cancelled (გაუქმებული)</option>
               </select>
             </div>
 
@@ -657,6 +819,58 @@ export function TaskDetailsDrawer({
           <h2 className="text-base font-extrabold text-stone-900 tracking-tight leading-snug">
             {task?.title || "იტვირთება..."}
           </h2>
+
+          {/* Action Row: Pause, Block, Reschedule */}
+          <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar">
+            {task?.status === TaskStatus.PAUSED ? (
+              <button
+                onClick={handleResumeTask}
+                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Play size={12} fill="currentColor" />
+                <span>განახლება</span>
+              </button>
+            ) : task?.status !== TaskStatus.DONE && task?.status !== TaskStatus.CANCELLED ? (
+              <button
+                onClick={() => setIsPauseModalOpen(true)}
+                className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="დავალების დროებით შეჩერება"
+              >
+                <Pause size={12} />
+                <span>შეჩერება</span>
+              </button>
+            ) : null}
+
+            {task?.status === TaskStatus.BLOCKED ? (
+              <button
+                onClick={handleUnblockTask}
+                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Check size={12} strokeWidth={2.5} />
+                <span>განბლოკვა</span>
+              </button>
+            ) : task?.status !== TaskStatus.DONE && task?.status !== TaskStatus.CANCELLED ? (
+              <button
+                onClick={() => setIsBlockModalOpen(true)}
+                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="დავალების დაბლოკვა"
+              >
+                <Ban size={12} />
+                <span>დაბლოკვა</span>
+              </button>
+            ) : null}
+
+            {isAdmin && (
+              <button
+                onClick={() => setIsRescheduleModalOpen(true)}
+                className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer ml-auto"
+                title="განრიგის შეცვლა (Admin)"
+              >
+                <Calendar size={12} />
+                <span>განრიგის შეცვლა</span>
+              </button>
+            )}
+          </div>
 
           {/* Progress Banner & Responsible Users */}
           <div className="flex items-center justify-between gap-3 pt-1 text-xs">
@@ -780,6 +994,98 @@ export function TaskDetailsDrawer({
             >
               ✕
             </button>
+          </div>
+        )}
+
+        {/* Paused Banner */}
+        {task?.status === TaskStatus.PAUSED && (
+          <div className="mx-6 mt-3 p-3.5 bg-amber-50 border border-amber-200/90 rounded-2xl flex items-start justify-between gap-3 text-amber-900 text-xs shadow-2xs">
+            <div className="flex items-start gap-2.5">
+              <Pause size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-extrabold flex items-center gap-2">
+                  <span>დავალება დროებით შეჩერებულია</span>
+                  {task.pausedAt && (
+                    <span className="text-[10px] font-semibold text-amber-700 bg-amber-100/70 px-2 py-0.5 rounded-full">
+                      {formatGeorgianDate(task.pausedAt)}
+                    </span>
+                  )}
+                </div>
+                {task.pauseReason && (
+                  <div className="text-stone-700 font-medium bg-white/80 p-2 rounded-xl border border-amber-200/60 text-[11px]">
+                    <span className="font-bold text-amber-800">შეჩერების მიზეზი: </span>
+                    {task.pauseReason}
+                  </div>
+                )}
+                <p className="text-[10px] text-amber-700">
+                  შეჩერებისას ქვე-დავალებების პროგრესი და ეტაპების რიგითობა უცვლელია. დედლაინი ავტომატურად არ გადაწეულა.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleResumeTask}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shrink-0 transition-colors shadow-2xs cursor-pointer"
+            >
+              <Play size={13} fill="currentColor" />
+              <span>განახლება</span>
+            </button>
+          </div>
+        )}
+
+        {/* Blocked Banner */}
+        {task?.status === TaskStatus.BLOCKED && (
+          <div className="mx-6 mt-3 p-3.5 bg-rose-50 border border-rose-200/90 rounded-2xl flex items-start justify-between gap-3 text-rose-900 text-xs shadow-2xs">
+            <div className="flex items-start gap-2.5">
+              <Ban size={16} className="text-rose-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-extrabold text-rose-950">დავალება დაბლოკილია (გარეგანი დაბრკოლება)</div>
+                {task.blockedReason && (
+                  <div className="text-stone-700 font-medium bg-white/80 p-2 rounded-xl border border-rose-200/60 text-[11px]">
+                    <span className="font-bold text-rose-800">დაბრკოლების მიზეზი: </span>
+                    {task.blockedReason}
+                  </div>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={handleUnblockTask}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shrink-0 transition-colors shadow-2xs cursor-pointer"
+            >
+              <Check size={13} strokeWidth={2.5} />
+              <span>განბლოკვა</span>
+            </button>
+          </div>
+        )}
+
+        {/* Scheduling Conflicts Banner */}
+        {taskConflicts.length > 0 && (
+          <div className="mx-6 mt-3 p-3 bg-amber-50/90 border border-amber-300 rounded-2xl space-y-2 text-xs shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-extrabold text-amber-900">
+                <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                <span>განრიგის გაფრთხილებები / კონფლიქტები ({taskConflicts.length})</span>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setIsRescheduleModalOpen(true)}
+                  className="text-[11px] font-bold text-orange-600 hover:text-orange-700 underline cursor-pointer"
+                >
+                  განრიგის კორექტირება
+                </button>
+              )}
+            </div>
+            <div className="space-y-1 text-[11px]">
+              {taskConflicts.map((c, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className={c.severity === "critical" ? "text-rose-500 font-bold" : "text-amber-500 font-bold"}>
+                    •
+                  </span>
+                  <span className={c.severity === "critical" ? "font-bold text-rose-800" : "font-medium text-stone-700"}>
+                    {c.message}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -1492,6 +1798,18 @@ export function TaskDetailsDrawer({
                     {formatGeorgianDate(task?.createdAt)}
                   </span>
                 </div>
+
+                {isAdmin && (
+                  <div className="col-span-2 pt-2">
+                    <button
+                      onClick={() => setIsRescheduleModalOpen(true)}
+                      className="w-full py-2.5 px-3 bg-stone-100 hover:bg-stone-200/80 text-stone-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer border border-stone-200 shadow-2xs"
+                    >
+                      <Calendar size={14} className="text-stone-600" />
+                      <span>განრიგისა და დედლაინის შეცვლა (Admin)</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : activeTab === "comments" ? (
@@ -1551,6 +1869,51 @@ export function TaskDetailsDrawer({
           }}
           onCancel={() => setPastedFile(null)}
         />
+
+        {/* Step 7: Pause Task Modal */}
+        {task && (
+          <PauseTaskModal
+            isOpen={isPauseModalOpen}
+            onClose={() => setIsPauseModalOpen(false)}
+            taskId={task.id}
+            taskTitle={task.title}
+            currentStatus={task.status}
+            progress={task.progress}
+            deadline={task.deadline || null}
+            onPauseConfirmed={handlePauseTask}
+          />
+        )}
+
+        {/* Step 7: Block Task Modal */}
+        {task && (
+          <BlockTaskModal
+            isOpen={isBlockModalOpen}
+            onClose={() => setIsBlockModalOpen(false)}
+            taskId={task.id}
+            taskTitle={task.title}
+            onBlockConfirmed={handleBlockTask}
+          />
+        )}
+
+        {/* Step 7: Admin Reschedule Modal */}
+        {task && (
+          <RescheduleTaskModal
+            isOpen={isRescheduleModalOpen}
+            onClose={() => setIsRescheduleModalOpen(false)}
+            taskId={task.id}
+            taskTitle={task.title}
+            currentStartDate={task.startDate || null}
+            currentDeadline={task.deadline || null}
+            isDeadlineLocked={task.deadlineLocked}
+            isAdmin={isAdmin}
+            stages={task.stages.map((s) => ({
+              id: s.id,
+              title: s.title,
+              deadline: s.deadline || null,
+            }))}
+            onRescheduleConfirmed={handleReschedule}
+          />
+        )}
       </div>
     </div>
   );

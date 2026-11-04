@@ -188,6 +188,69 @@ export async function PATCH(
           : new Date(data.startDate)
         : undefined;
 
+    // Validate start date is not after deadline
+    const effectiveStart =
+      incomingStart !== undefined ? incomingStart : existing.startDate;
+    if (effectiveStart && effectiveDeadline && effectiveStart > effectiveDeadline) {
+      return NextResponse.json(
+        { error: "დაწყების თარიღი არ შეიძლება იყოს დედლაინზე გვიან" },
+        { status: 400 }
+      );
+    }
+
+    // Require reason when admin modifies an established locked deadline
+    if (
+      existing.deadlineLocked &&
+      existing.deadline &&
+      incomingDeadline &&
+      existing.deadline.getTime() !== incomingDeadline.getTime()
+    ) {
+      if (!data.rescheduleReason || !data.rescheduleReason.trim()) {
+        return NextResponse.json(
+          { error: "დედლაინის ცვლილებისას მიზეზის მითითება სავალდებულოა" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validation for Pause
+    if (data.status === TaskStatus.PAUSED) {
+      if (
+        existing.status === TaskStatus.DONE ||
+        existing.status === TaskStatus.CANCELLED
+      ) {
+        return NextResponse.json(
+          { error: "დასრულებული ან გაუქმებული დავალების შეჩერება დაუშვებელია" },
+          { status: 400 }
+        );
+      }
+      if (!data.pauseReason || !data.pauseReason.trim()) {
+        return NextResponse.json(
+          { error: "დავალების შეჩერების მიზეზის მითითება სავალდებულოა" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validation for Blocked
+    if (data.status === TaskStatus.BLOCKED) {
+      if (
+        existing.status === TaskStatus.DONE ||
+        existing.status === TaskStatus.CANCELLED
+      ) {
+        return NextResponse.json(
+          { error: "დასრულებული ან გაუქმებული დავალების დაბლოკვა დაუშვებელია" },
+          { status: 400 }
+        );
+      }
+      if (!data.blockedReason || !data.blockedReason.trim()) {
+        return NextResponse.json(
+          { error: "დაბლოკვის მიზეზის (დაბრკოლების) მითითება სავალდებულოა" },
+          { status: 400 }
+        );
+      }
+    }
+
     const dataToUpdate: Prisma.TaskUpdateInput = {};
     if (data.projectId !== undefined) {
       dataToUpdate.project = { connect: { id: data.projectId } };
@@ -204,14 +267,14 @@ export async function PATCH(
       dataToUpdate.status = data.status;
       if (data.status === TaskStatus.PAUSED) {
         dataToUpdate.pausedAt = new Date();
-        dataToUpdate.pauseReason = data.pauseReason || "დროებით შეჩერებულია";
+        dataToUpdate.pauseReason = data.pauseReason!.trim();
       } else if (existing.status === TaskStatus.PAUSED) {
         dataToUpdate.pausedAt = null;
         dataToUpdate.pauseReason = null;
       }
 
       if (data.status === TaskStatus.BLOCKED) {
-        dataToUpdate.blockedReason = data.blockedReason || "დაბლოკილია";
+        dataToUpdate.blockedReason = data.blockedReason!.trim();
       } else if (existing.status === TaskStatus.BLOCKED) {
         dataToUpdate.blockedReason = null;
       }
@@ -230,6 +293,13 @@ export async function PATCH(
 
     const updatedTask = await prisma.$transaction(async (tx) => {
       // Handle assignee updates
+      const assigneesChanged =
+        data.assigneeIds !== undefined &&
+        (data.assigneeIds.length !== existing.assignments.length ||
+          !data.assigneeIds.every((id) =>
+            existing.assignments.some((a) => a.userId === id)
+          ));
+
       if (data.assigneeIds !== undefined) {
         await tx.taskAssignment.deleteMany({ where: { taskId: id } });
         if (data.assigneeIds.length > 0) {
@@ -248,7 +318,10 @@ export async function PATCH(
       });
 
       // Audit logs
-      if (incomingDeadline !== undefined && existing.deadline?.getTime() !== incomingDeadline?.getTime()) {
+      if (
+        incomingDeadline !== undefined &&
+        existing.deadline?.getTime() !== incomingDeadline?.getTime()
+      ) {
         await logAuditEvent({
           taskId: id,
           actorId: user.id,
@@ -262,16 +335,45 @@ export async function PATCH(
         });
       }
 
-      if (data.status !== undefined && data.status !== existing.status) {
+      if (
+        incomingStart !== undefined &&
+        existing.startDate?.getTime() !== incomingStart?.getTime()
+      ) {
         await logAuditEvent({
           taskId: id,
           actorId: user.id,
-          action: "STATUS_CHANGED",
+          action: "SCHEDULE_CHANGED",
+          entityType: "TASK",
+          entityId: id,
+          oldValues: { startDate: existing.startDate },
+          newValues: { startDate: incomingStart },
+          reason: data.rescheduleReason || "დაწყების თარიღის ცვლილება",
+          tx,
+        });
+      }
+
+      if (data.status !== undefined && data.status !== existing.status) {
+        let action: "WORK_PAUSED" | "WORK_RESUMED" | "STATUS_CHANGED" =
+          "STATUS_CHANGED";
+        let reason = data.pauseReason || data.blockedReason || "სტატუსის ცვლილება";
+
+        if (data.status === TaskStatus.PAUSED) {
+          action = "WORK_PAUSED";
+          reason = data.pauseReason || "სამუშაო შეჩერდა";
+        } else if (existing.status === TaskStatus.PAUSED) {
+          action = "WORK_RESUMED";
+          reason = data.rescheduleReason || "სამუშაო განახლდა";
+        }
+
+        await logAuditEvent({
+          taskId: id,
+          actorId: user.id,
+          action,
           entityType: "TASK",
           entityId: id,
           oldValues: { status: existing.status },
           newValues: { status: data.status },
-          reason: data.pauseReason || data.blockedReason || "სტატუსის ცვლილება",
+          reason,
           tx,
         });
       }
@@ -286,6 +388,22 @@ export async function PATCH(
           oldValues: { priority: existing.priority },
           newValues: { priority: data.priority },
           reason: "პრიორიტეტის განახლება",
+          tx,
+        });
+      }
+
+      if (assigneesChanged) {
+        await logAuditEvent({
+          taskId: id,
+          actorId: user.id,
+          action: "TASK_ASSIGNED",
+          entityType: "TASK",
+          entityId: id,
+          oldValues: {
+            assigneeIds: existing.assignments.map((a) => a.userId),
+          },
+          newValues: { assigneeIds: data.assigneeIds },
+          reason: "შემსრულებლების განახლება",
           tx,
         });
       }

@@ -8,11 +8,11 @@ import { VerticalTimeline, TimelineDateItem } from "@/components/VerticalTimelin
 import { SharedBacklog, BacklogTask } from "@/components/SharedBacklog";
 import { TaskModal, ProjectOption, UserOption } from "@/components/TaskModal";
 import { TaskDetailsDrawer } from "@/components/TaskDetailsDrawer";
+import { WorkloadDashboard } from "@/components/workload/WorkloadDashboard";
 import { TaskStatus } from "@prisma/client";
 import {
   Loader2,
   Calendar,
-  BarChart2,
   UserCheck,
   History,
   Users,
@@ -33,7 +33,11 @@ interface OverviewMetrics {
   completedLast7Days: number;
 }
 
-export default function WorkspacePage() {
+export default function WorkspacePage({
+  initialView,
+}: {
+  initialView?: NavView;
+} = {}) {
   const router = useRouter();
 
   // Authentication & Session State
@@ -41,11 +45,35 @@ export default function WorkspacePage() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // Navigation & View State
-  const [currentView, setCurrentView] = useState<NavView>("timeline");
+  const [currentView, setCurrentView] = useState<NavView>(() => {
+    if (initialView) return initialView;
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const view = params.get("view");
+      if (
+        view &&
+        [
+          "overview",
+          "timeline",
+          "backlog",
+          "my-work",
+          "workload",
+          "reports",
+          "activity-log",
+          "users",
+          "settings",
+        ].includes(view)
+      ) {
+        return view as NavView;
+      }
+    }
+    return "timeline";
+  });
   const [currentDate, setCurrentDate] = useState<Date>(
     () => new Date("2026-11-05T00:00:00Z")
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [workloadRefreshKey, setWorkloadRefreshKey] = useState(0);
 
   // Projects & Users State
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -200,6 +228,7 @@ export default function WorkspacePage() {
         const data = await metricsRes.json();
         if (data.metrics) setMetrics(data.metrics);
       }
+      setWorkloadRefreshKey((k) => k + 1);
     } catch (e) {
       console.error("Failed to refresh workspace data:", e);
     }
@@ -355,14 +384,14 @@ export default function WorkspacePage() {
               </p>
             </div>
           ) : currentView === "workload" ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white">
-              <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-600 mb-4">
-                <BarChart2 size={28} />
-              </div>
-              <h3 className="text-sm font-bold text-stone-900">გუნდის დატვირთვა</h3>
-              <p className="text-xs text-stone-500 max-w-xs mt-1">
-                დატვირთვისა და სიმძლავრის ეკრანი დაინერგება Step 7-ში.
-              </p>
+            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+              <WorkloadDashboard
+                onSelectTask={handleSelectTask}
+                selectedTaskId={selectedTaskId}
+                projects={projects}
+                users={users}
+                refreshKey={workloadRefreshKey}
+              />
             </div>
           ) : currentView === "activity-log" ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white">
