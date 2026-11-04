@@ -7,6 +7,8 @@ import { z } from "zod";
 const createStageSchema = z.object({
   title: z.string().min(1, "ეტაპის სათაური სავალდებულოა"),
   description: z.string().optional(),
+  startDate: z.string().nullable().optional(),
+  deadline: z.string().nullable().optional(),
   assigneeIds: z.array(z.string()).optional(),
 });
 
@@ -27,7 +29,7 @@ export async function POST(
       );
     }
 
-    const { title, description, assigneeIds } = result.data;
+    const { title, description, startDate, deadline, assigneeIds } = result.data;
 
     const existingCount = await prisma.workflowStage.count({
       where: { taskId },
@@ -35,6 +37,10 @@ export async function POST(
 
     // If it's the first stage, it is active by default
     const isActive = existingCount === 0;
+    const parsedStart = startDate ? new Date(startDate) : null;
+    const parsedDeadline = deadline ? new Date(deadline) : null;
+    const hasInitialAssignees = Boolean(assigneeIds && assigneeIds.length > 0);
+    const shouldLock = Boolean(hasInitialAssignees && parsedDeadline);
 
     const stage = await prisma.$transaction(async (tx) => {
       const created = await tx.workflowStage.create({
@@ -44,6 +50,9 @@ export async function POST(
           description,
           position: existingCount,
           isActive,
+          startDate: parsedStart,
+          deadline: parsedDeadline,
+          deadlineLocked: shouldLock,
         },
       });
 
@@ -71,8 +80,9 @@ export async function POST(
     });
 
     return NextResponse.json({ success: true, stage });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("POST /api/tasks/[id]/stages error:", error);

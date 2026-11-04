@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
+import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -30,7 +31,7 @@ export async function PATCH(
       return NextResponse.json({ error: "მომხმარებელი ვერ მოიძებნა" }, { status: 404 });
     }
 
-    const dataToUpdate: any = {};
+    const dataToUpdate: Prisma.UserUpdateInput = {};
     if (result.data.isActive !== undefined) dataToUpdate.isActive = result.data.isActive;
     if (result.data.name !== undefined) dataToUpdate.name = result.data.name;
     if (result.data.password) {
@@ -61,8 +62,9 @@ export async function PATCH(
         isActive: updatedUser.isActive,
       },
     });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED" || err.message === "FORBIDDEN") {
       return NextResponse.json({ error: "წვდომა შეზღუდულია" }, { status: 403 });
     }
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });

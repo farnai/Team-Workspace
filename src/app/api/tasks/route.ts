@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 import { z } from "zod";
-import { TaskType, Priority, TaskStatus } from "@prisma/client";
+import { TaskType, Priority, TaskStatus, Prisma } from "@prisma/client";
 
 const createTaskSchema = z.object({
   projectId: z.string().optional(),
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     const assigneeId = searchParams.get("assigneeId");
     const mode = searchParams.get("mode"); // e.g. "backlog", "timeline"
 
-    const where: any = {};
+    const where: Prisma.TaskWhereInput = {};
 
     if (search) {
       where.OR = [
@@ -91,8 +91,9 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ tasks });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("GET /api/tasks error:", error);
@@ -185,8 +186,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, task });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("POST /api/tasks error:", error);

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 import { validateDeadlineModification, calculateAndSyncTaskProgress } from "@/lib/workflow";
-import { TaskType, Priority, TaskStatus, Role } from "@prisma/client";
+import { TaskType, Priority, TaskStatus, Role, Prisma } from "@prisma/client";
 import { z } from "zod";
 
 const updateTaskSchema = z.object({
@@ -105,8 +105,9 @@ export async function GET(
     }
 
     return NextResponse.json({ task });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
@@ -171,7 +172,7 @@ export async function PATCH(
           : new Date(data.startDate)
         : undefined;
 
-    const dataToUpdate: any = {};
+    const dataToUpdate: Prisma.TaskUpdateInput = {};
     if (data.title !== undefined) dataToUpdate.title = data.title;
     if (data.description !== undefined) dataToUpdate.description = data.description;
     if (data.type !== undefined) dataToUpdate.type = data.type;
@@ -185,20 +186,20 @@ export async function PATCH(
       if (data.status === TaskStatus.PAUSED) {
         dataToUpdate.pausedAt = new Date();
         dataToUpdate.pauseReason = data.pauseReason || "დროებით შეჩერებულია";
-      } else if (existing.status === TaskStatus.PAUSED && data.status !== TaskStatus.PAUSED) {
+      } else if (existing.status === TaskStatus.PAUSED) {
         dataToUpdate.pausedAt = null;
         dataToUpdate.pauseReason = null;
       }
 
       if (data.status === TaskStatus.BLOCKED) {
         dataToUpdate.blockedReason = data.blockedReason || "დაბლოკილია";
-      } else if (existing.status === TaskStatus.BLOCKED && data.status !== TaskStatus.BLOCKED) {
+      } else if (existing.status === TaskStatus.BLOCKED) {
         dataToUpdate.blockedReason = null;
       }
 
       if (data.status === TaskStatus.DONE) {
         dataToUpdate.completedAt = new Date();
-      } else if (existing.status === TaskStatus.DONE && data.status !== TaskStatus.DONE) {
+      } else if (existing.status === TaskStatus.DONE) {
         dataToUpdate.completedAt = null;
       }
     }
@@ -281,8 +282,9 @@ export async function PATCH(
     await calculateAndSyncTaskProgress(id);
 
     return NextResponse.json({ success: true, task: updatedTask });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("PATCH /api/tasks/[id] error:", error);

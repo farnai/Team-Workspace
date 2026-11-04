@@ -39,8 +39,9 @@ export async function GET(
     } catch {
       return NextResponse.json({ error: "ფაილი დისკზე ვერ მოიძებნა" }, { status: 404 });
     }
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });

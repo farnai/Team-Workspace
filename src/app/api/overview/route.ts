@@ -94,8 +94,9 @@ export async function GET() {
       projects: projectSummaries,
       recentActivities,
     });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("GET /api/overview error:", error);

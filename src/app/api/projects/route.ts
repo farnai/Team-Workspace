@@ -22,8 +22,9 @@ export async function GET() {
     });
 
     return NextResponse.json({ projects });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
@@ -52,8 +53,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, project });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });

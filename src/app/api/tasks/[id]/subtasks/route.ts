@@ -37,6 +37,8 @@ export async function POST(
     });
 
     const parsedDeadline = deadline ? new Date(deadline) : null;
+    const hasInitialAssignees = Boolean(assigneeIds && assigneeIds.length > 0);
+    const shouldLock = Boolean(hasInitialAssignees && parsedDeadline);
 
     const subtask = await prisma.$transaction(async (tx) => {
       const created = await tx.subtask.create({
@@ -47,6 +49,7 @@ export async function POST(
           description,
           position: existingCount,
           deadline: parsedDeadline,
+          deadlineLocked: shouldLock,
           status: "TODO",
         },
       });
@@ -78,8 +81,9 @@ export async function POST(
     const updatedProgress = await calculateAndSyncTaskProgress(taskId);
 
     return NextResponse.json({ success: true, subtask, progress: updatedProgress });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("POST /api/tasks/[id]/subtasks error:", error);

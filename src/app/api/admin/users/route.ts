@@ -32,8 +32,9 @@ export async function GET() {
     });
 
     return NextResponse.json({ users });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED" || err.message === "FORBIDDEN") {
       return NextResponse.json({ error: "წვდომა შეზღუდულია (მხოლოდ ადმინისტრატორს)" }, { status: 403 });
     }
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
@@ -98,8 +99,9 @@ export async function POST(req: NextRequest) {
         isActive: newUser.isActive,
       },
     });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED" || err.message === "FORBIDDEN") {
       return NextResponse.json({ error: "წვდომა შეზღუდულია" }, { status: 403 });
     }
     console.error("Create user error:", error);

@@ -1,14 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import {
   Calendar as CalendarIcon,
   Filter,
   CheckCircle2,
   AlertCircle,
-  Clock,
-  User,
-  SlidersHorizontal,
 } from "lucide-react";
 import {
   formatGeorgianDate,
@@ -17,8 +15,44 @@ import {
   formatGeorgianDateShort,
 } from "@/lib/dateUtils";
 
+export interface TimelineTask {
+  id: string;
+  taskNumber: number;
+  title: string;
+  type: string;
+  priority: string;
+  status: string;
+  progress: number;
+  startDate: string | null;
+  deadline: string | null;
+  isOverdue?: boolean;
+  assignees: { id: string; name: string; avatarUrl: string | null }[];
+  totalSubtasks: number;
+  doneSubtasks: number;
+}
+
+export interface TimelineActivity {
+  id: string;
+  action: string;
+  createdAt: string;
+  reason?: string | null;
+  actor?: { id: string; name: string; avatarUrl: string | null };
+  task?: { id: string; title: string };
+}
+
+export interface TimelineDateItem {
+  date: string;
+  dayOfWeek: number;
+  isWeekend: boolean;
+  isWorking: boolean;
+  holidayName?: string | null;
+  isToday: boolean;
+  tasks: TimelineTask[];
+  activities: TimelineActivity[];
+}
+
 interface TimelineProps {
-  dates: any[];
+  dates: TimelineDateItem[];
   onSelectTask: (taskId: string) => void;
   selectedTaskId: string | null;
   mode: "schedule" | "activity";
@@ -131,7 +165,7 @@ export function VerticalTimeline({
             const filteredTasks =
               filterType === "ALL"
                 ? day.tasks
-                : day.tasks.filter((t: any) => t.type === filterType);
+                : day.tasks.filter((t) => t.type === filterType);
 
             return (
               <div key={day.date} className="relative pl-7 group">
@@ -187,7 +221,7 @@ export function VerticalTimeline({
                         დაგეგმილი ტასკები არ არის
                       </div>
                     ) : (
-                      filteredTasks.map((t: any) => {
+                      filteredTasks.map((t) => {
                         const isSelected = selectedTaskId === t.id;
 
                         // Type badge colors
@@ -257,17 +291,20 @@ export function VerticalTimeline({
                                 {t.assignees && t.assignees.length > 0 ? (
                                   <div className="flex items-center gap-1">
                                     <div className="flex -space-x-1.5 overflow-hidden">
-                                      {t.assignees.map((u: any) => (
+                                      {t.assignees.map((u) => (
                                         <div
                                           key={u.id}
                                           className="w-5 h-5 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[9px] font-bold text-stone-700"
                                           title={u.name}
                                         >
                                           {u.avatarUrl ? (
-                                            <img
+                                            <Image
                                               src={u.avatarUrl}
                                               alt={u.name}
+                                              width={20}
+                                              height={20}
                                               className="w-full h-full rounded-full object-cover"
+                                              unoptimized
                                             />
                                           ) : (
                                             u.name.charAt(0)
@@ -276,7 +313,7 @@ export function VerticalTimeline({
                                       ))}
                                     </div>
                                     <span className="text-stone-700 font-medium ml-1">
-                                      {t.assignees.map((u: any) => u.name).join(", ")}
+                                      {t.assignees.map((u) => u.name).join(", ")}
                                     </span>
                                   </div>
                                 ) : (
@@ -304,7 +341,7 @@ export function VerticalTimeline({
                         ამ დღეს აქტივობა არ დაფიქსირებულა
                       </div>
                     ) : (
-                      day.activities.map((a: any) => (
+                      day.activities.map((a) => (
                         <div
                           key={a.id}
                           className="p-2.5 rounded-xl bg-stone-50/80 border border-stone-200/60 text-xs"
@@ -329,7 +366,7 @@ export function VerticalTimeline({
                           )}
                           {a.task && (
                             <div
-                              onClick={() => onSelectTask(a.task.id)}
+                              onClick={() => a.task?.id && onSelectTask(a.task.id)}
                               className="mt-1 text-orange-600 hover:underline cursor-pointer font-semibold text-[11px]"
                             >
                               {a.task.title}

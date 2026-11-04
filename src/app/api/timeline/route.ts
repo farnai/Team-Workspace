@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { format, addDays, subDays, startOfDay, endOfDay, isSameDay } from "date-fns";
+import { TaskType, Prisma } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,9 +12,9 @@ export async function GET(req: NextRequest) {
     const centerDateStr = searchParams.get("date"); // e.g. "2026-11-04"
     const rangeDays = parseInt(searchParams.get("days") || "14", 10);
     const mode = searchParams.get("mode") || "schedule"; // "schedule" or "activity"
-    const projectId = searchParams.get("projectId");
-    const assigneeId = searchParams.get("assigneeId");
-    const type = searchParams.get("type");
+    const projectId = searchParams.get("projectId") || undefined;
+    const assigneeId = searchParams.get("assigneeId") || undefined;
+    const type = (searchParams.get("type") as TaskType) || undefined;
 
     const centerDate = centerDateStr ? new Date(centerDateStr) : new Date();
     const startDate = startOfDay(subDays(centerDate, Math.floor(rangeDays / 2)));
@@ -34,8 +35,20 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    interface TimelineDateEntry {
+      date: string;
+      dateObj: Date;
+      dayOfWeek: number;
+      isWeekend: boolean;
+      isWorking: boolean;
+      holidayName: string | null;
+      isToday: boolean;
+      tasks: Record<string, unknown>[];
+      activities: Record<string, unknown>[];
+    }
+
     // Generate date sequence
-    const dates: any[] = [];
+    const dates: TimelineDateEntry[] = [];
     let cur = new Date(startDate);
     while (cur <= endDate) {
       const dayOfWeek = cur.getDay();
@@ -57,7 +70,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Filter tasks
-    const taskWhere: any = {};
+    const taskWhere: Prisma.TaskWhereInput = {};
     if (projectId) taskWhere.projectId = projectId;
     if (assigneeId) taskWhere.assignments = { some: { userId: assigneeId } };
     if (type) taskWhere.type = type;
@@ -135,7 +148,7 @@ export async function GET(req: NextRequest) {
             gte: startDate,
             lte: endDate,
           },
-          ...(taskWhere.projectId ? { task: { projectId } } : {}),
+          ...(projectId ? { task: { projectId } } : {}),
         },
         include: {
           actor: { select: { id: true, name: true, avatarUrl: true } },
@@ -162,15 +175,25 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      dates: dates.map(({ dateObj, ...rest }) => rest),
+      dates: dates.map((d) => ({
+        date: d.date,
+        dayOfWeek: d.dayOfWeek,
+        isWeekend: d.isWeekend,
+        isWorking: d.isWorking,
+        holidayName: d.holidayName,
+        isToday: d.isToday,
+        tasks: d.tasks,
+        activities: d.activities,
+      })),
       range: {
         start: format(startDate, "yyyy-MM-dd"),
         end: format(endDate, "yyyy-MM-dd"),
         center: format(centerDate, "yyyy-MM-dd"),
       },
     });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("GET /api/timeline error:", error);

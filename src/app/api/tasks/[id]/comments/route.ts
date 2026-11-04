@@ -54,8 +54,9 @@ export async function POST(
     });
 
     return NextResponse.json({ success: true, comment });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("POST /api/tasks/[id]/comments error:", error);

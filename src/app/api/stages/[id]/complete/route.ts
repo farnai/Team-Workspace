@@ -16,10 +16,11 @@ export async function POST(
     });
 
     return NextResponse.json({ success: true, nextStage: result.nextStage });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message || "სერვერის შეცდომა" }, { status: 400 });
+    return NextResponse.json({ error: err.message || "სერვერის შეცდომა" }, { status: 400 });
   }
 }

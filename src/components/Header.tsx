@@ -1,19 +1,24 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import {
   Search,
   ChevronLeft,
   ChevronRight,
   Plus,
   Bell,
-  CheckCircle2,
-  Calendar,
   LogOut,
-  User as UserIcon,
   Shield,
 } from "lucide-react";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
+
+export interface HeaderNotification {
+  id: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+}
 
 interface HeaderProps {
   currentUser: {
@@ -29,7 +34,7 @@ interface HeaderProps {
   currentDate: Date;
   onDateChange: (newDate: Date) => void;
   onLogout: () => void;
-  notifications: any[];
+  notifications: HeaderNotification[];
   unreadCount: number;
 }
 
@@ -193,10 +198,13 @@ export function Header({
             >
               <div className="w-8 h-8 rounded-full overflow-hidden bg-orange-100 ring-2 ring-stone-200/80 flex items-center justify-center text-orange-700 font-bold text-xs">
                 {currentUser.avatarUrl ? (
-                  <img
+                  <Image
                     src={currentUser.avatarUrl}
                     alt={currentUser.name}
+                    width={32}
+                    height={32}
                     className="w-full h-full object-cover"
+                    unoptimized
                   />
                 ) : (
                   currentUser.name.charAt(0)

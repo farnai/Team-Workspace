@@ -7,8 +7,8 @@ export interface LogAuditOptions {
   action: AuditAction;
   entityType: string;
   entityId: string;
-  oldValues?: Record<string, any> | null;
-  newValues?: Record<string, any> | null;
+  oldValues?: Record<string, unknown> | Prisma.InputJsonValue | null;
+  newValues?: Record<string, unknown> | Prisma.InputJsonValue | null;
   reason?: string | null;
   tx?: Prisma.TransactionClient;
 }
@@ -33,8 +33,8 @@ export async function logAuditEvent({
       action,
       entityType,
       entityId,
-      oldValues: oldValues ?? undefined,
-      newValues: newValues ?? undefined,
+      oldValues: (oldValues as Prisma.InputJsonValue) ?? undefined,
+      newValues: (newValues as Prisma.InputJsonValue) ?? undefined,
       reason: reason ?? undefined,
     },
   });

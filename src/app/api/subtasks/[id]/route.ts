@@ -2,15 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
-import { calculateAndSyncTaskProgress } from "@/lib/workflow";
-import { SubtaskStatus } from "@prisma/client";
+import { calculateAndSyncTaskProgress, validateDeadlineModification } from "@/lib/workflow";
+import { SubtaskStatus, Role, Prisma } from "@prisma/client";
 import { z } from "zod";
 
 const updateSubtaskSchema = z.object({
   title: z.string().min(1).optional(),
   status: z.nativeEnum(SubtaskStatus).optional(),
+  startDate: z.string().nullable().optional(),
   deadline: z.string().nullable().optional(),
   assigneeIds: z.array(z.string()).optional(),
+  rescheduleReason: z.string().optional(),
 });
 
 export async function PATCH(
@@ -41,10 +43,47 @@ export async function PATCH(
       return NextResponse.json({ error: "საბტასკი ვერ მოიძებნა" }, { status: 404 });
     }
 
-    const dataToUpdate: any = {};
+    const isAdmin = user.role === Role.ADMIN;
+    const incomingDeadline =
+      data.deadline !== undefined
+        ? data.deadline === null
+          ? null
+          : new Date(data.deadline)
+        : undefined;
+
+    const deadlineCheck = validateDeadlineModification({
+      isDeadlineLocked: existing.deadlineLocked,
+      existingDeadline: existing.deadline,
+      incomingDeadline,
+      isAdmin,
+    });
+
+    if (!deadlineCheck.allowed) {
+      return NextResponse.json(
+        { error: deadlineCheck.error || "დედლაინის შეცვლა შეუძლია მხოლოდ ადმინისტრატორს" },
+        { status: 403 }
+      );
+    }
+
+    const incomingStart =
+      data.startDate !== undefined
+        ? data.startDate === null
+          ? null
+          : new Date(data.startDate)
+        : undefined;
+
+    const dataToUpdate: Prisma.SubtaskUpdateInput = {};
     if (data.title !== undefined) dataToUpdate.title = data.title;
-    if (data.deadline !== undefined) {
-      dataToUpdate.deadline = data.deadline ? new Date(data.deadline) : null;
+    if (incomingStart !== undefined) dataToUpdate.startDate = incomingStart;
+    if (incomingDeadline !== undefined) dataToUpdate.deadline = incomingDeadline;
+
+    // Lock deadline if deadline is set and subtask is assigned
+    if (
+      !existing.deadlineLocked &&
+      ((incomingDeadline || existing.deadline) &&
+        ((data.assigneeIds && data.assigneeIds.length > 0) || existing.assignments.length > 0))
+    ) {
+      dataToUpdate.deadlineLocked = true;
     }
 
     const isCompleting = data.status === SubtaskStatus.DONE && existing.status !== SubtaskStatus.DONE;
@@ -53,10 +92,10 @@ export async function PATCH(
     if (data.status !== undefined) {
       dataToUpdate.status = data.status;
       if (isCompleting) {
-        dataToUpdate.completedById = user.id;
+        dataToUpdate.completedBy = { connect: { id: user.id } };
         dataToUpdate.completedAt = new Date();
       } else if (isReopening) {
-        dataToUpdate.completedById = null;
+        dataToUpdate.completedBy = { disconnect: true };
         dataToUpdate.completedAt = null;
       }
     }
@@ -84,6 +123,20 @@ export async function PATCH(
           },
         },
       });
+
+      if (incomingDeadline !== undefined && existing.deadline?.getTime() !== incomingDeadline?.getTime()) {
+        await logAuditEvent({
+          taskId: existing.taskId,
+          actorId: user.id,
+          action: "DEADLINE_CHANGED",
+          entityType: "SUBTASK",
+          entityId: subtaskId,
+          oldValues: { deadline: existing.deadline },
+          newValues: { deadline: incomingDeadline },
+          reason: data.rescheduleReason || "ადმინისტრატორის მიერ საბტასკის დედლაინის შეცვლა",
+          tx,
+        });
+      }
 
       if (isCompleting) {
         await logAuditEvent({
@@ -120,8 +173,9 @@ export async function PATCH(
       subtask: updatedSubtask,
       progress: newProgress,
     });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("PATCH /api/subtasks/[id] error:", error);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
     const actorId = searchParams.get("actorId");
     const limit = parseInt(searchParams.get("limit") || "50", 10);
 
-    const where: any = {};
+    const where: Prisma.AuditEventWhereInput = {};
     if (taskId) where.taskId = taskId;
     if (actorId) where.actorId = actorId;
 
@@ -34,8 +35,9 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ auditEvents });
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
     console.error("GET /api/audit error:", error);

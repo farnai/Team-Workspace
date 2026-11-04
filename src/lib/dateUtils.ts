@@ -1,4 +1,4 @@
-import { format, isToday, isTomorrow, isYesterday, isWeekend } from "date-fns";
+import { format, isToday, isTomorrow, isYesterday } from "date-fns";
 
 const GEORGIAN_MONTHS = [
   "იანვარი",

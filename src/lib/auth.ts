@@ -71,7 +71,10 @@ export async function getCurrentUser(): Promise<User | null> {
     }
 
     return session.user;
-  } catch (error) {
+  } catch (error: unknown) {
+    if ((error as { digest?: string })?.digest === "HANGING_PROMISE_REJECTION") {
+      throw error;
+    }
     console.error("Error retrieving current user:", error);
     return null;
   }
