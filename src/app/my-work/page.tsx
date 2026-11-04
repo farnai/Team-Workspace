@@ -6,3 +6,4 @@ import WorkspacePage from "../page";
 export default function MyWorkRoutePage() {
   return <WorkspacePage initialView="my-work" />;
 }
+
