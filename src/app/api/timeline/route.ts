@@ -200,6 +200,13 @@ export async function GET(req: NextRequest) {
               deadline: t.deadline,
               deadlineLocked: t.deadlineLocked,
               isOverdue,
+              project: t.project
+                ? {
+                    id: t.project.id,
+                    name: t.project.name,
+                    color: t.project.color,
+                  }
+                : null,
               assignees: t.assignments.map((a) => a.user),
               responsibleUsers,
               activeStage: activeStage

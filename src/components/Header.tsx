@@ -10,6 +10,7 @@ import {
   Bell,
   LogOut,
   Shield,
+  Menu,
 } from "lucide-react";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
 
@@ -40,6 +41,7 @@ interface HeaderProps {
   unreadCount: number;
   onSelectTask?: (taskId: string) => void;
   onRefreshNotifications?: () => void;
+  onToggleMobileSidebar?: () => void;
 }
 
 export function Header({
@@ -54,6 +56,7 @@ export function Header({
   unreadCount,
   onSelectTask,
   onRefreshNotifications,
+  onToggleMobileSidebar,
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -99,9 +102,18 @@ export function Header({
   };
 
   return (
-    <header className="h-16 border-b border-stone-200/80 bg-white px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-      {/* Left: Brand Logo */}
-      <div className="flex items-center gap-8">
+    <header className="h-16 border-b border-stone-200/80 bg-white px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs shrink-0">
+      {/* Left: Brand Logo & Mobile Menu Toggle */}
+      <div className="flex items-center gap-3 sm:gap-8">
+        {onToggleMobileSidebar && (
+          <button
+            onClick={onToggleMobileSidebar}
+            className="p-1.5 -ml-1 text-stone-600 hover:text-stone-900 rounded-lg md:hidden cursor-pointer"
+            title="მენიუს გახსნა"
+          >
+            <Menu size={20} />
+          </button>
+        )}
         <div className="flex items-center gap-2.5 cursor-pointer" onClick={handleToday}>
           {/* Dual leaf terracotta brand icon */}
           <div className="w-8 h-8 rounded-xl bg-orange-600 flex items-center justify-center text-white shadow-xs">

@@ -78,7 +78,7 @@ export function SharedBacklog({
   // Filtering & Search State
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ACTIVE");
   const [projectFilter, setProjectFilter] = useState<string>("ALL");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
@@ -110,8 +110,12 @@ export function SharedBacklog({
           return false;
         }
 
-        // Status filter
-        if (statusFilter !== "ALL" && task.status !== statusFilter) {
+        // Status filter: Default ACTIVE excludes DONE and CANCELLED
+        if (statusFilter === "ACTIVE") {
+          if (task.status === TaskStatus.DONE || task.status === TaskStatus.CANCELLED) {
+            return false;
+          }
+        } else if (statusFilter !== "ALL" && task.status !== statusFilter) {
           return false;
         }
 
@@ -184,7 +188,7 @@ export function SharedBacklog({
   const resetFilters = () => {
     setSearchQuery("");
     setTypeFilter("ALL");
-    setStatusFilter("ALL");
+    setStatusFilter("ACTIVE");
     setProjectFilter("ALL");
     setAssigneeFilter("ALL");
     setPriorityFilter("ALL");
@@ -195,7 +199,7 @@ export function SharedBacklog({
   const hasActiveFilters =
     searchQuery !== "" ||
     typeFilter !== "ALL" ||
-    statusFilter !== "ALL" ||
+    statusFilter !== "ACTIVE" ||
     projectFilter !== "ALL" ||
     assigneeFilter !== "ALL" ||
     priorityFilter !== "ALL" ||
@@ -451,14 +455,14 @@ export function SharedBacklog({
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="w-full px-2 py-1 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-800 focus:outline-none"
                 >
-                  <option value="ALL">ყველა სტატუსი</option>
-                  <option value={TaskStatus.BACKLOG}>Backlog</option>
-                  <option value={TaskStatus.PLANNED}>Planned</option>
-                  <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
-                  <option value={TaskStatus.PAUSED}>Paused</option>
-                  <option value={TaskStatus.BLOCKED}>Blocked</option>
-                  <option value={TaskStatus.DONE}>Done</option>
-                  <option value={TaskStatus.CANCELLED}>Cancelled</option>
+                  <option value="ACTIVE">აქტიური (ნაგულისხმევი)</option>
+                  <option value={TaskStatus.BACKLOG}>ბექლოგი (Backlog)</option>
+                  <option value={TaskStatus.PLANNED}>დაგეგმილი (Planned)</option>
+                  <option value={TaskStatus.IN_PROGRESS}>მუშაობაში (In Progress)</option>
+                  <option value={TaskStatus.PAUSED}>შეჩერებული (Paused)</option>
+                  <option value={TaskStatus.BLOCKED}>დაბლოკილი (Blocked)</option>
+                  <option value={TaskStatus.CANCELLED}>გაუქმებული (ისტორია)</option>
+                  <option value="ALL">ყველა (მათ შორის არქივი)</option>
                 </select>
               </div>
 

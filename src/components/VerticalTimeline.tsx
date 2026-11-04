@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import {
   Calendar as CalendarIcon,
@@ -33,6 +33,7 @@ export interface TimelineTask {
   deadline: string | null;
   deadlineLocked?: boolean;
   isOverdue?: boolean;
+  project?: { id: string; name: string; color?: string | null } | null;
   assignees: { id: string; name: string; avatarUrl: string | null }[];
   responsibleUsers?: { id: string; name: string; avatarUrl: string | null }[];
   activeStage?: {
@@ -188,8 +189,18 @@ export function VerticalTimeline({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const todayElementRef = useRef<HTMLDivElement>(null);
   const initialScrolledRef = useRef<boolean>(false);
+  const dayElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Focus Today near the top of viewport on initial load or date change
+  const [activeDateKey, setActiveDateKey] = useState<string>(() => {
+    const today = dates.find((d) => d.isToday);
+    if (today) return today.date;
+    const y = currentDate.getFullYear();
+    const m = String(currentDate.getMonth() + 1).padStart(2, "0");
+    const d = String(currentDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  });
+
+  // Focus Today near the top of viewport on initial load
   useEffect(() => {
     if (!isLoading && dates.length > 0 && todayElementRef.current && scrollContainerRef.current) {
       if (!initialScrolledRef.current) {
@@ -201,11 +212,44 @@ export function VerticalTimeline({
     }
   }, [isLoading, dates]);
 
+  // Scroll detection to update activeDateKey smoothly
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const focusThreshold = container.scrollTop + 60;
+
+    let closestDate: string | null = null;
+    let closestDist = Infinity;
+
+    for (const [dateStr, el] of dayElementsRef.current.entries()) {
+      if (!el) continue;
+      const top = el.offsetTop;
+      const height = el.offsetHeight;
+      if (focusThreshold >= top && focusThreshold <= top + height) {
+        closestDate = dateStr;
+        break;
+      }
+      const dist = Math.abs(top - focusThreshold);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestDate = dateStr;
+      }
+    }
+
+    if (closestDate && closestDate !== activeDateKey) {
+      setActiveDateKey(closestDate);
+    }
+  }, [activeDateKey]);
+
   const handleScrollToToday = () => {
+    const todayItem = dates.find((d) => d.isToday);
     if (todayElementRef.current && scrollContainerRef.current) {
       const container = scrollContainerRef.current;
       const target = todayElementRef.current;
       container.scrollTo({ top: target.offsetTop - 16, behavior: "smooth" });
+    }
+    if (todayItem) {
+      setActiveDateKey(todayItem.date);
     }
     if (onToday) onToday();
   };
@@ -218,10 +262,16 @@ export function VerticalTimeline({
   })();
 
   const handleDatePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.value || !onDateChange) return;
-    const parts = e.target.value.split("-").map(Number);
-    if (parts.length === 3) {
+    if (!e.target.value) return;
+    const dateStr = e.target.value;
+    const parts = dateStr.split("-").map(Number);
+    if (parts.length === 3 && onDateChange) {
       onDateChange(new Date(parts[0], parts[1] - 1, parts[2]));
+    }
+    const targetEl = dayElementsRef.current.get(dateStr);
+    if (targetEl && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: targetEl.offsetTop - 16, behavior: "smooth" });
+      setActiveDateKey(dateStr);
     }
   };
 
@@ -337,7 +387,8 @@ export function VerticalTimeline({
       {/* Scrollable Timeline Area */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6 scroll-smooth"
+        onScroll={handleScroll}
+        className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-5 scroll-smooth"
       >
         {isLoading ? (
           <div className="p-12 text-center text-xs text-stone-400">
@@ -350,6 +401,7 @@ export function VerticalTimeline({
         ) : (
           dates.map((day) => {
             const relativeLabel = getDateRelativeLabel(day.date);
+            const isActiveDate = day.date === activeDateKey;
             const filteredTasks =
               filterType === "ALL"
                 ? day.tasks
@@ -358,14 +410,20 @@ export function VerticalTimeline({
             return (
               <div
                 key={day.date}
-                ref={day.isToday ? todayElementRef : null}
-                id={day.isToday ? "timeline-today-anchor" : undefined}
-                className={`relative pl-7 group transition-colors rounded-2xl p-2 ${
-                  day.isWeekend || !day.isWorking
-                    ? "bg-stone-50/50"
+                ref={(el) => {
+                  if (el) dayElementsRef.current.set(day.date, el);
+                  else dayElementsRef.current.delete(day.date);
+                  if (day.isToday) todayElementRef.current = el;
+                }}
+                id={day.isToday ? "timeline-today-anchor" : `timeline-day-${day.date}`}
+                className={`relative pl-7 group transition-all duration-200 rounded-2xl p-2.5 ${
+                  isActiveDate
+                    ? "bg-orange-50/25 ring-2 ring-orange-500/50 border border-orange-200/90 shadow-2xs opacity-100"
+                    : day.isWeekend || !day.isWorking
+                    ? "bg-stone-50/50 border border-stone-100/60 opacity-80 hover:opacity-100"
                     : day.isToday
-                    ? "bg-orange-50/20 ring-1 ring-orange-400/40"
-                    : ""
+                    ? "bg-emerald-50/20 border border-emerald-200/50 opacity-90 hover:opacity-100"
+                    : "border border-transparent opacity-80 hover:opacity-100 hover:bg-stone-50/60"
                 }`}
               >
                 {/* Vertical Timeline Axis Line */}
@@ -374,8 +432,10 @@ export function VerticalTimeline({
                 {/* Node Bullet Marker */}
                 <div
                   className={`absolute left-1.5 top-3 w-3 h-3 rounded-full border-2 bg-white transition-all ${
-                    day.isToday
-                      ? "border-orange-600 ring-3 ring-orange-100"
+                    isActiveDate
+                      ? "border-orange-600 ring-4 ring-orange-200/80 scale-110"
+                      : day.isToday
+                      ? "border-emerald-600 ring-2 ring-emerald-100"
                       : day.holidayName
                       ? "border-amber-500 bg-amber-100"
                       : day.isWeekend
@@ -385,23 +445,43 @@ export function VerticalTimeline({
                 />
 
                 {/* Date Header Row */}
-                <div className="flex items-center gap-2 mb-2.5 flex-wrap">
-                  <span className="text-xs font-extrabold text-stone-900 tracking-tight">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span
+                    className={`tracking-tight ${
+                      isActiveDate
+                        ? "text-sm font-black text-stone-900"
+                        : "text-xs font-bold text-stone-700"
+                    }`}
+                  >
                     {formatGeorgianDate(day.date)}
                   </span>
-                  <span className="text-xs text-stone-500 font-medium">
+                  <span
+                    className={`${
+                      isActiveDate
+                        ? "text-xs text-stone-600 font-semibold"
+                        : "text-[11px] text-stone-400 font-medium"
+                    }`}
+                  >
                     {getGeorgianDayOfWeek(day.date)}
                   </span>
 
-                  {/* Relative Badge (დღეს, ხვალ) */}
-                  {relativeLabel && (
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        day.isToday
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-stone-200/80 text-stone-700"
-                      }`}
-                    >
+                  {/* Active Indicator Badge */}
+                  {isActiveDate && (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-orange-600 text-white shadow-2xs">
+                      აქტიური
+                    </span>
+                  )}
+
+                  {/* Today Badge */}
+                  {day.isToday && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200/60">
+                      • დღეს
+                    </span>
+                  )}
+
+                  {/* Relative Badge */}
+                  {relativeLabel && !day.isToday && (
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">
                       • {relativeLabel}
                     </span>
                   )}
@@ -420,7 +500,7 @@ export function VerticalTimeline({
 
                 {/* Mode 1: Schedule Mode */}
                 {mode === "schedule" ? (
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     {filteredTasks.length === 0 ? (
                       <div className="text-[11px] text-stone-300 italic pl-1">
                         დაგეგმილი ტასკები არ არის
@@ -440,7 +520,6 @@ export function VerticalTimeline({
                             "bg-rose-50 text-rose-700 border-rose-200/60";
                         }
 
-                        // Determine responsible participants to display (active stage responsibles or task assignees)
                         const activeResponsibles =
                           t.responsibleUsers && t.responsibleUsers.length > 0
                             ? t.responsibleUsers
@@ -448,19 +527,20 @@ export function VerticalTimeline({
 
                         const isContinuation = Boolean(t.isMultiDay && !t.isSpanStart);
 
+                        // Continuation Card (Single-line dashed row)
                         if (isContinuation) {
                           return (
                             <div
                               key={`${t.id}-${day.date}`}
                               onClick={() => onSelectTask(t.id)}
-                              className={`px-3 py-2 rounded-xl border border-dashed transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                              className={`px-3 py-1.5 rounded-xl border border-dashed transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
                                 isSelected
                                   ? "bg-orange-50/70 border-orange-500 ring-2 ring-orange-200/60 shadow-xs"
                                   : "bg-stone-50/70 hover:bg-white border-stone-200/90 shadow-2xs hover:shadow-xs"
                               }`}
                             >
                               <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-stone-200/80 text-stone-600 tracking-wider uppercase shrink-0">
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-stone-200/80 text-stone-600 tracking-wider uppercase shrink-0">
                                   გაგრძელება
                                 </span>
                                 <span className="text-[10px] font-mono font-bold text-stone-400 shrink-0">
@@ -469,20 +549,20 @@ export function VerticalTimeline({
                                 <h4 className="text-xs font-semibold text-stone-800 truncate">
                                   {t.title}
                                 </h4>
-                                {t.activeStage && (
-                                  <span className="hidden md:inline-flex text-[10px] font-semibold text-orange-700 bg-orange-100/70 px-2 py-0.2 rounded-md shrink-0 truncate max-w-[140px]">
-                                    {t.activeStage.title}
+                                {t.project && (
+                                  <span className="hidden sm:inline-flex text-[9px] font-medium text-stone-500 bg-stone-100 px-1.5 py-0.2 rounded shrink-0 truncate max-w-[100px]">
+                                    {t.project.name}
                                   </span>
                                 )}
                               </div>
 
-                              <div className="flex items-center gap-2.5 shrink-0">
+                              <div className="flex items-center gap-2 shrink-0">
                                 {activeResponsibles && activeResponsibles.length > 0 && (
-                                  <div className="flex -space-x-1.5 overflow-hidden">
+                                  <div className="flex -space-x-1 overflow-hidden">
                                     {activeResponsibles.slice(0, 2).map((u) => (
                                       <div
                                         key={u.id}
-                                        className="w-5 h-5 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-bold text-stone-700 shrink-0"
+                                        className="w-4 h-4 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-bold text-stone-700 shrink-0"
                                         title={u.name}
                                       >
                                         {u.name.charAt(0)}
@@ -490,21 +570,11 @@ export function VerticalTimeline({
                                     ))}
                                   </div>
                                 )}
-
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-12 h-1.5 bg-stone-200 rounded-full overflow-hidden hidden sm:block">
-                                    <div
-                                      className="bg-emerald-500 h-full rounded-full"
-                                      style={{ width: `${t.progress}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-[10px] font-bold text-stone-600">
-                                    {t.progress}%
-                                  </span>
-                                </div>
-
+                                <span className="text-[10px] font-bold text-stone-600">
+                                  {t.progress}%
+                                </span>
                                 {t.isSpanEnd && (
-                                  <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                  <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-200 shrink-0">
                                     დედლაინი
                                   </span>
                                 )}
@@ -513,19 +583,78 @@ export function VerticalTimeline({
                           );
                         }
 
+                        // Case A: Inactive Date -> Ultra-compact 1-line card
+                        if (!isActiveDate) {
+                          return (
+                            <div
+                              key={`${t.id}-${day.date}`}
+                              onClick={() => onSelectTask(t.id)}
+                              className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
+                                isSelected
+                                  ? "bg-orange-50/60 border-orange-500 ring-2 ring-orange-200/60 shadow-xs"
+                                  : "bg-white hover:bg-stone-50/90 border-stone-200/70 shadow-2xs hover:shadow-xs"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span
+                                  className={`text-[8px] font-black px-1 py-0.2 rounded border uppercase shrink-0 ${typeBadgeClass}`}
+                                >
+                                  {t.type.slice(0, 3)}
+                                </span>
+                                <span className="text-[10px] font-mono font-bold text-stone-400 shrink-0">
+                                  #{t.taskNumber}
+                                </span>
+                                <h4 className="text-xs font-medium text-stone-800 truncate">
+                                  {t.title}
+                                </h4>
+                                {t.project && (
+                                  <span className="hidden sm:inline-flex text-[9px] font-medium text-stone-500 bg-stone-100 px-1.5 py-0.2 rounded shrink-0 truncate max-w-[90px]">
+                                    {t.project.name}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                {activeResponsibles && activeResponsibles.length > 0 && (
+                                  <div className="flex -space-x-1 overflow-hidden">
+                                    {activeResponsibles.slice(0, 2).map((u) => (
+                                      <div
+                                        key={u.id}
+                                        className="w-4 h-4 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-bold text-stone-700 shrink-0"
+                                        title={u.name}
+                                      >
+                                        {u.name.charAt(0)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <span className="text-[10px] font-bold text-stone-600">
+                                  {t.progress}%
+                                </span>
+                                {t.deadline && (
+                                  <span className="text-[10px] text-stone-400 font-mono hidden sm:inline">
+                                    {formatGeorgianDateShort(t.deadline)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // Case B: Active Date -> Clean, compact 1-2 line card
                         return (
                           <div
                             key={`${t.id}-${day.date}`}
                             onClick={() => onSelectTask(t.id)}
-                            className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                            className={`p-3 rounded-2xl border transition-all cursor-pointer ${
                               isSelected
                                 ? "bg-orange-50/50 border-orange-500 ring-2 ring-orange-200/60 shadow-xs"
                                 : "bg-white hover:bg-stone-50/90 border-stone-200/90 shadow-2xs hover:shadow-xs"
                             }`}
                           >
-                            {/* Top row: Type badge, Task Number, Title, Overdue & Progress */}
+                            {/* Line 1: Type, Number, Title, Project, Overdue & Progress */}
                             <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
                                 <span
                                   className={`text-[9px] font-black px-1.5 py-0.5 rounded border tracking-wider uppercase shrink-0 ${typeBadgeClass}`}
                                 >
@@ -539,19 +668,25 @@ export function VerticalTimeline({
                                 <h4 className="text-xs font-bold text-stone-900 truncate">
                                   {t.title}
                                 </h4>
+
+                                {t.project && (
+                                  <span className="hidden sm:inline-flex text-[9px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-md shrink-0 truncate max-w-[120px]">
+                                    {t.project.name}
+                                  </span>
+                                )}
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
                                 {t.isOverdue && (
                                   <span className="flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
-                                    <AlertCircle size={11} />
+                                    <AlertCircle size={10} />
                                     <span>გადაცილებული</span>
                                   </span>
                                 )}
 
                                 {t.status === "DONE" && (
-                                  <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                                    <CheckCircle2 size={13} />
+                                  <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                    <CheckCircle2 size={12} />
                                   </span>
                                 )}
 
@@ -563,43 +698,30 @@ export function VerticalTimeline({
                               </div>
                             </div>
 
-                            {/* Active Stage Indicator (Phase D Workflow Integration) */}
-                            {t.activeStage && (
-                              <div className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-orange-800 bg-orange-50/80 px-2.5 py-1 rounded-xl border border-orange-200/70">
-                                <Layers size={12} className="text-orange-600 shrink-0" />
-                                <span className="truncate">
-                                  აქტიური ეტაპი: {t.activeStage.title}
-                                </span>
-                              </div>
-                            )}
+                            {/* Line 2: Active Stage, Responsibles, Subtasks & Deadline */}
+                            <div className="mt-2 flex items-center justify-between text-[11px] text-stone-500 gap-2 flex-wrap">
+                              <div className="flex items-center gap-2 min-w-0">
+                                {t.activeStage && (
+                                  <span className="text-[10px] font-bold text-orange-800 bg-orange-100/70 px-2 py-0.5 rounded-md border border-orange-200/60 truncate max-w-[140px]">
+                                    {t.activeStage.title}
+                                  </span>
+                                )}
 
-                            {/* Middle progress bar */}
-                            <div className="mt-2.5 w-full bg-stone-100 h-1.5 rounded-full overflow-hidden">
-                              <div
-                                className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                                style={{ width: `${t.progress}%` }}
-                              />
-                            </div>
-
-                            {/* Bottom row: Multi-Day Badge, Responsible Avatars & Deadline */}
-                            <div className="mt-2.5 flex items-center justify-between text-[11px] text-stone-500 gap-2 flex-wrap">
-                              {/* Left: Assignees */}
-                              <div className="flex items-center gap-1.5 min-w-0">
                                 {activeResponsibles && activeResponsibles.length > 0 ? (
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1">
                                     <div className="flex -space-x-1.5 overflow-hidden">
                                       {activeResponsibles.map((u) => (
                                         <div
                                           key={u.id}
-                                          className="w-5 h-5 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[9px] font-bold text-stone-700"
+                                          className="w-4 h-4 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-bold text-stone-700"
                                           title={u.name}
                                         >
                                           {u.avatarUrl ? (
                                             <Image
                                               src={u.avatarUrl}
                                               alt={u.name}
-                                              width={20}
-                                              height={20}
+                                              width={16}
+                                              height={16}
                                               className="w-full h-full rounded-full object-cover"
                                               unoptimized
                                             />
@@ -609,39 +731,38 @@ export function VerticalTimeline({
                                         </div>
                                       ))}
                                     </div>
-                                    <span className="text-stone-700 font-semibold truncate max-w-[120px] sm:max-w-none">
+                                    <span className="text-stone-700 font-semibold text-[10px] truncate max-w-[100px] sm:max-w-none">
                                       {activeResponsibles.map((u) => u.name).join(", ")}
                                     </span>
                                   </div>
                                 ) : (
-                                  <span className="text-stone-400 italic flex items-center gap-1">
-                                    <User size={11} />
+                                  <span className="text-stone-400 italic text-[10px] flex items-center gap-1">
+                                    <User size={10} />
                                     <span>დაუნიშნავი</span>
                                   </span>
                                 )}
 
                                 {t.totalSubtasks > 0 && (
-                                  <span className="text-[10px] font-bold text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded-md ml-1">
+                                  <span className="text-[9px] font-bold text-stone-400 bg-stone-100 px-1.5 py-0.2 rounded-md">
                                     {t.doneSubtasks}/{t.totalSubtasks}
                                   </span>
                                 )}
                               </div>
 
-                              {/* Right: Multi-Day range / Deadline */}
                               <div className="flex items-center gap-2 shrink-0">
                                 {t.isMultiDay && t.startDate && t.deadline && (
-                                  <span className="text-[10px] font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                  <span className="text-[9px] font-medium text-stone-500 bg-stone-100 px-1.5 py-0.2 rounded flex items-center gap-1">
                                     <span>{formatGeorgianDateShort(t.startDate)}</span>
-                                    <ArrowRight size={9} />
+                                    <ArrowRight size={8} />
                                     <span>{formatGeorgianDateShort(t.deadline)}</span>
                                   </span>
                                 )}
 
-                                <div className="flex items-center gap-1 text-stone-600 font-medium text-[11px]">
-                                  <CalendarIcon size={11} className="text-stone-400" />
+                                <div className="flex items-center gap-1 text-stone-600 font-medium text-[10px]">
+                                  <CalendarIcon size={10} className="text-stone-400" />
                                   <span>{formatGeorgianDateShort(t.deadline)}</span>
                                   {t.deadlineLocked && (
-                                    <Lock size={10} className="text-stone-400" />
+                                    <Lock size={9} className="text-stone-400" />
                                   )}
                                 </div>
                               </div>
@@ -667,7 +788,6 @@ export function VerticalTimeline({
                             key={a.id}
                             className="p-3 rounded-2xl bg-white border border-stone-200/80 shadow-2xs text-xs space-y-1 hover:border-stone-300 transition-colors"
                           >
-                            {/* Header: Actor, Action Label, Time */}
                             <div className="flex items-center justify-between text-stone-500 text-[10px]">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-bold text-stone-900">
@@ -686,14 +806,12 @@ export function VerticalTimeline({
                               </span>
                             </div>
 
-                            {/* Details (e.g. status transition or old/new deadline) */}
                             {details && (
                               <div className="text-stone-800 font-medium text-[11px] bg-stone-50/80 p-2 rounded-xl border border-stone-100">
                                 {details}
                               </div>
                             )}
 
-                            {/* Task Link */}
                             {a.task && (
                               <div
                                 onClick={() => a.task?.id && onSelectTask(a.task.id)}

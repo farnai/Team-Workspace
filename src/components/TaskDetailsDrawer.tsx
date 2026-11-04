@@ -25,6 +25,7 @@ import {
   Pause,
   Play,
   AlertTriangle,
+  RotateCcw,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus, SubtaskStatus } from "@prisma/client";
 import { formatGeorgianDate, formatGeorgianDateShort } from "@/lib/dateUtils";
@@ -822,6 +823,17 @@ export function TaskDetailsDrawer({
 
           {/* Action Row: Pause, Block, Reschedule */}
           <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar">
+            {task?.status === TaskStatus.DONE && (
+              <button
+                onClick={() => handleStatusChange(TaskStatus.IN_PROGRESS)}
+                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                title="არქივიდან ამოღება და სამუშაოში დაბრუნება"
+              >
+                <RotateCcw size={12} />
+                <span>ხელახლა გახსნა</span>
+              </button>
+            )}
+
             {task?.status === TaskStatus.PAUSED ? (
               <button
                 onClick={handleResumeTask}

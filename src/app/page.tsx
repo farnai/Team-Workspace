@@ -13,6 +13,7 @@ import { OverviewDashboard } from "@/components/overview/OverviewDashboard";
 import { MyWorkDashboard } from "@/components/my-work/MyWorkDashboard";
 import { AdminUsersManagement } from "@/components/admin/AdminUsersManagement";
 import { CalendarSettings } from "@/components/settings/CalendarSettings";
+import { ArchiveView } from "@/components/archive/ArchiveView";
 import { TaskStatus } from "@prisma/client";
 import {
   Loader2,
@@ -56,6 +57,7 @@ export default function WorkspacePage({
           "overview",
           "timeline",
           "backlog",
+          "archive",
           "my-work",
           "workload",
           "reports",
@@ -74,6 +76,7 @@ export default function WorkspacePage({
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [workloadRefreshKey, setWorkloadRefreshKey] = useState(0);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Projects & Users State
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -306,7 +309,7 @@ export default function WorkspacePage({
   if (!currentUser) return null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8F7F4]">
+    <div className="h-screen h-[100dvh] flex flex-col bg-[#F8F7F4] overflow-hidden">
       {/* Global Application Header */}
       <Header
         currentUser={currentUser}
@@ -320,10 +323,11 @@ export default function WorkspacePage({
         unreadCount={unreadCount}
         onSelectTask={handleSelectTask}
         onRefreshNotifications={refreshNotifications}
+        onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
       />
 
       {/* Main Workspace: Sidebar + Workspace Panels */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Navigation Sidebar */}
         <Sidebar
           currentView={currentView}
@@ -340,12 +344,14 @@ export default function WorkspacePage({
           }}
           isAdmin={currentUser.role === "ADMIN"}
           metrics={metrics}
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileClose={() => setIsMobileSidebarOpen(false)}
         />
 
         {/* View Content Area */}
-        <main className="flex-1 flex overflow-hidden">
+        <main className="flex-1 flex overflow-hidden min-h-0">
           {currentView === "overview" ? (
-            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+            <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">
               <OverviewDashboard
                 onSelectTask={handleSelectTask}
                 selectedTaskId={selectedTaskId}
@@ -354,11 +360,21 @@ export default function WorkspacePage({
                 onOpenNewTask={handleOpenNewTask}
               />
             </div>
+          ) : currentView === "archive" ? (
+            <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">
+              <ArchiveView
+                onSelectTask={handleSelectTask}
+                selectedTaskId={selectedTaskId}
+                projects={projects}
+                users={users}
+                onTaskReopened={handleTaskSaved}
+              />
+            </div>
           ) : currentView === "timeline" || currentView === "backlog" ? (
-            <div className="flex-1 flex overflow-hidden w-full">
+            <div className="flex-1 flex overflow-hidden min-h-0 w-full h-full">
               {/* Center Panel: Vertical Timeline (~65-68% when Backlog is open, 100% when collapsed) */}
               <div
-                className={`h-full flex flex-col transition-all duration-200 overflow-hidden ${
+                className={`h-full flex flex-col transition-all duration-200 overflow-hidden min-h-0 ${
                   isBacklogOpen ? "w-full lg:w-[65%] xl:w-[68%]" : "w-full"
                 }`}
               >
@@ -406,7 +422,7 @@ export default function WorkspacePage({
               )}
             </div>
           ) : currentView === "my-work" ? (
-            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+            <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">
               <MyWorkDashboard
                 currentUserId={currentUser.id}
                 onSelectTask={handleSelectTask}
@@ -414,7 +430,7 @@ export default function WorkspacePage({
               />
             </div>
           ) : currentView === "workload" ? (
-            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+            <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">
               <WorkloadDashboard
                 onSelectTask={handleSelectTask}
                 selectedTaskId={selectedTaskId}
@@ -424,7 +440,7 @@ export default function WorkspacePage({
               />
             </div>
           ) : currentView === "activity-log" ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white min-h-0">
               <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-600 mb-4">
                 <History size={28} />
               </div>
@@ -434,15 +450,15 @@ export default function WorkspacePage({
               </p>
             </div>
           ) : currentView === "users" ? (
-            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+            <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">
               <AdminUsersManagement currentAdminId={currentUser.id} />
             </div>
           ) : currentView === "settings" ? (
-            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+            <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">
               <CalendarSettings />
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+            <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">
               <OverviewDashboard
                 onSelectTask={handleSelectTask}
                 selectedTaskId={selectedTaskId}
