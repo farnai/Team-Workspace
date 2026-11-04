@@ -25,3 +25,23 @@ export async function GET() {
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
   }
 }
+
+// Mark all as read
+export async function POST() {
+  try {
+    const user = await requireAuth();
+
+    await prisma.notification.updateMany({
+      where: { userId: user.id, isRead: false },
+      data: { isRead: true },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
+    }
+    return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
+  }
+}

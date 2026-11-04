@@ -630,11 +630,11 @@ export function WorkloadDashboard({
                           {/* Overlap Conflict Pill */}
                           {cell.hasConflict && (
                             <div
-                              className="px-1.5 py-0.5 bg-rose-100 border border-rose-300 text-rose-900 text-[9px] font-black rounded flex items-center gap-1 shadow-2xs animate-pulse"
-                              title={cell.conflictMessage || "პარალელური აქტიური დავალებები"}
+                              className="px-1.5 py-0.5 bg-amber-100/90 border border-amber-300 text-amber-900 text-[9px] font-bold rounded flex items-center gap-1 shadow-2xs"
+                              title={cell.conflictMessage || "პარალელური დავალებები"}
                             >
-                              <AlertTriangle size={10} className="shrink-0" />
-                              <span className="truncate">გადატვირთვა</span>
+                              <AlertTriangle size={10} className="shrink-0 text-amber-600" />
+                              <span className="truncate">პარალელური ({cell.assignments.length})</span>
                             </div>
                           )}
 

@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
-import { Prisma } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
-  password: z.string().min(6).optional(),
-  name: z.string().min(2).optional(),
+  password: z.string().min(6, "პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო").optional(),
+  name: z.string().min(2, "სახელი უნდა შედგებოდეს მინიმუმ 2 სიმბოლოსგან").optional(),
+  role: z.nativeEnum(Role).optional(),
 });
 
 export async function PATCH(
@@ -23,7 +24,10 @@ export async function PATCH(
 
     const result = updateUserSchema.safeParse(body);
     if (!result.success) {
-      return NextResponse.json({ error: "არასწორი მონაცემები" }, { status: 400 });
+      return NextResponse.json(
+        { error: result.error.issues[0]?.message || "არასწორი მონაცემები" },
+        { status: 400 }
+      );
     }
 
     const targetUser = await prisma.user.findUnique({ where: { id } });
@@ -31,9 +35,17 @@ export async function PATCH(
       return NextResponse.json({ error: "მომხმარებელი ვერ მოიძებნა" }, { status: 404 });
     }
 
+    if (id === admin.id && result.data.isActive === false) {
+      return NextResponse.json(
+        { error: "საკუთარი ადმინისტრატორის ანგარიშის დეაქტივაცია შეუძლებელია" },
+        { status: 400 }
+      );
+    }
+
     const dataToUpdate: Prisma.UserUpdateInput = {};
     if (result.data.isActive !== undefined) dataToUpdate.isActive = result.data.isActive;
     if (result.data.name !== undefined) dataToUpdate.name = result.data.name;
+    if (result.data.role !== undefined) dataToUpdate.role = result.data.role;
     if (result.data.password) {
       dataToUpdate.passwordHash = await bcrypt.hash(result.data.password, 10);
     }
@@ -43,14 +55,29 @@ export async function PATCH(
       data: dataToUpdate,
     });
 
+    let reason = "ადმინისტრატორის მიერ მომხმარებლის პროფილის განახლება";
+    if (result.data.isActive !== undefined) {
+      reason = result.data.isActive ? "მომხმარებლის გააქტიურება" : "მომხმარებლის დეაქტივაცია";
+    } else if (result.data.password) {
+      reason = "მომხმარებლის პაროლის განახლება ადმინისტრატორის მიერ";
+    }
+
     await logAuditEvent({
       actorId: admin.id,
       action: "USER_STATUS_CHANGED",
       entityType: "USER",
       entityId: id,
-      oldValues: { isActive: targetUser.isActive, name: targetUser.name },
-      newValues: { isActive: updatedUser.isActive, name: updatedUser.name },
-      reason: "ადმინისტრატორის მიერ მომხმარებლის პროფილის განახლება",
+      oldValues: {
+        isActive: targetUser.isActive,
+        name: targetUser.name,
+        role: targetUser.role,
+      },
+      newValues: {
+        isActive: updatedUser.isActive,
+        name: updatedUser.name,
+        role: updatedUser.role,
+      },
+      reason,
     });
 
     return NextResponse.json({
@@ -59,13 +86,14 @@ export async function PATCH(
         id: updatedUser.id,
         name: updatedUser.name,
         email: updatedUser.email,
+        role: updatedUser.role,
         isActive: updatedUser.isActive,
       },
     });
   } catch (error: unknown) {
     const err = error as Error;
     if (err.message === "UNAUTHORIZED" || err.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "წვდომა შეზღუდულია" }, { status: 403 });
+      return NextResponse.json({ error: "წვდომა შეზღუდულია (მხოლოდ ადმინისტრატორს)" }, { status: 403 });
     }
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
   }

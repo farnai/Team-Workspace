@@ -20,7 +20,7 @@ export interface ConflictItem {
   dateStr?: string;
 }
 
-interface BasicTaskForConflict {
+export interface BasicTaskForConflict {
   id: string;
   taskNumber: number;
   title: string;
@@ -214,16 +214,18 @@ export function detectTeamWorkloadConflicts(
   for (const [userId, dayMap] of userDayMap.entries()) {
     for (const [dateStr, assignedList] of dayMap.entries()) {
       if (assignedList.length >= 2) {
-        // Check if one of them is critical/hotfix
-        const hasCritical = assignedList.some(
-          (a) => a.priority === "CRITICAL" || a.priority === "HIGH"
-        );
+        // Step 8 correction: Overlapping tasks produce a warning by default.
+        // Critical severity is reserved only for genuinely critical conditions (e.g. 2+ CRITICAL priority tasks simultaneously).
+        const criticalCount = assignedList.filter(
+          (a) => a.priority === "CRITICAL"
+        ).length;
+        const isCriticalCondition = criticalCount >= 2;
 
         const uName = userNameMap.get(userId) || "თანამშრომელი";
         conflicts.push({
           type: "USER_OVERLOAD",
-          severity: hasCritical ? "critical" : "warning",
-          message: `${uName}-ს ამ დღეს (${dateStr}) აქვს ${assignedList.length} პარალელური აქტიური დავალება: ${assignedList
+          severity: isCriticalCondition ? "critical" : "warning",
+          message: `${uName}-ს ამ დღეს (${dateStr}) აქვს ${assignedList.length} პარალელური დავალება: ${assignedList
             .map((a) => a.taskTitle)
             .join(", ")}.`,
           userId,

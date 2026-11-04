@@ -15,9 +15,11 @@ import { formatGeorgianDateShort } from "@/lib/dateUtils";
 
 export interface HeaderNotification {
   id: string;
+  taskId?: string | null;
   title: string;
   message: string;
   isRead: boolean;
+  createdAt?: string;
 }
 
 interface HeaderProps {
@@ -36,6 +38,8 @@ interface HeaderProps {
   onLogout: () => void;
   notifications: HeaderNotification[];
   unreadCount: number;
+  onSelectTask?: (taskId: string) => void;
+  onRefreshNotifications?: () => void;
 }
 
 export function Header({
@@ -48,9 +52,35 @@ export function Header({
   onLogout,
   notifications,
   unreadCount,
+  onSelectTask,
+  onRefreshNotifications,
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+  const handleNotificationClick = async (n: HeaderNotification) => {
+    if (!n.isRead) {
+      try {
+        await fetch(`/api/notifications/${n.id}`, { method: "PATCH" });
+        if (onRefreshNotifications) onRefreshNotifications();
+      } catch (err) {
+        console.error("Failed to mark notification as read", err);
+      }
+    }
+    if (n.taskId && onSelectTask) {
+      onSelectTask(n.taskId);
+      setShowNotifications(false);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await fetch("/api/notifications", { method: "POST" });
+      if (onRefreshNotifications) onRefreshNotifications();
+    } catch (err) {
+      console.error("Failed to mark all notifications as read", err);
+    }
+  };
 
   const handlePrevDay = () => {
     const d = new Date(currentDate);
@@ -159,28 +189,44 @@ export function Header({
           {showNotifications && (
             <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-stone-200/80 py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
               <div className="px-4 py-2 border-b border-stone-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-stone-900">შეტყობინებები</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-stone-900">შეტყობინებები</span>
+                  {unreadCount > 0 && (
+                    <span className="px-2 py-0.5 text-[10px] bg-orange-100 text-orange-700 font-semibold rounded-full">
+                      {unreadCount} ახალი
+                    </span>
+                  )}
+                </div>
                 {unreadCount > 0 && (
-                  <span className="px-2 py-0.5 text-[10px] bg-orange-100 text-orange-700 font-semibold rounded-full">
-                    {unreadCount} ახალი
-                  </span>
+                  <button
+                    onClick={handleMarkAllAsRead}
+                    className="text-[11px] text-orange-600 hover:text-orange-700 font-medium transition-colors"
+                  >
+                    ყველას წაკითხვა
+                  </button>
                 )}
               </div>
-              <div className="max-h-72 overflow-y-auto">
+              <div className="max-h-72 overflow-y-auto divide-y divide-stone-100/60">
                 {notifications.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-stone-400">
+                  <div className="p-6 text-center text-xs text-stone-400">
                     შეტყობინებები არ არის
                   </div>
                 ) : (
                   notifications.map((n) => (
                     <div
                       key={n.id}
-                      className={`px-4 py-3 hover:bg-stone-50 border-b border-stone-100/60 last:border-none cursor-pointer ${
-                        !n.isRead ? "bg-orange-50/30" : ""
+                      onClick={() => handleNotificationClick(n)}
+                      className={`px-4 py-3 hover:bg-stone-50 transition-colors cursor-pointer ${
+                        !n.isRead ? "bg-orange-50/40" : ""
                       }`}
                     >
-                      <div className="text-xs font-semibold text-stone-900">{n.title}</div>
-                      <div className="text-[11px] text-stone-500 mt-0.5">{n.message}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-stone-900">{n.title}</span>
+                        {!n.isRead && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-orange-600 shrink-0" />
+                        )}
+                      </div>
+                      <div className="text-[11px] text-stone-600 mt-0.5 leading-relaxed">{n.message}</div>
                     </div>
                   ))
                 )}

@@ -594,4 +594,9 @@ test("Step 7: Overload Warning (2+ Active Tasks on Same Day)", () => {
     overloadConflicts.some((c) => c.userName === "ანა"),
     "Conflict must specify Ana as overloaded user"
   );
+  assert.strictEqual(
+    overloadConflicts[0].severity,
+    "warning",
+    "Overload of 2 standard tasks must produce warning severity (not critical)"
+  );
 });

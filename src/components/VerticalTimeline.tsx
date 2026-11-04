@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import {
   Calendar as CalendarIcon,
@@ -185,6 +185,30 @@ export function VerticalTimeline({
   onToday,
 }: TimelineProps) {
   const [filterType, setFilterType] = useState<string>("ALL");
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const todayElementRef = useRef<HTMLDivElement>(null);
+  const initialScrolledRef = useRef<boolean>(false);
+
+  // Focus Today near the top of viewport on initial load or date change
+  useEffect(() => {
+    if (!isLoading && dates.length > 0 && todayElementRef.current && scrollContainerRef.current) {
+      if (!initialScrolledRef.current) {
+        const container = scrollContainerRef.current;
+        const target = todayElementRef.current;
+        container.scrollTop = target.offsetTop - 16;
+        initialScrolledRef.current = true;
+      }
+    }
+  }, [isLoading, dates]);
+
+  const handleScrollToToday = () => {
+    if (todayElementRef.current && scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const target = todayElementRef.current;
+      container.scrollTo({ top: target.offsetTop - 16, behavior: "smooth" });
+    }
+    if (onToday) onToday();
+  };
 
   const datePickerValue = (() => {
     const y = currentDate.getFullYear();
@@ -225,7 +249,7 @@ export function VerticalTimeline({
 
             {onToday && (
               <button
-                onClick={onToday}
+                onClick={handleScrollToToday}
                 className="px-2 py-0.5 hover:bg-white rounded-lg text-stone-700 hover:text-orange-600 transition-colors cursor-pointer font-bold"
                 title="მიმდინარე დღეზე გადასვლა"
               >
@@ -311,7 +335,10 @@ export function VerticalTimeline({
       </div>
 
       {/* Scrollable Timeline Area */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6 scroll-smooth"
+      >
         {isLoading ? (
           <div className="p-12 text-center text-xs text-stone-400">
             იტვირთება თაიმლაინი...
@@ -331,11 +358,13 @@ export function VerticalTimeline({
             return (
               <div
                 key={day.date}
+                ref={day.isToday ? todayElementRef : null}
+                id={day.isToday ? "timeline-today-anchor" : undefined}
                 className={`relative pl-7 group transition-colors rounded-2xl p-2 ${
                   day.isWeekend || !day.isWorking
                     ? "bg-stone-50/50"
                     : day.isToday
-                    ? "bg-orange-50/20"
+                    ? "bg-orange-50/20 ring-1 ring-orange-400/40"
                     : ""
                 }`}
               >
@@ -416,6 +445,73 @@ export function VerticalTimeline({
                           t.responsibleUsers && t.responsibleUsers.length > 0
                             ? t.responsibleUsers
                             : t.assignees;
+
+                        const isContinuation = Boolean(t.isMultiDay && !t.isSpanStart);
+
+                        if (isContinuation) {
+                          return (
+                            <div
+                              key={`${t.id}-${day.date}`}
+                              onClick={() => onSelectTask(t.id)}
+                              className={`px-3 py-2 rounded-xl border border-dashed transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                                isSelected
+                                  ? "bg-orange-50/70 border-orange-500 ring-2 ring-orange-200/60 shadow-xs"
+                                  : "bg-stone-50/70 hover:bg-white border-stone-200/90 shadow-2xs hover:shadow-xs"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-stone-200/80 text-stone-600 tracking-wider uppercase shrink-0">
+                                  გაგრძელება
+                                </span>
+                                <span className="text-[10px] font-mono font-bold text-stone-400 shrink-0">
+                                  #{t.taskNumber}
+                                </span>
+                                <h4 className="text-xs font-semibold text-stone-800 truncate">
+                                  {t.title}
+                                </h4>
+                                {t.activeStage && (
+                                  <span className="hidden md:inline-flex text-[10px] font-semibold text-orange-700 bg-orange-100/70 px-2 py-0.2 rounded-md shrink-0 truncate max-w-[140px]">
+                                    {t.activeStage.title}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2.5 shrink-0">
+                                {activeResponsibles && activeResponsibles.length > 0 && (
+                                  <div className="flex -space-x-1.5 overflow-hidden">
+                                    {activeResponsibles.slice(0, 2).map((u) => (
+                                      <div
+                                        key={u.id}
+                                        className="w-5 h-5 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-bold text-stone-700 shrink-0"
+                                        title={u.name}
+                                      >
+                                        {u.name.charAt(0)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-12 h-1.5 bg-stone-200 rounded-full overflow-hidden hidden sm:block">
+                                    <div
+                                      className="bg-emerald-500 h-full rounded-full"
+                                      style={{ width: `${t.progress}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-bold text-stone-600">
+                                    {t.progress}%
+                                  </span>
+                                </div>
+
+                                {t.isSpanEnd && (
+                                  <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                    დედლაინი
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        }
 
                         return (
                           <div

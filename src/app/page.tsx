@@ -9,14 +9,14 @@ import { SharedBacklog, BacklogTask } from "@/components/SharedBacklog";
 import { TaskModal, ProjectOption, UserOption } from "@/components/TaskModal";
 import { TaskDetailsDrawer } from "@/components/TaskDetailsDrawer";
 import { WorkloadDashboard } from "@/components/workload/WorkloadDashboard";
+import { OverviewDashboard } from "@/components/overview/OverviewDashboard";
+import { MyWorkDashboard } from "@/components/my-work/MyWorkDashboard";
+import { AdminUsersManagement } from "@/components/admin/AdminUsersManagement";
+import { CalendarSettings } from "@/components/settings/CalendarSettings";
 import { TaskStatus } from "@prisma/client";
 import {
   Loader2,
-  Calendar,
-  UserCheck,
   History,
-  Users,
-  Settings,
 } from "lucide-react";
 
 interface CurrentUser {
@@ -206,6 +206,20 @@ export default function WorkspacePage({
     };
   }, [currentUser, currentDate, timelineMode]);
 
+  // Refresh Notifications
+  const refreshNotifications = async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (e) {
+      console.error("Failed to refresh notifications:", e);
+    }
+  };
+
   // Synchronization Callback when task is created or updated
   const handleTaskSaved = async () => {
     try {
@@ -229,6 +243,7 @@ export default function WorkspacePage({
         if (data.metrics) setMetrics(data.metrics);
       }
       setWorkloadRefreshKey((k) => k + 1);
+      refreshNotifications();
     } catch (e) {
       console.error("Failed to refresh workspace data:", e);
     }
@@ -303,6 +318,8 @@ export default function WorkspacePage({
         onLogout={handleLogout}
         notifications={notifications}
         unreadCount={unreadCount}
+        onSelectTask={handleSelectTask}
+        onRefreshNotifications={refreshNotifications}
       />
 
       {/* Main Workspace: Sidebar + Workspace Panels */}
@@ -315,6 +332,11 @@ export default function WorkspacePage({
             if (view === "backlog") {
               setIsBacklogOpen(true);
             }
+            if (typeof window !== "undefined") {
+              const url = new URL(window.location.href);
+              url.searchParams.set("view", view);
+              window.history.pushState({}, "", url.toString());
+            }
           }}
           isAdmin={currentUser.role === "ADMIN"}
           metrics={metrics}
@@ -322,7 +344,17 @@ export default function WorkspacePage({
 
         {/* View Content Area */}
         <main className="flex-1 flex overflow-hidden">
-          {currentView === "timeline" || currentView === "backlog" ? (
+          {currentView === "overview" ? (
+            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+              <OverviewDashboard
+                onSelectTask={handleSelectTask}
+                selectedTaskId={selectedTaskId}
+                projects={projects}
+                users={users}
+                onOpenNewTask={handleOpenNewTask}
+              />
+            </div>
+          ) : currentView === "timeline" || currentView === "backlog" ? (
             <div className="flex-1 flex overflow-hidden w-full">
               {/* Center Panel: Vertical Timeline (~65-68% when Backlog is open, 100% when collapsed) */}
               <div
@@ -374,14 +406,12 @@ export default function WorkspacePage({
               )}
             </div>
           ) : currentView === "my-work" ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white">
-              <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-600 mb-4">
-                <UserCheck size={28} />
-              </div>
-              <h3 className="text-sm font-bold text-stone-900">ჩემი სამუშაოები</h3>
-              <p className="text-xs text-stone-500 max-w-xs mt-1">
-                პერსონალური სამუშაო დაფა დაინერგება შემდგომ ეტაპზე.
-              </p>
+            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+              <MyWorkDashboard
+                currentUserId={currentUser.id}
+                onSelectTask={handleSelectTask}
+                selectedTaskId={selectedTaskId}
+              />
             </div>
           ) : currentView === "workload" ? (
             <div className="flex-1 overflow-y-auto bg-stone-50/50">
@@ -404,34 +434,22 @@ export default function WorkspacePage({
               </p>
             </div>
           ) : currentView === "users" ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white">
-              <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-600 mb-4">
-                <Users size={28} />
-              </div>
-              <h3 className="text-sm font-bold text-stone-900">მომხმარებლები (ადმინი)</h3>
-              <p className="text-xs text-stone-500 max-w-xs mt-1">
-                მომხმარებლების მართვის ადმინ-პანელი.
-              </p>
+            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+              <AdminUsersManagement currentAdminId={currentUser.id} />
             </div>
           ) : currentView === "settings" ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white">
-              <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-600 mb-4">
-                <Settings size={28} />
-              </div>
-              <h3 className="text-sm font-bold text-stone-900">სისტემის პარამეტრები</h3>
-              <p className="text-xs text-stone-500 max-w-xs mt-1">
-                სამუშაო კალენდრისა და უქმეების მართვა.
-              </p>
+            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+              <CalendarSettings />
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white">
-              <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-600 mb-4">
-                <Calendar size={28} />
-              </div>
-              <h3 className="text-sm font-bold text-stone-900">საწყისი მიმოხილვა</h3>
-              <p className="text-xs text-stone-500 max-w-xs mt-1">
-                მიმოხილვის დაფა დაინერგება Step 8-ში.
-              </p>
+            <div className="flex-1 overflow-y-auto bg-stone-50/50">
+              <OverviewDashboard
+                onSelectTask={handleSelectTask}
+                selectedTaskId={selectedTaskId}
+                projects={projects}
+                users={users}
+                onOpenNewTask={handleOpenNewTask}
+              />
             </div>
           )}
         </main>
