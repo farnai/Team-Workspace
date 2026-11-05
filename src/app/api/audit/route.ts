@@ -36,6 +36,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ auditEvents });
   } catch (error: unknown) {
+    if ((error as { digest?: string })?.digest === "HANGING_PROMISE_REJECTION") {
+      throw error;
+    }
     const err = error as Error;
     if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });

@@ -192,7 +192,6 @@ test("Step 6: Multi-Day Task Projection, Active Stage Responsibility & Historica
 
   const multiDayTask = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 9000) + 1000,
       title: "მრავალდღიანი კომპონენტის განვითარება",
       projectId: project.id,
       createdById: adminUser.id,

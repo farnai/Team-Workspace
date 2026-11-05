@@ -8,7 +8,7 @@ import {
   formatGeorgianDate,
   formatGeorgianDateShort,
 } from "../src/lib/dateUtils";
-import { format, addDays, subDays } from "date-fns";
+import { format } from "date-fns";
 
 test("Step 8.2: Georgia/Tbilisi Timezone Calendar & Relative Label Integrity", () => {
   const todayStr = getTbilisiTodayString();
@@ -52,7 +52,7 @@ test("Step 8.2: Active-Day Focus Zone Calculation Invariants", () => {
   // Simulate the container and day element rects
   const containerTop = 128;
   const focusLineY = containerTop + 24; // 152px
-  let currentScrollTop = 0;
+  
 
   // Day 1 (Oct 28): top 128, height 40 -> bottom 168
   const day1Rect = { top: 128, bottom: 168 };

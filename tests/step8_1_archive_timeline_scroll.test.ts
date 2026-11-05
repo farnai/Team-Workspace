@@ -53,7 +53,6 @@ test("Step 8.1 - Task Archive: Completed tasks record completedAt, exit active b
   // Create an active task
   const task = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 90000) + 10000,
       title: `Feature for Archive Test ${ts}`,
       type: TaskType.FEATURE,
       priority: Priority.HIGH,
@@ -196,7 +195,6 @@ test("Step 8.1 - Task Archive: Reopening a task restores active status and logs 
 
   const task = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 90000) + 10000,
       title: `Task to Reopen ${ts}`,
       type: TaskType.BUG,
       priority: Priority.CRITICAL,
@@ -316,7 +314,6 @@ test("Step 8.1 - Cancelled tasks are distinct from completed archive tasks and e
 
   const cancelledTask = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 90000) + 10000,
       title: `Cancelled Task ${ts}`,
       type: TaskType.HOTFIX,
       priority: Priority.LOW,

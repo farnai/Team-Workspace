@@ -457,7 +457,7 @@ export function VerticalTimeline({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="relative flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-3 space-y-2 scroll-smooth"
+        className="relative flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-3 scroll-smooth"
       >
         {isLoading ? (
           <div className="p-12 text-center text-xs text-stone-400">
@@ -478,6 +478,10 @@ export function VerticalTimeline({
                 : day.tasks.filter((t) => t.type === filterType);
             const hasTasks = filteredTasks.length > 0;
 
+            const isTodayAndActive = isTodayDate && isActiveDate;
+            const isTodayNotActive = isTodayDate && !isActiveDate;
+            const isOtherActive = !isTodayDate && isActiveDate;
+
             return (
               <div
                 key={day.date}
@@ -487,95 +491,108 @@ export function VerticalTimeline({
                   if (day.isToday) todayElementRef.current = el;
                 }}
                 id={day.isToday ? "timeline-today-anchor" : `timeline-day-${day.date}`}
-                className={`relative pl-6 group transition-all duration-150 rounded-xl ${
-                  isActiveDate
-                    ? "bg-orange-50/20 ring-1 ring-orange-400/50 border border-orange-200/80 p-2 sm:p-2.5 shadow-2xs"
-                    : day.isWeekend || !day.isWorking
-                    ? "bg-stone-50/40 border border-stone-200/40 p-1.5 sm:p-2"
-                    : isTodayDate
-                    ? "bg-emerald-50/15 border border-emerald-200/40 p-1.5 sm:p-2"
-                    : "border border-transparent hover:border-stone-200/60 p-1.5 sm:p-2"
-                }`}
+                className="relative flex items-start gap-2.5 sm:gap-3 group pb-2.5 sm:pb-3"
               >
-                {/* Vertical Timeline Axis Line */}
-                <div className="absolute left-2.5 top-2 bottom-0 w-[1.5px] bg-stone-200/90 group-last:bottom-2" />
+                {/* Left Column: Timeline Rail & Date Marker Gutter (24px fixed width) */}
+                <div className="relative flex flex-col items-center shrink-0 w-6 self-stretch">
+                  {/* Continuous Vertical Rail connecting days */}
+                  <div className="absolute top-0 bottom-0 w-[2px] bg-stone-200 group-first:top-3 group-last:h-4 group-last:bottom-auto" />
 
-                {/* Node Bullet Marker */}
-                <div
-                  className={`absolute left-1.5 top-2.5 w-2.5 h-2.5 rounded-full border-2 bg-white transition-all ${
-                    isActiveDate
-                      ? "border-orange-600 ring-3 ring-orange-200 scale-110"
-                      : isTodayDate
-                      ? "border-emerald-600 ring-2 ring-emerald-100"
-                      : day.holidayName
-                      ? "border-amber-500 bg-amber-100"
-                      : day.isWeekend
-                      ? "border-stone-300 bg-stone-100"
-                      : "border-stone-400"
-                  }`}
-                />
-
-                {/* Date Header Row */}
-                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                  <span
-                    className={`tracking-tight ${
+                  {/* Circular Node Marker positioned directly on the rail */}
+                  <div
+                    className={`relative z-10 mt-2.5 w-3 h-3 rounded-full border-2 transition-all shrink-0 ${
                       isActiveDate
-                        ? "text-xs font-black text-stone-900"
-                        : "text-xs font-bold text-stone-700"
+                        ? "border-orange-600 bg-white ring-4 ring-orange-100 scale-110 shadow-xs"
+                        : isTodayDate
+                        ? "border-emerald-600 bg-emerald-500 ring-3 ring-emerald-100 shadow-2xs"
+                        : day.holidayName
+                        ? "border-amber-500 bg-amber-100"
+                        : day.isWeekend
+                        ? "border-stone-300 bg-stone-100"
+                        : "border-stone-300 bg-white hover:border-stone-400"
                     }`}
-                  >
-                    {formatGeorgianDate(day.date)}
-                  </span>
-
-                  <span
-                    className={`${
-                      isActiveDate
-                        ? "text-[11px] text-stone-600 font-semibold"
-                        : "text-[11px] text-stone-400 font-medium"
-                    }`}
-                  >
-                    {getGeorgianDayOfWeek(day.date)}
-                  </span>
-
-                  {/* Active Indicator Badge */}
-                  {isActiveDate && (
-                    <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-orange-600 text-white shadow-2xs">
-                      აქტიური
-                    </span>
-                  )}
-
-                  {/* Today Badge */}
-                  {isTodayDate && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200/60">
-                      • დღეს
-                    </span>
-                  )}
-
-                  {/* Relative Badge */}
-                  {relativeLabel && !isTodayDate && (
-                    <span className="text-[9px] font-medium px-1.5 py-0.2 rounded-full bg-stone-100 text-stone-600">
-                      • {relativeLabel}
-                    </span>
-                  )}
-
-                  {/* Holiday or Weekend Badge */}
-                  {day.holidayName ? (
-                    <span className="text-[9px] font-bold text-amber-800 bg-amber-100/80 px-1.5 py-0.2 rounded-full border border-amber-200/80">
-                      • {day.holidayName} (უქმე)
-                    </span>
-                  ) : day.isWeekend ? (
-                    <span className="text-[9px] font-medium text-stone-400 bg-stone-100/70 px-1.5 py-0.2 rounded-full">
-                      • დასვენება
-                    </span>
-                  ) : null}
-
-                  {/* Empty Day Note (Concise inline hint if empty and active) */}
-                  {isActiveDate && !hasTasks && mode === "schedule" && (
-                    <span className="text-[10px] text-stone-400 italic ml-1">
-                      • სამუშაოები არ არის
-                    </span>
-                  )}
+                  />
                 </div>
+
+                {/* Right Column: Day Content Box (strictly separated from the rail) */}
+                <div
+                  className={`flex-1 min-w-0 transition-all duration-150 rounded-xl ${
+                    isTodayAndActive
+                      ? "bg-white border border-orange-300 ring-1 ring-orange-200/70 p-2.5 sm:p-3 shadow-xs"
+                      : isTodayNotActive
+                      ? "bg-white border border-stone-200/90 p-2.5 sm:p-3 shadow-2xs"
+                      : isOtherActive
+                      ? "bg-orange-50/25 border border-orange-200/80 ring-1 ring-orange-300/40 p-2.5 sm:p-3 shadow-2xs"
+                      : day.isWeekend || !day.isWorking
+                      ? "bg-stone-50/40 border border-stone-200/40 p-1.5 sm:p-2"
+                      : "bg-transparent border border-transparent hover:border-stone-200/60 p-1.5 sm:p-2"
+                  }`}
+                >
+                  {/* Date Header Row */}
+                  <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                    <span
+                      className={`tracking-tight ${
+                        isTodayDate
+                          ? "text-base font-extrabold text-stone-900"
+                          : isActiveDate
+                          ? "text-xs sm:text-[13px] font-black text-stone-900"
+                          : "text-xs sm:text-[13px] font-bold text-stone-700"
+                      }`}
+                    >
+                      {formatGeorgianDate(day.date)}
+                    </span>
+
+                    <span
+                      className={`${
+                        isTodayDate
+                          ? "text-xs text-stone-500 font-semibold"
+                          : isActiveDate
+                          ? "text-[11px] text-stone-600 font-semibold"
+                          : "text-[11px] text-stone-400 font-medium"
+                      }`}
+                    >
+                      {getGeorgianDayOfWeek(day.date)}
+                    </span>
+
+                    {/* Today Badge */}
+                    {isTodayDate && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200/60 shadow-2xs">
+                        • დღეს
+                      </span>
+                    )}
+
+                    {/* Active Indicator Badge */}
+                    {isActiveDate && (
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-orange-600 text-white shadow-2xs">
+                        აქტიური
+                      </span>
+                    )}
+
+                    {/* Relative Badge */}
+                    {relativeLabel && !isTodayDate && (
+                      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-600">
+                        • {relativeLabel}
+                      </span>
+                    )}
+
+                    {/* Holiday or Weekend Badge */}
+                    {day.holidayName ? (
+                      <span className="text-[9px] font-bold text-amber-800 bg-amber-100/80 px-1.5 py-0.5 rounded-full border border-amber-200/80">
+                        • {day.holidayName} (უქმე)
+                      </span>
+                    ) : day.isWeekend ? (
+                      <span className="text-[9px] font-medium text-stone-400 bg-stone-100/70 px-1.5 py-0.5 rounded-full">
+                        • დასვენება
+                      </span>
+                    ) : null}
+
+                    {/* Empty Day Note */}
+                    {!hasTasks && mode === "schedule" && (
+                      <span className="text-[11px] text-stone-400 italic ml-1">
+                        • სამუშაოები არ არის
+                      </span>
+                    )}
+                  </div>
 
                 {/* Mode 1: Schedule Mode */}
                 {mode === "schedule" ? (
@@ -614,6 +631,7 @@ export function VerticalTimeline({
                           return (
                             <div
                               key={`${t.id}-${day.date}`}
+                              data-task-id={t.id}
                               onClick={() => onSelectTask(t.id)}
                               className={`px-2.5 py-1 rounded-lg border border-dashed transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
                                 isSelected
@@ -665,6 +683,7 @@ export function VerticalTimeline({
                         return (
                           <div
                             key={`${t.id}-${day.date}`}
+                            data-task-id={t.id}
                             onClick={() => onSelectTask(t.id)}
                             className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
                               isSelected
@@ -804,6 +823,7 @@ export function VerticalTimeline({
                     )}
                   </div>
                 )}
+                </div>
               </div>
             );
           })

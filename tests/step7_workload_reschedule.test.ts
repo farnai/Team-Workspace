@@ -133,7 +133,6 @@ test("Step 7: Pause & Resume Lifecycle Integrity (Subtask & Deadline Preservatio
   // Create Task with 2 subtasks (1 completed, 1 pending)
   const task = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 9000) + 1000,
       title: "დავალება შეჩერების ტესტირებისთვის",
       projectId: project.id,
       createdById: member.id,
@@ -280,7 +279,6 @@ test("Step 7: Block & Unblock with Obstacle Tracking", async () => {
 
   const task = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 9000) + 1000,
       title: "დაბლოკვის ფუნქციონალის ტესტი",
       projectId: project.id,
       createdById: user.id,
@@ -346,7 +344,6 @@ test("Step 7: Admin Manual Rescheduling, Reason Mandate & Start Date <= Deadline
 
   const task = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 9000) + 1000,
       title: "დაბლოკილი დედლაინის მქონე დავალება",
       projectId: project.id,
       createdById: admin.id,
@@ -428,7 +425,6 @@ test("Step 7: Workload Distinct Task Calculations (No Double-Counting & Stage Re
   // Create Parent Task where worker is assigned to parent task AND 3 subtasks of that task
   const task = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 9000) + 1000,
       title: "დავალება მრავალი საბტასკით",
       projectId: project.id,
       createdById: worker.id,
@@ -470,7 +466,6 @@ test("Step 7: Workload Distinct Task Calculations (No Double-Counting & Stage Re
   // Create another task where worker is ONLY assigned to a FUTURE (inactive) workflow stage
   const futureStageTask = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 9000) + 1000,
       title: "დავალება სამომავლო ეტაპით",
       projectId: project.id,
       createdById: worker.id,

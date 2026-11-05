@@ -36,7 +36,10 @@ export function PasteConfirmModal({
   return (
     <div
       className="fixed inset-0 z-50 bg-stone-900/80 backdrop-blur-2xs flex items-center justify-center p-4 animate-in fade-in duration-150"
-      onClick={onCancel}
+      onClick={(e) => {
+        e.stopPropagation();
+        onCancel();
+      }}
     >
       <div
         className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-stone-200 animate-in zoom-in-95 duration-150 text-xs"
@@ -57,7 +60,10 @@ export function PasteConfirmModal({
             </div>
           </div>
           <button
-            onClick={onCancel}
+            onClick={(e) => {
+        e.stopPropagation();
+        onCancel();
+      }}
             className="p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg cursor-pointer"
           >
             <X size={16} />
@@ -87,7 +93,10 @@ export function PasteConfirmModal({
           <button
             type="button"
             disabled={isUploading}
-            onClick={onCancel}
+            onClick={(e) => {
+        e.stopPropagation();
+        onCancel();
+      }}
             className="px-3.5 py-1.5 border border-stone-200 text-stone-600 rounded-xl font-bold hover:bg-stone-50 cursor-pointer transition-colors"
           >
             გაუქმება

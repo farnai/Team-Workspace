@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   X,
   CheckCircle2,
@@ -223,6 +223,57 @@ export function TaskDetailsDrawer({
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
 
   const isAdmin = currentUser.role === "ADMIN";
+
+  // Step 9.B: Outside-click handling and Tabs accessibility
+  const isBackdropMouseDownRef = useRef(false);
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [canScrollTabsLeft, setCanScrollTabsLeft] = useState(false);
+  const [canScrollTabsRight, setCanScrollTabsRight] = useState(false);
+
+  const updateTabsScrollState = useCallback(() => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    setCanScrollTabsLeft(el.scrollLeft > 2);
+    setCanScrollTabsRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    updateTabsScrollState();
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(updateTabsScrollState);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [updateTabsScrollState, isOpen, activeTab]);
+
+  const handleTabSelect = (tab: DrawerTab) => {
+    setActiveTab(tab);
+    const btn = tabRefs.current[tab];
+    if (btn) {
+      btn.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }
+  };
+
+  const handleBackdropMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    isBackdropMouseDownRef.current = e.target === e.currentTarget;
+  };
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isBackdropMouseDownRef.current && e.target === e.currentTarget) {
+      if (
+        isPauseModalOpen ||
+        isBlockModalOpen ||
+        isRescheduleModalOpen ||
+        pastedFile !== null ||
+        previewImageUrl !== null
+      ) {
+        return;
+      }
+      onClose();
+    }
+    isBackdropMouseDownRef.current = false;
+  };
 
   // Fetch Full Task Data
   const refreshTaskDetails = useCallback(async () => {
@@ -732,9 +783,15 @@ export function TaskDetailsDrawer({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-stone-900/30 backdrop-blur-2xs animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-40 flex justify-end bg-stone-900/35 backdrop-blur-2xs animate-in fade-in duration-200"
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick}
+    >
       <div
-        className="w-full sm:w-[560px] md:w-[620px] lg:w-[680px] h-full bg-white shadow-2xl border-l border-stone-200/90 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 text-stone-900"
+        data-testid="task-details-drawer"
+        className="w-full sm:w-[580px] md:w-[680px] lg:w-[780px] xl:w-[820px] max-w-full h-full bg-white shadow-2xl border-l border-stone-200/90 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200 text-stone-900"
+        onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Drawer Header */}
@@ -926,73 +983,106 @@ export function TaskDetailsDrawer({
         </div>
 
         {/* Navigation Tabs: სამუშაო | დეტალები | კომენტარები | ფაილები | დღიური | აქტივობა */}
-        <div className="flex items-center border-b border-stone-200 px-4 gap-1 sm:gap-2 text-xs font-bold shrink-0 bg-white select-none overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveTab("work")}
-            className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "work"
-                ? "border-orange-600 text-orange-600 font-extrabold"
-                : "border-transparent text-stone-500 hover:text-stone-900"
-            }`}
+        <div className="relative border-b border-stone-200 bg-white shrink-0 select-none">
+          <div
+            ref={tabsContainerRef}
+            onScroll={updateTabsScrollState}
+            role="tablist"
+            className="flex items-center px-3 sm:px-4 gap-1 sm:gap-2 text-xs font-bold overflow-x-auto no-scrollbar scroll-smooth"
           >
-            <Layers size={14} />
-            <span>სამუშაო</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("details")}
-            className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "details"
-                ? "border-orange-600 text-orange-600 font-extrabold"
-                : "border-transparent text-stone-500 hover:text-stone-900"
-            }`}
-          >
-            <Info size={14} />
-            <span>დეტალები</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("comments")}
-            className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "comments"
-                ? "border-orange-600 text-orange-600 font-extrabold"
-                : "border-transparent text-stone-500 hover:text-stone-900"
-            }`}
-          >
-            <MessageSquare size={14} />
-            <span>კომენტარები ({task?.comments?.length || 0})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("attachments")}
-            className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "attachments"
-                ? "border-orange-600 text-orange-600 font-extrabold"
-                : "border-transparent text-stone-500 hover:text-stone-900"
-            }`}
-          >
-            <Paperclip size={14} />
-            <span>ფაილები ({task?.attachments?.length || 0})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("daily_updates")}
-            className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "daily_updates"
-                ? "border-orange-600 text-orange-600 font-extrabold"
-                : "border-transparent text-stone-500 hover:text-stone-900"
-            }`}
-          >
-            <FileText size={14} />
-            <span>დღიური ({task?.dailyUpdates?.length || 0})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("activity")}
-            className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
-              activeTab === "activity"
-                ? "border-orange-600 text-orange-600 font-extrabold"
-                : "border-transparent text-stone-500 hover:text-stone-900"
-            }`}
-          >
-            <History size={14} />
-            <span>აქტივობა ({task?.auditEvents?.length || 0})</span>
-          </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === "work"}
+              ref={(el) => { tabRefs.current["work"] = el; }}
+              onClick={() => handleTabSelect("work")}
+              className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === "work"
+                  ? "border-orange-600 text-orange-600 font-extrabold"
+                  : "border-transparent text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              <Layers size={14} />
+              <span>სამუშაო</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === "details"}
+              ref={(el) => { tabRefs.current["details"] = el; }}
+              onClick={() => handleTabSelect("details")}
+              className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === "details"
+                  ? "border-orange-600 text-orange-600 font-extrabold"
+                  : "border-transparent text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              <Info size={14} />
+              <span>დეტალები</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === "comments"}
+              ref={(el) => { tabRefs.current["comments"] = el; }}
+              onClick={() => handleTabSelect("comments")}
+              className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === "comments"
+                  ? "border-orange-600 text-orange-600 font-extrabold"
+                  : "border-transparent text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              <MessageSquare size={14} />
+              <span>კომენტარები ({task?.comments?.length || 0})</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === "attachments"}
+              ref={(el) => { tabRefs.current["attachments"] = el; }}
+              onClick={() => handleTabSelect("attachments")}
+              className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === "attachments"
+                  ? "border-orange-600 text-orange-600 font-extrabold"
+                  : "border-transparent text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              <Paperclip size={14} />
+              <span>ფაილები ({task?.attachments?.length || 0})</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === "daily_updates"}
+              ref={(el) => { tabRefs.current["daily_updates"] = el; }}
+              onClick={() => handleTabSelect("daily_updates")}
+              className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === "daily_updates"
+                  ? "border-orange-600 text-orange-600 font-extrabold"
+                  : "border-transparent text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              <FileText size={14} />
+              <span>დღიური ({task?.dailyUpdates?.length || 0})</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === "activity"}
+              ref={(el) => { tabRefs.current["activity"] = el; }}
+              onClick={() => handleTabSelect("activity")}
+              className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === "activity"
+                  ? "border-orange-600 text-orange-600 font-extrabold"
+                  : "border-transparent text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              <History size={14} />
+              <span>აქტივობა ({task?.auditEvents?.length || 0})</span>
+            </button>
+          </div>
+
+          {/* Left/Right subtle fade overflow indicators on mobile */}
+          {canScrollTabsLeft && (
+            <div className="absolute left-0 top-0 bottom-0 w-6 pointer-events-none bg-gradient-to-r from-white to-transparent sm:hidden" />
+          )}
+          {canScrollTabsRight && (
+            <div className="absolute right-0 top-0 bottom-0 w-6 pointer-events-none bg-gradient-to-l from-white to-transparent sm:hidden" />
+          )}
         </div>
 
         {/* Global Error Banner */}

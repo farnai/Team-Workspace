@@ -61,7 +61,6 @@ test("Step 8: Admin User Management - Creation, Deactivation, History Preservati
 
   const task = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 90000) + 10000,
       title: "Task with historical user activity",
       type: TaskType.FEATURE,
       priority: Priority.HIGH,
@@ -181,7 +180,6 @@ test("Step 8: Sequential Workflow Stages - Active vs Waiting Stage Assignee in O
   // Stage 3: QA (waiting/future) -> assigned to Farna
   const task = await testPrisma.task.create({
     data: {
-      taskNumber: Math.floor(Math.random() * 90000) + 10000,
       title: "Sequential Feature Pipeline",
       type: TaskType.FEATURE,
       priority: Priority.HIGH,

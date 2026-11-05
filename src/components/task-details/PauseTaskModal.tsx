@@ -51,7 +51,10 @@ export function PauseTaskModal({
   return (
     <div
       className="fixed inset-0 z-50 bg-stone-900/80 backdrop-blur-2xs flex items-center justify-center p-4 animate-in fade-in duration-150"
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
     >
       <div
         className="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl border border-stone-200 animate-in zoom-in-95 duration-150 text-xs"
@@ -73,7 +76,10 @@ export function PauseTaskModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
             className="p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg cursor-pointer"
           >
             <X size={16} />
@@ -139,7 +145,10 @@ export function PauseTaskModal({
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
             <button
               type="button"
-              onClick={onClose}
+              onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
               disabled={isSubmitting}
               className="px-3.5 py-1.5 border border-stone-200 text-stone-600 rounded-xl font-semibold hover:bg-stone-50 cursor-pointer"
             >

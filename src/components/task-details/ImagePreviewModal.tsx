@@ -19,7 +19,10 @@ export function ImagePreviewModal({
   return (
     <div
       className="fixed inset-0 z-50 bg-stone-900/85 backdrop-blur-xs flex flex-col items-center justify-center p-4 animate-in fade-in duration-150"
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
     >
       <div
         className="bg-white rounded-2xl max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-stone-200 animate-in zoom-in-95 duration-150"
@@ -41,7 +44,10 @@ export function ImagePreviewModal({
               <span>გადმოწერა</span>
             </a>
             <button
-              onClick={onClose}
+              onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
               className="p-1 text-stone-400 hover:text-stone-800 hover:bg-stone-200 rounded-lg cursor-pointer"
             >
               <X size={18} />

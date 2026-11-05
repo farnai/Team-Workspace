@@ -20,6 +20,9 @@ export async function GET() {
 
     return NextResponse.json({ users });
   } catch (error: unknown) {
+    if ((error as { digest?: string })?.digest === "HANGING_PROMISE_REJECTION") {
+      throw error;
+    }
     const err = error as Error;
     if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
