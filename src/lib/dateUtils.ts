@@ -1,4 +1,4 @@
-import { format, isToday, isTomorrow, isYesterday } from "date-fns";
+import { format } from "date-fns";
 
 const GEORGIAN_MONTHS = [
   "იანვარი",
@@ -80,10 +80,49 @@ export function getGeorgianDayOfWeek(dateInput: Date | string): string {
   return GEORGIAN_DAYS_OF_WEEK[date.getDay()];
 }
 
+export function getTbilisiTodayString(): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tbilisi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(new Date());
+}
+
+export function getTbilisiTodayDate(): Date {
+  const str = getTbilisiTodayString();
+  const [y, m, d] = str.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+export function isTbilisiToday(dateInput: Date | string): boolean {
+  if (!dateInput) return false;
+  const targetStr =
+    typeof dateInput === "string" && dateInput.length >= 10
+      ? dateInput.slice(0, 10)
+      : format(new Date(dateInput), "yyyy-MM-dd");
+  return targetStr === getTbilisiTodayString();
+}
+
 export function getDateRelativeLabel(dateInput: Date | string): string | null {
-  const date = new Date(dateInput);
-  if (isToday(date)) return "დღეს";
-  if (isTomorrow(date)) return "ხვალ";
-  if (isYesterday(date)) return "გუშინ";
+  if (!dateInput) return null;
+  const targetStr =
+    typeof dateInput === "string" && dateInput.length >= 10
+      ? dateInput.slice(0, 10)
+      : format(new Date(dateInput), "yyyy-MM-dd");
+
+  const todayStr = getTbilisiTodayString();
+  if (targetStr === todayStr) return "დღეს";
+
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const tomorrow = new Date(y, m - 1, d + 1);
+  const yesterday = new Date(y, m - 1, d - 1);
+
+  const tomorrowStr = format(tomorrow, "yyyy-MM-dd");
+  const yesterdayStr = format(yesterday, "yyyy-MM-dd");
+
+  if (targetStr === tomorrowStr) return "ხვალ";
+  if (targetStr === yesterdayStr) return "გუშინ";
   return null;
 }

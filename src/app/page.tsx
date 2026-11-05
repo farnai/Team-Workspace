@@ -15,6 +15,8 @@ import { AdminUsersManagement } from "@/components/admin/AdminUsersManagement";
 import { CalendarSettings } from "@/components/settings/CalendarSettings";
 import { ArchiveView } from "@/components/archive/ArchiveView";
 import { TaskStatus } from "@prisma/client";
+import { format } from "date-fns";
+import { getTbilisiTodayDate } from "@/lib/dateUtils";
 import {
   Loader2,
   History,
@@ -71,9 +73,12 @@ export default function WorkspacePage({
     }
     return "timeline";
   });
-  const [currentDate, setCurrentDate] = useState<Date>(
-    () => new Date("2026-11-05T00:00:00Z")
-  );
+  const [currentDate, setCurrentDate] = useState<Date>(() => {
+    if (typeof window !== "undefined") {
+      return getTbilisiTodayDate();
+    }
+    return new Date("2026-11-05T00:00:00Z");
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [workloadRefreshKey, setWorkloadRefreshKey] = useState(0);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -184,7 +189,7 @@ export default function WorkspacePage({
     async function loadTimeline() {
       setIsTimelineLoading(true);
       try {
-        const dateParam = currentDate.toISOString().split("T")[0];
+        const dateParam = format(currentDate, "yyyy-MM-dd");
         const res = await fetch(
           `/api/timeline?date=${dateParam}&mode=${timelineMode}&days=14`
         );
@@ -399,7 +404,7 @@ export default function WorkspacePage({
                     d.setDate(d.getDate() + 7);
                     setCurrentDate(d);
                   }}
-                  onToday={() => setCurrentDate(new Date())}
+                  onToday={() => setCurrentDate(getTbilisiTodayDate())}
                 />
               </div>
 

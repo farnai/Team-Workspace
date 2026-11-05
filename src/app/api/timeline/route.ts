@@ -8,6 +8,7 @@ import {
   isDateWorkingDay,
   formatDateKey,
 } from "@/lib/calendar";
+import { isTbilisiToday } from "@/lib/dateUtils";
 
 export async function GET(req: NextRequest) {
   try {
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
         isWeekend,
         isWorking,
         holidayName,
-        isToday: isSameDay(cur, new Date()),
+        isToday: isTbilisiToday(cur),
         tasks: [],
         activities: [],
       });

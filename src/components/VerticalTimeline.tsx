@@ -7,18 +7,17 @@ import {
   Filter,
   CheckCircle2,
   AlertCircle,
-  Layers,
   ChevronLeft,
   ChevronRight,
   Lock,
-  ArrowRight,
-  User,
+  Layers,
 } from "lucide-react";
 import {
   formatGeorgianDate,
   getGeorgianDayOfWeek,
   getDateRelativeLabel,
   formatGeorgianDateShort,
+  getTbilisiTodayString,
 } from "@/lib/dateUtils";
 
 export interface TimelineTask {
@@ -179,7 +178,6 @@ export function VerticalTimeline({
   isLoading,
   onToggleBacklog,
   isBacklogOpen,
-  currentDate = new Date(),
   onDateChange,
   onPrev,
   onNext,
@@ -188,131 +186,202 @@ export function VerticalTimeline({
   const [filterType, setFilterType] = useState<string>("ALL");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const todayElementRef = useRef<HTMLDivElement>(null);
-  const initialScrolledRef = useRef<boolean>(false);
   const dayElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
+  const todayDateStr =
+    typeof window !== "undefined" ? getTbilisiTodayString() : "2026-11-05";
+
+  // Active date key (string in YYYY-MM-DD format)
   const [activeDateKey, setActiveDateKey] = useState<string>(() => {
     const today = dates.find((d) => d.isToday);
     if (today) return today.date;
-    const y = currentDate.getFullYear();
-    const m = String(currentDate.getMonth() + 1).padStart(2, "0");
-    const d = String(currentDate.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
+    return todayDateStr;
   });
 
-  // Focus Today near the top of viewport on initial load
-  useEffect(() => {
-    if (!isLoading && dates.length > 0 && todayElementRef.current && scrollContainerRef.current) {
-      if (!initialScrolledRef.current) {
-        const container = scrollContainerRef.current;
-        const target = todayElementRef.current;
-        container.scrollTop = target.offsetTop - 16;
-        initialScrolledRef.current = true;
-      }
+  const effectiveActiveDateKey = (() => {
+    if (dates.length > 0) {
+      const exists = dates.some((d) => d.date === activeDateKey);
+      if (exists) return activeDateKey;
+      const today = dates.find((d) => d.isToday);
+      if (today) return today.date;
+      return dates[0]?.date || activeDateKey;
     }
-  }, [isLoading, dates]);
-
-  // Scroll detection to update activeDateKey smoothly
-  const handleScroll = useCallback(() => {
-    if (!scrollContainerRef.current) return;
-    const container = scrollContainerRef.current;
-    const focusThreshold = container.scrollTop + 60;
-
-    let closestDate: string | null = null;
-    let closestDist = Infinity;
-
-    for (const [dateStr, el] of dayElementsRef.current.entries()) {
-      if (!el) continue;
-      const top = el.offsetTop;
-      const height = el.offsetHeight;
-      if (focusThreshold >= top && focusThreshold <= top + height) {
-        closestDate = dateStr;
-        break;
-      }
-      const dist = Math.abs(top - focusThreshold);
-      if (dist < closestDist) {
-        closestDist = dist;
-        closestDate = dateStr;
-      }
-    }
-
-    if (closestDate && closestDate !== activeDateKey) {
-      setActiveDateKey(closestDate);
-    }
-  }, [activeDateKey]);
-
-  const handleScrollToToday = () => {
-    const todayItem = dates.find((d) => d.isToday);
-    if (todayElementRef.current && scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
-      const target = todayElementRef.current;
-      container.scrollTo({ top: target.offsetTop - 16, behavior: "smooth" });
-    }
-    if (todayItem) {
-      setActiveDateKey(todayItem.date);
-    }
-    if (onToday) onToday();
-  };
-
-  const datePickerValue = (() => {
-    const y = currentDate.getFullYear();
-    const m = String(currentDate.getMonth() + 1).padStart(2, "0");
-    const d = String(currentDate.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
+    return activeDateKey;
   })();
 
-  const handleDatePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.value) return;
-    const dateStr = e.target.value;
-    const parts = dateStr.split("-").map(Number);
-    if (parts.length === 3 && onDateChange) {
-      onDateChange(new Date(parts[0], parts[1] - 1, parts[2]));
+  const isProgrammaticScrollingRef = useRef<boolean>(false);
+  const rafIdRef = useRef<number | null>(null);
+  const hasInitiallyPositionedRef = useRef<boolean>(false);
+
+  // Initial positioning: On fresh load with loaded dates, place Today immediately near the top
+  useEffect(() => {
+    if (isLoading || dates.length === 0) return;
+    if (hasInitiallyPositionedRef.current) return;
+
+    const todayItem =
+      dates.find((d) => d.isToday) || dates.find((d) => d.date === todayDateStr);
+    const targetDate = todayItem ? todayItem.date : dates[0]?.date;
+    if (!targetDate) return;
+
+    const targetEl =
+      dayElementsRef.current.get(targetDate) || todayElementRef.current;
+    const container = scrollContainerRef.current;
+
+    if (targetEl && container) {
+      // Temporarily set scrollBehavior to auto for instant, flicker-free initial alignment
+      const prevBehavior = container.style.scrollBehavior;
+      container.style.scrollBehavior = "auto";
+
+      const cRect = container.getBoundingClientRect();
+      const tRect = targetEl.getBoundingClientRect();
+      const targetScrollTop = container.scrollTop + (tRect.top - cRect.top) - 12;
+
+      container.scrollTop = Math.max(0, targetScrollTop);
+      hasInitiallyPositionedRef.current = true;
+
+      // Restore default smooth scrolling for subsequent user navigation
+      requestAnimationFrame(() => {
+        if (container) {
+          container.style.scrollBehavior = prevBehavior || "";
+        }
+      });
     }
-    const targetEl = dayElementsRef.current.get(dateStr);
-    if (targetEl && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({ top: targetEl.offsetTop - 16, behavior: "smooth" });
-      setActiveDateKey(dateStr);
+  }, [isLoading, dates, todayDateStr]);
+
+  // Dynamic active-day detection on manual scroll
+  const handleScroll = useCallback(() => {
+    if (isProgrammaticScrollingRef.current) return;
+    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+
+    rafIdRef.current = requestAnimationFrame(() => {
+      if (!scrollContainerRef.current) return;
+      const container = scrollContainerRef.current;
+      const cRect = container.getBoundingClientRect();
+
+      // Focus line is 24px below the top of the timeline scroll container
+      const focusY = cRect.top + 24;
+
+      let closestDate: string | null = null;
+      let closestDist = Infinity;
+
+      for (const [dateStr, el] of dayElementsRef.current.entries()) {
+        if (!el) continue;
+        const dRect = el.getBoundingClientRect();
+
+        // Check if the focus line falls within this day's element boundaries
+        if (focusY >= dRect.top && focusY <= dRect.bottom) {
+          closestDate = dateStr;
+          break;
+        }
+
+        // Or measure distance to focus line
+        const dist = Math.abs(dRect.top - focusY);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestDate = dateStr;
+        }
+      }
+
+      if (closestDate && closestDate !== activeDateKey) {
+        setActiveDateKey(closestDate);
+      }
+    });
+  }, [activeDateKey]);
+
+  // Navigate to Today
+  const handleScrollToToday = () => {
+    const todayItem =
+      dates.find((d) => d.isToday) || dates.find((d) => d.date === todayDateStr);
+    const container = scrollContainerRef.current;
+
+    if (todayItem) {
+      const targetEl =
+        dayElementsRef.current.get(todayItem.date) || todayElementRef.current;
+      if (targetEl && container) {
+        isProgrammaticScrollingRef.current = true;
+        const cRect = container.getBoundingClientRect();
+        const tRect = targetEl.getBoundingClientRect();
+        const targetScroll = container.scrollTop + (tRect.top - cRect.top) - 12;
+
+        container.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
+        setActiveDateKey(todayItem.date);
+
+        setTimeout(() => {
+          isProgrammaticScrollingRef.current = false;
+        }, 500);
+      }
+    } else {
+      if (onToday) onToday();
+    }
+  };
+
+  // Date picker selection
+  const handleDatePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDateStr = e.target.value;
+    if (!newDateStr) return;
+
+    const targetEl = dayElementsRef.current.get(newDateStr);
+    const container = scrollContainerRef.current;
+
+    if (targetEl && container) {
+      isProgrammaticScrollingRef.current = true;
+      const cRect = container.getBoundingClientRect();
+      const tRect = targetEl.getBoundingClientRect();
+      const targetScroll = container.scrollTop + (tRect.top - cRect.top) - 12;
+
+      container.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
+      setActiveDateKey(newDateStr);
+
+      setTimeout(() => {
+        isProgrammaticScrollingRef.current = false;
+      }, 500);
+    } else {
+      setActiveDateKey(newDateStr);
+      const [y, m, d] = newDateStr.split("-").map(Number);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d) && onDateChange) {
+        onDateChange(new Date(y, m - 1, d));
+      }
     }
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-white border-r border-stone-200/80 overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-white border-r border-stone-200/80 overflow-hidden min-h-0">
       {/* Timeline Controls Header */}
-      <div className="p-3.5 sm:p-4 border-b border-stone-100 flex flex-wrap items-center justify-between gap-3 shrink-0 bg-white">
-        {/* Left: Title & Date Navigation */}
+      <div className="p-2.5 sm:p-3 border-b border-stone-100 flex flex-wrap items-center justify-between gap-2.5 shrink-0 bg-white z-10 shadow-2xs">
+        {/* Left: Title & Date Controls */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          <h2 className="text-base font-extrabold text-stone-900 tracking-tight">
+          <h2 className="text-sm font-extrabold text-stone-900 tracking-tight">
             თაიმლაინი
           </h2>
 
-          {/* Date Navigation Controls */}
-          <div className="flex items-center gap-1 bg-stone-100/90 p-1 rounded-xl text-xs font-semibold">
+          {/* Date Controls Bar */}
+          <div className="flex items-center gap-1 bg-stone-100/90 p-0.5 rounded-xl text-xs font-semibold">
             {onPrev && (
               <button
                 onClick={onPrev}
                 className="p-1 hover:bg-white rounded-lg text-stone-600 hover:text-stone-900 transition-colors cursor-pointer"
                 title="7 დღით უკან"
               >
-                <ChevronLeft size={15} />
+                <ChevronLeft size={14} />
               </button>
             )}
 
             {onToday && (
               <button
                 onClick={handleScrollToToday}
-                className="px-2 py-0.5 hover:bg-white rounded-lg text-stone-700 hover:text-orange-600 transition-colors cursor-pointer font-bold"
+                className="px-2 py-0.5 hover:bg-white rounded-lg text-stone-700 hover:text-orange-600 transition-colors cursor-pointer text-xs font-bold"
                 title="მიმდინარე დღეზე გადასვლა"
               >
                 დღეს
               </button>
             )}
 
-            {/* Date Picker Input */}
-            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white rounded-lg border border-stone-200/70 shadow-2xs">
+            {/* Date Picker Input (Always synchronized with activeDateKey) */}
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white rounded-lg border border-stone-200/80 shadow-2xs">
               <CalendarIcon size={12} className="text-stone-400" />
               <input
                 type="date"
-                value={datePickerValue}
+                value={effectiveActiveDateKey}
                 onChange={handleDatePickerChange}
                 className="text-[11px] font-bold text-stone-800 bg-transparent focus:outline-none cursor-pointer"
                 title="აირჩიეთ ნებისმიერი თარიღი"
@@ -325,16 +394,16 @@ export function VerticalTimeline({
                 className="p-1 hover:bg-white rounded-lg text-stone-600 hover:text-stone-900 transition-colors cursor-pointer"
                 title="7 დღით წინ"
               >
-                <ChevronRight size={15} />
+                <ChevronRight size={14} />
               </button>
             )}
           </div>
 
-          {/* Mode Switcher: Schedule vs Activity */}
+          {/* Mode Switcher */}
           <div className="flex items-center bg-stone-100/90 p-0.5 rounded-xl text-xs font-semibold">
             <button
               onClick={() => onModeChange("schedule")}
-              className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+              className={`px-2.5 py-0.5 rounded-lg transition-all cursor-pointer ${
                 mode === "schedule"
                   ? "bg-white text-stone-900 shadow-2xs font-extrabold"
                   : "text-stone-500 hover:text-stone-800"
@@ -344,23 +413,23 @@ export function VerticalTimeline({
             </button>
             <button
               onClick={() => onModeChange("activity")}
-              className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+              className={`px-2.5 py-0.5 rounded-lg transition-all cursor-pointer ${
                 mode === "activity"
                   ? "bg-white text-stone-900 shadow-2xs font-extrabold"
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
-              აქტივობა (ისტორია)
+              აქტივობა
             </button>
           </div>
         </div>
 
         {/* Right: Filters & Backlog Toggle */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {onToggleBacklog && !isBacklogOpen && (
             <button
               onClick={onToggleBacklog}
-              className="flex items-center gap-1.5 px-3 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-full text-xs font-semibold transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-full text-xs font-semibold transition-colors cursor-pointer"
               title="საერთო ბექლოგის გახსნა"
             >
               <Layers size={13} className="text-orange-600" />
@@ -369,11 +438,11 @@ export function VerticalTimeline({
           )}
 
           <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-xl px-2 py-0.5">
-            <Filter size={13} className="text-stone-400" />
+            <Filter size={12} className="text-stone-400" />
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="text-xs font-medium bg-transparent text-stone-700 focus:outline-none cursor-pointer"
+              className="text-[11px] font-semibold bg-transparent text-stone-700 focus:outline-none cursor-pointer"
             >
               <option value="ALL">ყველა ტიპი</option>
               <option value="FEATURE">Feature</option>
@@ -388,7 +457,7 @@ export function VerticalTimeline({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-5 scroll-smooth"
+        className="relative flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-3 space-y-2 scroll-smooth"
       >
         {isLoading ? (
           <div className="p-12 text-center text-xs text-stone-400">
@@ -400,12 +469,14 @@ export function VerticalTimeline({
           </div>
         ) : (
           dates.map((day) => {
+            const isActiveDate = day.date === effectiveActiveDateKey;
+            const isTodayDate = day.isToday || day.date === todayDateStr;
             const relativeLabel = getDateRelativeLabel(day.date);
-            const isActiveDate = day.date === activeDateKey;
             const filteredTasks =
               filterType === "ALL"
                 ? day.tasks
                 : day.tasks.filter((t) => t.type === filterType);
+            const hasTasks = filteredTasks.length > 0;
 
             return (
               <div
@@ -416,25 +487,25 @@ export function VerticalTimeline({
                   if (day.isToday) todayElementRef.current = el;
                 }}
                 id={day.isToday ? "timeline-today-anchor" : `timeline-day-${day.date}`}
-                className={`relative pl-7 group transition-all duration-200 rounded-2xl p-2.5 ${
+                className={`relative pl-6 group transition-all duration-150 rounded-xl ${
                   isActiveDate
-                    ? "bg-orange-50/25 ring-2 ring-orange-500/50 border border-orange-200/90 shadow-2xs opacity-100"
+                    ? "bg-orange-50/20 ring-1 ring-orange-400/50 border border-orange-200/80 p-2 sm:p-2.5 shadow-2xs"
                     : day.isWeekend || !day.isWorking
-                    ? "bg-stone-50/50 border border-stone-100/60 opacity-80 hover:opacity-100"
-                    : day.isToday
-                    ? "bg-emerald-50/20 border border-emerald-200/50 opacity-90 hover:opacity-100"
-                    : "border border-transparent opacity-80 hover:opacity-100 hover:bg-stone-50/60"
+                    ? "bg-stone-50/40 border border-stone-200/40 p-1.5 sm:p-2"
+                    : isTodayDate
+                    ? "bg-emerald-50/15 border border-emerald-200/40 p-1.5 sm:p-2"
+                    : "border border-transparent hover:border-stone-200/60 p-1.5 sm:p-2"
                 }`}
               >
                 {/* Vertical Timeline Axis Line */}
-                <div className="absolute left-2.5 top-2.5 bottom-0 w-[1.5px] bg-stone-200/90 group-last:bottom-2" />
+                <div className="absolute left-2.5 top-2 bottom-0 w-[1.5px] bg-stone-200/90 group-last:bottom-2" />
 
                 {/* Node Bullet Marker */}
                 <div
-                  className={`absolute left-1.5 top-3 w-3 h-3 rounded-full border-2 bg-white transition-all ${
+                  className={`absolute left-1.5 top-2.5 w-2.5 h-2.5 rounded-full border-2 bg-white transition-all ${
                     isActiveDate
-                      ? "border-orange-600 ring-4 ring-orange-200/80 scale-110"
-                      : day.isToday
+                      ? "border-orange-600 ring-3 ring-orange-200 scale-110"
+                      : isTodayDate
                       ? "border-emerald-600 ring-2 ring-emerald-100"
                       : day.holidayName
                       ? "border-amber-500 bg-amber-100"
@@ -445,20 +516,21 @@ export function VerticalTimeline({
                 />
 
                 {/* Date Header Row */}
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                   <span
                     className={`tracking-tight ${
                       isActiveDate
-                        ? "text-sm font-black text-stone-900"
+                        ? "text-xs font-black text-stone-900"
                         : "text-xs font-bold text-stone-700"
                     }`}
                   >
                     {formatGeorgianDate(day.date)}
                   </span>
+
                   <span
                     className={`${
                       isActiveDate
-                        ? "text-xs text-stone-600 font-semibold"
+                        ? "text-[11px] text-stone-600 font-semibold"
                         : "text-[11px] text-stone-400 font-medium"
                     }`}
                   >
@@ -467,57 +539,65 @@ export function VerticalTimeline({
 
                   {/* Active Indicator Badge */}
                   {isActiveDate && (
-                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-orange-600 text-white shadow-2xs">
+                    <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-orange-600 text-white shadow-2xs">
                       აქტიური
                     </span>
                   )}
 
                   {/* Today Badge */}
-                  {day.isToday && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200/60">
+                  {isTodayDate && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200/60">
                       • დღეს
                     </span>
                   )}
 
                   {/* Relative Badge */}
-                  {relativeLabel && !day.isToday && (
-                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">
+                  {relativeLabel && !isTodayDate && (
+                    <span className="text-[9px] font-medium px-1.5 py-0.2 rounded-full bg-stone-100 text-stone-600">
                       • {relativeLabel}
                     </span>
                   )}
 
                   {/* Holiday or Weekend Badge */}
                   {day.holidayName ? (
-                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
+                    <span className="text-[9px] font-bold text-amber-800 bg-amber-100/80 px-1.5 py-0.2 rounded-full border border-amber-200/80">
                       • {day.holidayName} (უქმე)
                     </span>
                   ) : day.isWeekend ? (
-                    <span className="text-[10px] font-medium text-stone-400 bg-stone-100 px-2 py-0.5 rounded-full">
-                      • შაბათ-კვირა (დასვენება)
+                    <span className="text-[9px] font-medium text-stone-400 bg-stone-100/70 px-1.5 py-0.2 rounded-full">
+                      • დასვენება
                     </span>
                   ) : null}
+
+                  {/* Empty Day Note (Concise inline hint if empty and active) */}
+                  {isActiveDate && !hasTasks && mode === "schedule" && (
+                    <span className="text-[10px] text-stone-400 italic ml-1">
+                      • სამუშაოები არ არის
+                    </span>
+                  )}
                 </div>
 
                 {/* Mode 1: Schedule Mode */}
                 {mode === "schedule" ? (
-                  <div className="space-y-2">
-                    {filteredTasks.length === 0 ? (
-                      <div className="text-[11px] text-stone-300 italic pl-1">
-                        დაგეგმილი ტასკები არ არის
-                      </div>
-                    ) : (
-                      filteredTasks.map((t) => {
+                  hasTasks && (
+                    <div className="space-y-1.5">
+                      {filteredTasks.map((t) => {
                         const isSelected = selectedTaskId === t.id;
 
-                        // Type badge styling
-                        let typeBadgeClass =
-                          "bg-indigo-50 text-indigo-700 border-indigo-200/60";
+                        let typeBadge = {
+                          label: "FEAT",
+                          class: "bg-indigo-50 text-indigo-700 border-indigo-200/60",
+                        };
                         if (t.type === "BUG") {
-                          typeBadgeClass =
-                            "bg-amber-50 text-amber-700 border-amber-200/60";
+                          typeBadge = {
+                            label: "BUG",
+                            class: "bg-amber-50 text-amber-700 border-amber-200/60",
+                          };
                         } else if (t.type === "HOTFIX") {
-                          typeBadgeClass =
-                            "bg-rose-50 text-rose-700 border-rose-200/60";
+                          typeBadge = {
+                            label: "HOTFIX",
+                            class: "bg-rose-50 text-rose-700 border-rose-200/60",
+                          };
                         }
 
                         const activeResponsibles =
@@ -525,56 +605,54 @@ export function VerticalTimeline({
                             ? t.responsibleUsers
                             : t.assignees;
 
-                        const isContinuation = Boolean(t.isMultiDay && !t.isSpanStart);
+                        const isContinuation = Boolean(
+                          t.isMultiDay && !t.isSpanStart
+                        );
 
-                        // Continuation Card (Single-line dashed row)
+                        // Continuation Card (single-line dashed row)
                         if (isContinuation) {
                           return (
                             <div
                               key={`${t.id}-${day.date}`}
                               onClick={() => onSelectTask(t.id)}
-                              className={`px-3 py-1.5 rounded-xl border border-dashed transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
+                              className={`px-2.5 py-1 rounded-lg border border-dashed transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
                                 isSelected
-                                  ? "bg-orange-50/70 border-orange-500 ring-2 ring-orange-200/60 shadow-xs"
-                                  : "bg-stone-50/70 hover:bg-white border-stone-200/90 shadow-2xs hover:shadow-xs"
+                                  ? "bg-orange-50/70 border-orange-500 ring-1 ring-orange-200"
+                                  : "bg-stone-50/60 hover:bg-white border-stone-200/80 hover:border-stone-300"
                               }`}
                             >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-stone-200/80 text-stone-600 tracking-wider uppercase shrink-0">
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                <span className="text-[8px] font-bold px-1 py-0.2 rounded bg-stone-200/80 text-stone-600 uppercase shrink-0">
                                   გაგრძელება
                                 </span>
-                                <span className="text-[10px] font-mono font-bold text-stone-400 shrink-0">
+                                <span className="text-[10px] font-mono text-stone-400 shrink-0">
                                   #{t.taskNumber}
                                 </span>
-                                <h4 className="text-xs font-semibold text-stone-800 truncate">
+                                <h4 className="text-xs font-medium text-stone-800 truncate">
                                   {t.title}
                                 </h4>
-                                {t.project && (
-                                  <span className="hidden sm:inline-flex text-[9px] font-medium text-stone-500 bg-stone-100 px-1.5 py-0.2 rounded shrink-0 truncate max-w-[100px]">
-                                    {t.project.name}
-                                  </span>
-                                )}
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
-                                {activeResponsibles && activeResponsibles.length > 0 && (
-                                  <div className="flex -space-x-1 overflow-hidden">
-                                    {activeResponsibles.slice(0, 2).map((u) => (
-                                      <div
-                                        key={u.id}
-                                        className="w-4 h-4 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-bold text-stone-700 shrink-0"
-                                        title={u.name}
-                                      >
-                                        {u.name.charAt(0)}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <span className="text-[10px] font-bold text-stone-600">
+                                {activeResponsibles &&
+                                  activeResponsibles.length > 0 && (
+                                    <div className="flex -space-x-1">
+                                      {activeResponsibles.slice(0, 2).map((u) => (
+                                        <div
+                                          key={u.id}
+                                          className="w-4 h-4 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[7px] font-bold text-stone-700"
+                                          title={u.name}
+                                        >
+                                          {u.name.charAt(0)}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                <span className="text-[10px] font-semibold text-stone-500">
                                   {t.progress}%
                                 </span>
                                 {t.isSpanEnd && (
-                                  <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-200 shrink-0">
+                                  <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1 py-0.2 rounded border border-amber-200">
                                     დედლაინი
                                   </span>
                                 )}
@@ -583,201 +661,99 @@ export function VerticalTimeline({
                           );
                         }
 
-                        // Case A: Inactive Date -> Ultra-compact 1-line card
-                        if (!isActiveDate) {
-                          return (
-                            <div
-                              key={`${t.id}-${day.date}`}
-                              onClick={() => onSelectTask(t.id)}
-                              className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
-                                isSelected
-                                  ? "bg-orange-50/60 border-orange-500 ring-2 ring-orange-200/60 shadow-xs"
-                                  : "bg-white hover:bg-stone-50/90 border-stone-200/70 shadow-2xs hover:shadow-xs"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <span
-                                  className={`text-[8px] font-black px-1 py-0.2 rounded border uppercase shrink-0 ${typeBadgeClass}`}
-                                >
-                                  {t.type.slice(0, 3)}
-                                </span>
-                                <span className="text-[10px] font-mono font-bold text-stone-400 shrink-0">
-                                  #{t.taskNumber}
-                                </span>
-                                <h4 className="text-xs font-medium text-stone-800 truncate">
-                                  {t.title}
-                                </h4>
-                                {t.project && (
-                                  <span className="hidden sm:inline-flex text-[9px] font-medium text-stone-500 bg-stone-100 px-1.5 py-0.2 rounded shrink-0 truncate max-w-[90px]">
-                                    {t.project.name}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                {activeResponsibles && activeResponsibles.length > 0 && (
-                                  <div className="flex -space-x-1 overflow-hidden">
-                                    {activeResponsibles.slice(0, 2).map((u) => (
-                                      <div
-                                        key={u.id}
-                                        className="w-4 h-4 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-bold text-stone-700 shrink-0"
-                                        title={u.name}
-                                      >
-                                        {u.name.charAt(0)}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <span className="text-[10px] font-bold text-stone-600">
-                                  {t.progress}%
-                                </span>
-                                {t.deadline && (
-                                  <span className="text-[10px] text-stone-400 font-mono hidden sm:inline">
-                                    {formatGeorgianDateShort(t.deadline)}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        // Case B: Active Date -> Clean, compact 1-2 line card
+                        // Standard Compact Card
                         return (
                           <div
                             key={`${t.id}-${day.date}`}
                             onClick={() => onSelectTask(t.id)}
-                            className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                            className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
                               isSelected
-                                ? "bg-orange-50/50 border-orange-500 ring-2 ring-orange-200/60 shadow-xs"
-                                : "bg-white hover:bg-stone-50/90 border-stone-200/90 shadow-2xs hover:shadow-xs"
+                                ? "bg-orange-50/70 border-orange-500 ring-2 ring-orange-200 shadow-xs"
+                                : isActiveDate
+                                ? "bg-white hover:bg-stone-50 border-stone-200 shadow-2xs hover:shadow-xs"
+                                : "bg-white hover:bg-stone-50/80 border-stone-200/70 shadow-2xs"
                             }`}
                           >
-                            {/* Line 1: Type, Number, Title, Project, Overdue & Progress */}
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span
-                                  className={`text-[9px] font-black px-1.5 py-0.5 rounded border tracking-wider uppercase shrink-0 ${typeBadgeClass}`}
-                                >
-                                  {t.type}
+                            {/* Left: Type, Task#, Title, Active Stage */}
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <span
+                                className={`text-[8px] font-black px-1.5 py-0.2 rounded border uppercase tracking-wider shrink-0 ${typeBadge.class}`}
+                              >
+                                {typeBadge.label}
+                              </span>
+                              <span className="text-[10px] font-mono font-bold text-stone-400 shrink-0">
+                                #{t.taskNumber}
+                              </span>
+                              <h4 className="text-xs font-semibold text-stone-900 truncate">
+                                {t.title}
+                              </h4>
+                              {t.activeStage && (
+                                <span className="hidden md:inline-flex text-[9px] font-bold text-orange-800 bg-orange-100/70 px-1.5 py-0.2 rounded shrink-0 truncate max-w-[120px]">
+                                  {t.activeStage.title}
                                 </span>
-
-                                <span className="text-[10px] font-mono font-bold text-stone-400 shrink-0">
-                                  #{t.taskNumber}
-                                </span>
-
-                                <h4 className="text-xs font-bold text-stone-900 truncate">
-                                  {t.title}
-                                </h4>
-
-                                {t.project && (
-                                  <span className="hidden sm:inline-flex text-[9px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-md shrink-0 truncate max-w-[120px]">
-                                    {t.project.name}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                {t.isOverdue && (
-                                  <span className="flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
-                                    <AlertCircle size={10} />
-                                    <span>გადაცილებული</span>
-                                  </span>
-                                )}
-
-                                {t.status === "DONE" && (
-                                  <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                                    <CheckCircle2 size={12} />
-                                  </span>
-                                )}
-
-                                <div className="text-right">
-                                  <span className="text-xs font-extrabold text-stone-800">
-                                    {t.progress}%
-                                  </span>
-                                </div>
-                              </div>
+                              )}
                             </div>
 
-                            {/* Line 2: Active Stage, Responsibles, Subtasks & Deadline */}
-                            <div className="mt-2 flex items-center justify-between text-[11px] text-stone-500 gap-2 flex-wrap">
-                              <div className="flex items-center gap-2 min-w-0">
-                                {t.activeStage && (
-                                  <span className="text-[10px] font-bold text-orange-800 bg-orange-100/70 px-2 py-0.5 rounded-md border border-orange-200/60 truncate max-w-[140px]">
-                                    {t.activeStage.title}
-                                  </span>
-                                )}
-
-                                {activeResponsibles && activeResponsibles.length > 0 ? (
-                                  <div className="flex items-center gap-1">
-                                    <div className="flex -space-x-1.5 overflow-hidden">
-                                      {activeResponsibles.map((u) => (
-                                        <div
-                                          key={u.id}
-                                          className="w-4 h-4 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-bold text-stone-700"
-                                          title={u.name}
-                                        >
-                                          {u.avatarUrl ? (
-                                            <Image
-                                              src={u.avatarUrl}
-                                              alt={u.name}
-                                              width={16}
-                                              height={16}
-                                              className="w-full h-full rounded-full object-cover"
-                                              unoptimized
-                                            />
-                                          ) : (
-                                            u.name.charAt(0)
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                    <span className="text-stone-700 font-semibold text-[10px] truncate max-w-[100px] sm:max-w-none">
-                                      {activeResponsibles.map((u) => u.name).join(", ")}
-                                    </span>
+                            {/* Right: Overdue, Done, Responsibles, Progress, Deadline */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {t.isOverdue && (
+                                <span className="flex items-center gap-0.5 text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                                  <AlertCircle size={9} />
+                                  <span>ვადაგადაცილებული</span>
+                                </span>
+                              )}
+                              {t.status === "DONE" && (
+                                <CheckCircle2 size={13} className="text-emerald-600" />
+                              )}
+                              {activeResponsibles &&
+                                activeResponsibles.length > 0 && (
+                                  <div className="flex -space-x-1 overflow-hidden">
+                                    {activeResponsibles.slice(0, 2).map((u) => (
+                                      <div
+                                        key={u.id}
+                                        className="w-4 h-4 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[7px] font-bold text-stone-700 shrink-0"
+                                        title={u.name}
+                                      >
+                                        {u.avatarUrl ? (
+                                          <Image
+                                            src={u.avatarUrl}
+                                            alt={u.name}
+                                            width={16}
+                                            height={16}
+                                            className="w-full h-full rounded-full object-cover"
+                                            unoptimized
+                                          />
+                                        ) : (
+                                          u.name.charAt(0)
+                                        )}
+                                      </div>
+                                    ))}
                                   </div>
-                                ) : (
-                                  <span className="text-stone-400 italic text-[10px] flex items-center gap-1">
-                                    <User size={10} />
-                                    <span>დაუნიშნავი</span>
-                                  </span>
                                 )}
-
-                                {t.totalSubtasks > 0 && (
-                                  <span className="text-[9px] font-bold text-stone-400 bg-stone-100 px-1.5 py-0.2 rounded-md">
-                                    {t.doneSubtasks}/{t.totalSubtasks}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                {t.isMultiDay && t.startDate && t.deadline && (
-                                  <span className="text-[9px] font-medium text-stone-500 bg-stone-100 px-1.5 py-0.2 rounded flex items-center gap-1">
-                                    <span>{formatGeorgianDateShort(t.startDate)}</span>
-                                    <ArrowRight size={8} />
-                                    <span>{formatGeorgianDateShort(t.deadline)}</span>
-                                  </span>
-                                )}
-
-                                <div className="flex items-center gap-1 text-stone-600 font-medium text-[10px]">
+                              <span className="text-[10px] font-bold text-stone-700">
+                                {t.progress}%
+                              </span>
+                              {t.deadline && (t.isSpanEnd || t.isOverdue) && (
+                                <div className="flex items-center gap-0.5 text-[10px] font-medium text-stone-500">
                                   <CalendarIcon size={10} className="text-stone-400" />
                                   <span>{formatGeorgianDateShort(t.deadline)}</span>
                                   {t.deadlineLocked && (
-                                    <Lock size={9} className="text-stone-400" />
+                                    <Lock size={8} className="text-stone-400" />
                                   )}
                                 </div>
-                              </div>
+                              )}
                             </div>
                           </div>
                         );
-                      })
-                    )}
-                  </div>
+                      })}
+                    </div>
+                  )
                 ) : (
                   /* Mode 2: Activity Mode (Historical Truth) */
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {day.activities.length === 0 ? (
-                      <div className="text-[11px] text-stone-300 italic pl-1">
-                        ამ დღეს აქტივობა არ დაფიქსირებულა
+                      <div className="text-[10px] text-stone-300 italic pl-1">
+                        აქტივობა არ არის
                       </div>
                     ) : (
                       day.activities.map((a) => {
@@ -786,7 +762,7 @@ export function VerticalTimeline({
                         return (
                           <div
                             key={a.id}
-                            className="p-3 rounded-2xl bg-white border border-stone-200/80 shadow-2xs text-xs space-y-1 hover:border-stone-300 transition-colors"
+                            className="p-2 rounded-xl bg-white border border-stone-200/80 shadow-2xs text-xs space-y-1 hover:border-stone-300 transition-colors"
                           >
                             <div className="flex items-center justify-between text-stone-500 text-[10px]">
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -807,7 +783,7 @@ export function VerticalTimeline({
                             </div>
 
                             {details && (
-                              <div className="text-stone-800 font-medium text-[11px] bg-stone-50/80 p-2 rounded-xl border border-stone-100">
+                              <div className="text-stone-800 font-medium text-[10px] bg-stone-50/80 p-1.5 rounded-lg border border-stone-100">
                                 {details}
                               </div>
                             )}
@@ -815,7 +791,7 @@ export function VerticalTimeline({
                             {a.task && (
                               <div
                                 onClick={() => a.task?.id && onSelectTask(a.task.id)}
-                                className="pt-0.5 text-orange-600 hover:text-orange-700 cursor-pointer font-bold text-[11px] flex items-center gap-1"
+                                className="pt-0.5 text-orange-600 hover:text-orange-700 cursor-pointer font-bold text-[10px] flex items-center gap-1"
                               >
                                 <span>
                                   #{a.task.taskNumber || ""} {a.task.title}
