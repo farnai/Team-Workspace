@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Header, HeaderNotification } from "@/components/Header";
 import { Sidebar, NavView } from "@/components/Sidebar";
 import { VerticalTimeline, TimelineDateItem } from "@/components/VerticalTimeline";
-import { SharedBacklog, BacklogTask } from "@/components/SharedBacklog";
+import type { BacklogTask } from "@/components/SharedBacklog";
 import { TaskModal, ProjectOption, UserOption } from "@/components/TaskModal";
 import { TaskDetailsDrawer } from "@/components/TaskDetailsDrawer";
 import { WorkloadDashboard } from "@/components/workload/WorkloadDashboard";
@@ -14,6 +14,8 @@ import { MyWorkDashboard } from "@/components/my-work/MyWorkDashboard";
 import { AdminUsersManagement } from "@/components/admin/AdminUsersManagement";
 import { CalendarSettings } from "@/components/settings/CalendarSettings";
 import { ArchiveView } from "@/components/archive/ArchiveView";
+import { KanbanBoard } from "@/components/kanban/KanbanBoard";
+import { ReportsDashboard } from "@/components/reports/ReportsDashboard";
 import { TaskStatus } from "@prisma/client";
 import { format } from "date-fns";
 import { getTbilisiTodayDate } from "@/lib/dateUtils";
@@ -89,7 +91,6 @@ export default function WorkspacePage({
 
   // Backlog & Modals State
   const [tasks, setTasks] = useState<BacklogTask[]>([]);
-  const [isBacklogOpen, setIsBacklogOpen] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -338,9 +339,6 @@ export default function WorkspacePage({
           currentView={currentView}
           onSelectView={(view) => {
             setCurrentView(view);
-            if (view === "backlog") {
-              setIsBacklogOpen(true);
-            }
             if (typeof window !== "undefined") {
               const url = new URL(window.location.href);
               url.searchParams.set("view", view);
@@ -375,14 +373,10 @@ export default function WorkspacePage({
                 onTaskReopened={handleTaskSaved}
               />
             </div>
-          ) : currentView === "timeline" || currentView === "backlog" ? (
+          ) : currentView === "timeline" ? (
             <div className="flex-1 flex overflow-hidden min-h-0 w-full h-full">
-              {/* Center Panel: Vertical Timeline (~65-68% when Backlog is open, 100% when collapsed) */}
-              <div
-                className={`h-full flex flex-col transition-all duration-200 overflow-hidden min-h-0 ${
-                  isBacklogOpen ? "w-full lg:w-[65%] xl:w-[68%]" : "w-full"
-                }`}
-              >
+              {/* Dedicated Vertical Timeline (Full Width, Focused) */}
+              <div className="w-full h-full flex flex-col overflow-hidden min-h-0">
                 <VerticalTimeline
                   dates={timelineDates}
                   onSelectTask={handleSelectTask}
@@ -390,8 +384,15 @@ export default function WorkspacePage({
                   mode={timelineMode}
                   onModeChange={setTimelineMode}
                   isLoading={isTimelineLoading}
-                  onToggleBacklog={() => setIsBacklogOpen(true)}
-                  isBacklogOpen={isBacklogOpen}
+                  onToggleBacklog={() => {
+                    setCurrentView("backlog");
+                    if (typeof window !== "undefined") {
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("view", "backlog");
+                      window.history.pushState({}, "", url.toString());
+                    }
+                  }}
+                  isBacklogOpen={false}
                   currentDate={currentDate}
                   onDateChange={setCurrentDate}
                   onPrev={() => {
@@ -407,24 +408,31 @@ export default function WorkspacePage({
                   onToday={() => setCurrentDate(getTbilisiTodayDate())}
                 />
               </div>
-
-              {/* Right Panel: Shared Backlog (~32-35% on Desktop, hidden when collapsed) */}
-              {isBacklogOpen && (
-                <div className="hidden lg:flex lg:w-[35%] xl:w-[32%] h-full flex-col shrink-0 overflow-hidden animate-in slide-in-from-right-3 duration-200">
-                  <SharedBacklog
-                    tasks={tasks}
-                    onSelectTask={handleSelectTask}
-                    selectedTaskId={selectedTaskId}
-                    onOpenNewTask={handleOpenNewTask}
-                    onEditTask={handleEditTask}
-                    onStatusChange={handleStatusChange}
-                    onClose={() => setIsBacklogOpen(false)}
-                    projects={projects}
-                    users={users}
-                    isAdmin={currentUser.role === "ADMIN"}
-                  />
-                </div>
-              )}
+            </div>
+          ) : currentView === "backlog" ? (
+            <div className="flex-1 flex overflow-hidden min-h-0 w-full h-full">
+              {/* Dedicated Kanban Board for Backlog */}
+              <KanbanBoard
+                tasks={tasks}
+                onSelectTask={handleSelectTask}
+                selectedTaskId={selectedTaskId}
+                onOpenNewTask={handleOpenNewTask}
+                onEditTask={handleEditTask}
+                onStatusChange={handleStatusChange}
+                projects={projects}
+                users={users}
+                isAdmin={currentUser.role === "ADMIN"}
+              />
+            </div>
+          ) : currentView === "reports" ? (
+            <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">
+              {/* Dedicated Analytics & Reports Dashboard */}
+              <ReportsDashboard
+                tasks={tasks}
+                projects={projects}
+                users={users}
+                onSelectTask={handleSelectTask}
+              />
             </div>
           ) : currentView === "my-work" ? (
             <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">

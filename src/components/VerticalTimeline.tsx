@@ -491,52 +491,51 @@ export function VerticalTimeline({
                   if (day.isToday) todayElementRef.current = el;
                 }}
                 id={day.isToday ? "timeline-today-anchor" : `timeline-day-${day.date}`}
-                className="relative flex items-start gap-2.5 sm:gap-3 group pb-2.5 sm:pb-3"
+                className="relative flex items-stretch gap-2.5 sm:gap-3 group"
               >
                 {/* Left Column: Timeline Rail & Date Marker Gutter (24px fixed width) */}
                 <div className="relative flex flex-col items-center shrink-0 w-6 self-stretch">
-                  {/* Continuous Vertical Rail connecting days */}
-                  <div className="absolute top-0 bottom-0 w-[2px] bg-stone-200 group-first:top-3 group-last:h-4 group-last:bottom-auto" />
+                  {/* Continuous Vertical Rail connecting days seamlessly with 0px gap */}
+                  <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[2px] bg-stone-300 group-first:top-3.5 group-last:bottom-auto group-last:h-4" />
 
                   {/* Circular Node Marker positioned directly on the rail */}
                   <div
-                    className={`relative z-10 mt-2.5 w-3 h-3 rounded-full border-2 transition-all shrink-0 ${
+                    className={`relative z-10 mt-3 rounded-full border-2 transition-all shrink-0 ${
                       isActiveDate
-                        ? "border-orange-600 bg-white ring-4 ring-orange-100 scale-110 shadow-xs"
+                        ? "w-3.5 h-3.5 border-orange-600 bg-white ring-4 ring-orange-200 scale-125 shadow-xs"
                         : isTodayDate
-                        ? "border-emerald-600 bg-emerald-500 ring-3 ring-emerald-100 shadow-2xs"
+                        ? "w-3 h-3 border-emerald-600 bg-emerald-500 ring-2 ring-emerald-100 shadow-2xs"
                         : day.holidayName
-                        ? "border-amber-500 bg-amber-100"
+                        ? "w-2.5 h-2.5 border-amber-500 bg-amber-100"
                         : day.isWeekend
-                        ? "border-stone-300 bg-stone-100"
-                        : "border-stone-300 bg-white hover:border-stone-400"
+                        ? "w-2.5 h-2.5 border-stone-300 bg-stone-200"
+                        : "w-2.5 h-2.5 border-stone-300 bg-stone-200 hover:border-stone-400"
                     }`}
                   />
                 </div>
 
-                {/* Right Column: Day Content Box (strictly separated from the rail) */}
-                <div
-                  className={`flex-1 min-w-0 transition-all duration-150 rounded-xl ${
-                    isTodayAndActive
-                      ? "bg-white border border-orange-300 ring-1 ring-orange-200/70 p-2.5 sm:p-3 shadow-xs"
-                      : isTodayNotActive
-                      ? "bg-white border border-stone-200/90 p-2.5 sm:p-3 shadow-2xs"
-                      : isOtherActive
-                      ? "bg-orange-50/25 border border-orange-200/80 ring-1 ring-orange-300/40 p-2.5 sm:p-3 shadow-2xs"
-                      : day.isWeekend || !day.isWorking
-                      ? "bg-stone-50/40 border border-stone-200/40 p-1.5 sm:p-2"
-                      : "bg-transparent border border-transparent hover:border-stone-200/60 p-1.5 sm:p-2"
-                  }`}
-                >
+                {/* Right Column: Day Content Box wrapper with bottom padding for 0px rail continuity */}
+                <div className="flex-1 min-w-0 pb-2.5 sm:pb-3">
+                  <div
+                    className={`transition-all duration-150 ${
+                      isTodayAndActive || isOtherActive
+                        ? "bg-white border-2 border-orange-500/90 shadow-md ring-2 ring-orange-100/60 p-3 sm:p-3.5 rounded-2xl"
+                        : isTodayNotActive
+                        ? "bg-emerald-50/25 border border-emerald-300/80 shadow-2xs p-2.5 sm:p-3 rounded-2xl"
+                        : day.isWeekend || !day.isWorking
+                        ? "bg-stone-100/50 border border-stone-200/50 p-2 sm:p-2.5 rounded-xl"
+                        : "bg-stone-100/60 hover:bg-stone-100/80 border border-stone-200/60 p-2 sm:p-2.5 rounded-xl"
+                    }`}
+                  >
                   {/* Date Header Row */}
                   <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                     <span
                       className={`tracking-tight ${
-                        isTodayDate
-                          ? "text-base font-extrabold text-stone-900"
-                          : isActiveDate
-                          ? "text-xs sm:text-[13px] font-black text-stone-900"
-                          : "text-xs sm:text-[13px] font-bold text-stone-700"
+                        isTodayAndActive || isOtherActive
+                          ? "text-base sm:text-lg font-black text-stone-900"
+                          : isTodayNotActive
+                          ? "text-sm sm:text-base font-extrabold text-stone-800"
+                          : "text-xs sm:text-[13px] font-semibold text-stone-600"
                       }`}
                     >
                       {formatGeorgianDate(day.date)}
@@ -544,10 +543,10 @@ export function VerticalTimeline({
 
                     <span
                       className={`${
-                        isTodayDate
+                        isTodayAndActive || isOtherActive
+                          ? "text-xs text-stone-600 font-semibold"
+                          : isTodayDate
                           ? "text-xs text-stone-500 font-semibold"
-                          : isActiveDate
-                          ? "text-[11px] text-stone-600 font-semibold"
                           : "text-[11px] text-stone-400 font-medium"
                       }`}
                     >
@@ -563,14 +562,14 @@ export function VerticalTimeline({
 
                     {/* Active Indicator Badge */}
                     {isActiveDate && (
-                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-orange-600 text-white shadow-2xs">
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-600 text-white shadow-2xs">
                         აქტიური
                       </span>
                     )}
 
                     {/* Relative Badge */}
                     {relativeLabel && !isTodayDate && (
-                      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-600">
+                      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-stone-200/70 text-stone-600">
                         • {relativeLabel}
                       </span>
                     )}
@@ -581,7 +580,7 @@ export function VerticalTimeline({
                         • {day.holidayName} (უქმე)
                       </span>
                     ) : day.isWeekend ? (
-                      <span className="text-[9px] font-medium text-stone-400 bg-stone-100/70 px-1.5 py-0.5 rounded-full">
+                      <span className="text-[9px] font-medium text-stone-400 bg-stone-200/60 px-1.5 py-0.5 rounded-full">
                         • დასვენება
                       </span>
                     ) : null}
@@ -636,7 +635,9 @@ export function VerticalTimeline({
                               className={`px-2.5 py-1 rounded-lg border border-dashed transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
                                 isSelected
                                   ? "bg-orange-50/70 border-orange-500 ring-1 ring-orange-200"
-                                  : "bg-stone-50/60 hover:bg-white border-stone-200/80 hover:border-stone-300"
+                                  : isActiveDate
+                                  ? "bg-stone-50/90 hover:bg-white border-stone-300"
+                                  : "bg-white/60 hover:bg-white border-stone-200/60 opacity-75 hover:opacity-100"
                               }`}
                             >
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -689,8 +690,8 @@ export function VerticalTimeline({
                               isSelected
                                 ? "bg-orange-50/70 border-orange-500 ring-2 ring-orange-200 shadow-xs"
                                 : isActiveDate
-                                ? "bg-white hover:bg-stone-50 border-stone-200 shadow-2xs hover:shadow-xs"
-                                : "bg-white hover:bg-stone-50/80 border-stone-200/70 shadow-2xs"
+                                ? "bg-white hover:bg-stone-50 border-stone-300 shadow-2xs hover:shadow-xs"
+                                : "bg-white/80 hover:bg-white border-stone-200/70 opacity-80 hover:opacity-100 shadow-2xs"
                             }`}
                           >
                             {/* Left: Type, Task#, Title, Active Stage */}
@@ -823,6 +824,7 @@ export function VerticalTimeline({
                     )}
                   </div>
                 )}
+                  </div>
                 </div>
               </div>
             );
