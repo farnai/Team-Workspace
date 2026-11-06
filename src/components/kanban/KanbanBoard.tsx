@@ -15,6 +15,9 @@ import {
   RotateCcw,
   Table as TableIcon,
   LayoutGrid,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 import { Priority, TaskStatus } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
@@ -47,6 +50,17 @@ interface KanbanBoardProps {
 
 type KanbanColumnId = "TODO" | "IN_PROGRESS" | "DONE";
 
+type SortField =
+  | "title"
+  | "project"
+  | "priority"
+  | "status"
+  | "assignees"
+  | "progress"
+  | "deadline";
+
+type SortDirection = "asc" | "desc";
+
 export function KanbanBoard({
   tasks,
   onSelectTask,
@@ -58,7 +72,7 @@ export function KanbanBoard({
   isAdmin,
   onNavigateToTimeline,
 }: KanbanBoardProps) {
-  // View mode switcher: Board (დაფა) vs Table (ცხრილი)
+  // View mode switcher: Board (დაფა) vs Table (ცხრილი) — default to board
   const [viewMode, setViewMode] = useState<"board" | "table">("board");
 
   // Search and Filters State
@@ -68,6 +82,24 @@ export function KanbanBoard({
   const [selectedUser, setSelectedUser] = useState<string>("ALL");
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<KanbanColumnId | null>(null);
+
+  // Sorting State
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const handleHeaderSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else {
+        setSortField(null);
+        setSortDirection("asc");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
 
   // Filter tasks
   const filteredTasks = useMemo(() => {
@@ -104,25 +136,98 @@ export function KanbanBoard({
     });
   }, [tasks, searchQuery, selectedProject, selectedPriority, selectedUser]);
 
+  // Sorted tasks based on active sortField and sortDirection
+  const sortedTasks = useMemo(() => {
+    if (!sortField) return filteredTasks;
+
+    const priorityWeights: Record<Priority, number> = {
+      CRITICAL: 4,
+      HIGH: 3,
+      MEDIUM: 2,
+      LOW: 1,
+    };
+
+    const statusWeights: Record<TaskStatus, number> = {
+      BACKLOG: 1,
+      PLANNED: 2,
+      IN_PROGRESS: 3,
+      PAUSED: 4,
+      BLOCKED: 5,
+      DONE: 6,
+      CANCELLED: 7,
+    };
+
+    return [...filteredTasks].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case "title":
+          comparison = a.title.localeCompare(b.title, "ka");
+          break;
+
+        case "project": {
+          const nameA = a.project?.name || "";
+          const nameB = b.project?.name || "";
+          comparison = nameA.localeCompare(nameB, "ka");
+          break;
+        }
+
+        case "priority": {
+          const weightA = priorityWeights[a.priority] || 0;
+          const weightB = priorityWeights[b.priority] || 0;
+          comparison = weightA - weightB;
+          break;
+        }
+
+        case "status": {
+          const weightA = statusWeights[a.status] || 0;
+          const weightB = statusWeights[b.status] || 0;
+          comparison = weightA - weightB;
+          break;
+        }
+
+        case "assignees": {
+          const nameA = a.assignments[0]?.user.name || "";
+          const nameB = b.assignments[0]?.user.name || "";
+          comparison = nameA.localeCompare(nameB, "ka");
+          break;
+        }
+
+        case "progress":
+          comparison = a.progress - b.progress;
+          break;
+
+        case "deadline": {
+          const timeA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
+          const timeB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
+          comparison = timeA - timeB;
+          break;
+        }
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [filteredTasks, sortField, sortDirection]);
+
   // Group tasks into 3 columns
   const columnsData = useMemo(() => {
-    const todo = filteredTasks.filter(
+    const todo = sortedTasks.filter(
       (t) => t.status === TaskStatus.BACKLOG || t.status === TaskStatus.PLANNED
     );
-    const inProgress = filteredTasks.filter(
+    const inProgress = sortedTasks.filter(
       (t) =>
         t.status === TaskStatus.IN_PROGRESS ||
         t.status === TaskStatus.PAUSED ||
         t.status === TaskStatus.BLOCKED
     );
-    const done = filteredTasks.filter((t) => t.status === TaskStatus.DONE);
+    const done = sortedTasks.filter((t) => t.status === TaskStatus.DONE);
 
     return {
       TODO: todo,
       IN_PROGRESS: inProgress,
       DONE: done,
     };
-  }, [filteredTasks]);
+  }, [sortedTasks]);
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
@@ -179,28 +284,28 @@ export function KanbanBoard({
     }
   };
 
-  // Helper: Render Priority Badge matching reference `# Priority` format
+  // Helper: Render Priority Badge
   const renderPriorityBadge = (priority: Priority) => {
     switch (priority) {
       case Priority.CRITICAL:
         return (
           <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            # Urgent
+            Urgent
           </span>
         );
       case Priority.HIGH:
         return (
           <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            # High
+            High
           </span>
         );
       case Priority.MEDIUM:
         return (
           <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-blue-50/70 text-blue-700 border border-blue-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            # Medium
+            Medium
           </span>
         );
       case Priority.LOW:
@@ -208,7 +313,7 @@ export function KanbanBoard({
         return (
           <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-stone-400" />
-            # Low
+            Low
           </span>
         );
     }
@@ -261,6 +366,48 @@ export function KanbanBoard({
           </span>
         );
     }
+  };
+
+  // Helper: Render sortable column header for Table View
+  const renderSortableHeader = (
+    label: string,
+    field: SortField,
+    className = ""
+  ) => {
+    const isActive = sortField === field;
+    return (
+      <th
+        onClick={() => handleHeaderSort(field)}
+        className={`py-3 px-4 select-none cursor-pointer group hover:bg-stone-100/90 transition-colors ${className}`}
+        title={`სორტირება: ${label}`}
+      >
+        <div className="flex items-center gap-1.5">
+          <span
+            className={
+              isActive
+                ? "text-blue-700 font-black"
+                : "text-stone-600 font-extrabold"
+            }
+          >
+            {label}
+          </span>
+          <span className="shrink-0 transition-opacity">
+            {isActive ? (
+              sortDirection === "asc" ? (
+                <ArrowUp size={12} className="text-blue-600 stroke-[2.5]" />
+              ) : (
+                <ArrowDown size={12} className="text-blue-600 stroke-[2.5]" />
+              )
+            ) : (
+              <ArrowUpDown
+                size={12}
+                className="text-stone-300 group-hover:text-stone-500 opacity-60 group-hover:opacity-100"
+              />
+            )}
+          </span>
+        </div>
+      </th>
+    );
   };
 
   return (
@@ -411,17 +558,17 @@ export function KanbanBoard({
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-stone-200 bg-stone-50/80 text-stone-600 font-extrabold uppercase text-[10px] tracking-wider">
-                    <th className="py-3 px-4">დავალება</th>
-                    <th className="py-3 px-4">პროექტი</th>
-                    <th className="py-3 px-4">პრიორიტეტი</th>
-                    <th className="py-3 px-4">სტატუსი</th>
-                    <th className="py-3 px-4">შემსრულებლები</th>
-                    <th className="py-3 px-4">პროგრესი</th>
-                    <th className="py-3 px-4">დედლაინი</th>
+                    {renderSortableHeader("დავალება", "title")}
+                    {renderSortableHeader("პროექტი", "project")}
+                    {renderSortableHeader("პრიორიტეტი", "priority")}
+                    {renderSortableHeader("სტატუსი", "status")}
+                    {renderSortableHeader("შემსრულებლები", "assignees")}
+                    {renderSortableHeader("პროგრესი", "progress")}
+                    {renderSortableHeader("დედლაინი", "deadline")}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {filteredTasks.map((task) => (
+                  {sortedTasks.map((task) => (
                     <tr
                       key={task.id}
                       onClick={() => onSelectTask(task.id)}
@@ -483,7 +630,7 @@ export function KanbanBoard({
                       </td>
                     </tr>
                   ))}
-                  {filteredTasks.length === 0 && (
+                  {sortedTasks.length === 0 && (
                     <tr>
                       <td colSpan={7} className="py-12 text-center text-xs text-stone-400">
                         დავალებები ვერ მოიძებნა
