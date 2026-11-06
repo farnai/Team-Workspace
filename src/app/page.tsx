@@ -16,6 +16,7 @@ import { CalendarSettings } from "@/components/settings/CalendarSettings";
 import { ArchiveView } from "@/components/archive/ArchiveView";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { ReportsDashboard } from "@/components/reports/ReportsDashboard";
+import { ActivityLogDashboard } from "@/components/audit/ActivityLogDashboard";
 import { TaskStatus } from "@prisma/client";
 import { format } from "date-fns";
 import { getTbilisiTodayDate } from "@/lib/dateUtils";
@@ -461,14 +462,12 @@ export default function WorkspacePage({
               />
             </div>
           ) : currentView === "activity-log" ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white min-h-0">
-              <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-600 mb-4">
-                <History size={28} />
-              </div>
-              <h3 className="text-sm font-bold text-stone-900">ლოგი / ისტორია</h3>
-              <p className="text-xs text-stone-500 max-w-xs mt-1">
-                სრული აუდიტის ჟურნალის ეკრანი დაინერგება შემდგომ ეტაპზე.
-              </p>
+            <div className="flex-1 flex overflow-hidden min-h-0 w-full h-full">
+              <ActivityLogDashboard
+                onSelectTask={handleSelectTask}
+                users={users}
+                currentUser={currentUser}
+              />
             </div>
           ) : currentView === "users" ? (
             <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
-import { Prisma } from "@prisma/client";
+import { Prisma, AuditAction } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,31 +10,117 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const taskId = searchParams.get("taskId");
     const actorId = searchParams.get("actorId");
-    const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const action = searchParams.get("action");
+    const search = searchParams.get("search");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
+    const limit = Math.min(parseInt(searchParams.get("limit") || "100", 10), 500);
+    const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
+    const skip = (page - 1) * limit;
 
     const where: Prisma.AuditEventWhereInput = {};
-    if (taskId) where.taskId = taskId;
-    if (actorId) where.actorId = actorId;
 
-    const auditEvents = await prisma.auditEvent.findMany({
-      where,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      include: {
-        actor: { select: { id: true, name: true, avatarUrl: true, role: true } },
-        task: {
-          select: {
-            id: true,
-            taskNumber: true,
-            title: true,
-            type: true,
-            status: true,
+    if (taskId) {
+      where.taskId = taskId;
+    }
+
+    if (actorId && actorId !== "ALL") {
+      where.actorId = actorId;
+    }
+
+    if (action && action !== "ALL") {
+      if (Object.values(AuditAction).includes(action as AuditAction)) {
+        where.action = action as AuditAction;
+      }
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        where.createdAt.gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
+    }
+
+    // Search query
+    if (search && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { reason: { contains: q, mode: "insensitive" } },
+        { entityType: { contains: q, mode: "insensitive" } },
+        { task: { title: { contains: q, mode: "insensitive" } } },
+        { actor: { name: { contains: q, mode: "insensitive" } } },
+      ];
+    }
+
+    const [totalCount, auditEvents] = await Promise.all([
+      prisma.auditEvent.count({ where }),
+      prisma.auditEvent.findMany({
+        where,
+        take: limit,
+        skip,
+        orderBy: { createdAt: "desc" },
+        include: {
+          actor: { select: { id: true, name: true, avatarUrl: true, role: true } },
+          task: {
+            select: {
+              id: true,
+              taskNumber: true,
+              title: true,
+              type: true,
+              status: true,
+              project: {
+                select: {
+                  id: true,
+                  name: true,
+                  color: true,
+                },
+              },
+            },
           },
         },
+      }),
+    ]);
+
+    // Compute basic summary stats
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [todayCount, statusChangeCount, deadlineChangeCount] = await Promise.all([
+      prisma.auditEvent.count({
+        where: { createdAt: { gte: todayStart } },
+      }),
+      prisma.auditEvent.count({
+        where: { action: AuditAction.STATUS_CHANGED },
+      }),
+      prisma.auditEvent.count({
+        where: {
+          OR: [
+            { action: AuditAction.DEADLINE_CHANGED },
+            { action: AuditAction.SCHEDULE_CHANGED },
+          ],
+        },
+      }),
+    ]);
+
+    return NextResponse.json({
+      auditEvents,
+      totalCount,
+      page,
+      limit,
+      totalPages: Math.ceil(totalCount / limit),
+      stats: {
+        total: totalCount,
+        today: todayCount,
+        statusChanges: statusChangeCount,
+        deadlineChanges: deadlineChangeCount,
       },
     });
-
-    return NextResponse.json({ auditEvents });
   } catch (error: unknown) {
     if ((error as { digest?: string })?.digest === "HANGING_PROMISE_REJECTION") {
       throw error;
