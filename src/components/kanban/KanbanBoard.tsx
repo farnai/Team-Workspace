@@ -18,8 +18,10 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  ChevronDown,
 } from "lucide-react";
 import { Priority, TaskStatus } from "@prisma/client";
+import { format } from "date-fns";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
 import { BacklogTask } from "@/components/SharedBacklog";
 
@@ -69,7 +71,6 @@ export function KanbanBoard({
   onStatusChange,
   projects,
   users,
-  isAdmin,
   onNavigateToTimeline,
 }: KanbanBoardProps) {
   // View mode switcher: Board (დაფა) vs Table (ცხრილი) — default to board
@@ -77,6 +78,7 @@ export function KanbanBoard({
 
   // Search and Filters State
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCompany, setSelectedCompany] = useState<string>("ALL");
   const [selectedProject, setSelectedProject] = useState<string>("ALL");
   const [selectedPriority, setSelectedPriority] = useState<string>("ALL");
   const [selectedUser, setSelectedUser] = useState<string>("ALL");
@@ -101,6 +103,17 @@ export function KanbanBoard({
     }
   };
 
+  // Extract companies if present in projects or task naming
+  const companies = useMemo(() => {
+    const set = new Set<string>();
+    tasks.forEach((t) => {
+      if (t.project?.name && t.project.name.includes(" - ")) {
+        set.add(t.project.name.split(" - ")[0].trim());
+      }
+    });
+    return Array.from(set);
+  }, [tasks]);
+
   // Filter tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -114,6 +127,14 @@ export function KanbanBoard({
         const matchesNumber = String(task.taskNumber).includes(query);
         const matchesDesc = task.description?.toLowerCase().includes(query);
         if (!matchesTitle && !matchesNumber && !matchesDesc) return false;
+      }
+
+      // Company filter
+      if (selectedCompany !== "ALL") {
+        const projectName = task.project?.name || "";
+        if (!projectName.toLowerCase().includes(selectedCompany.toLowerCase())) {
+          return false;
+        }
       }
 
       // Project filter
@@ -134,7 +155,7 @@ export function KanbanBoard({
 
       return true;
     });
-  }, [tasks, searchQuery, selectedProject, selectedPriority, selectedUser]);
+  }, [tasks, searchQuery, selectedCompany, selectedProject, selectedPriority, selectedUser]);
 
   // Sorted tasks based on active sortField and sortDirection
   const sortedTasks = useMemo(() => {
@@ -284,12 +305,12 @@ export function KanbanBoard({
     }
   };
 
-  // Helper: Render Priority Badge
+  // Helper: Render Priority Badge (Urgent, High, Medium, Low - NO #)
   const renderPriorityBadge = (priority: Priority) => {
     switch (priority) {
       case Priority.CRITICAL:
         return (
-          <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200/80">
+          <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 border border-rose-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
             Urgent
           </span>
@@ -412,18 +433,18 @@ export function KanbanBoard({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#F8F7F4] overflow-hidden">
-      {/* Top Header Row (Matches Approved Kanban Reference) */}
+      {/* Top Header Row (Matches Approved Kanban Reference Screenshot) */}
       <div className="px-5 sm:px-8 py-4 bg-white border-b border-stone-200 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
             Kanban Board
           </h1>
-          <p className="text-xs text-stone-500 mt-1">
+          <p className="text-xs text-stone-500 mt-0.5">
             Drag tasks between columns · click a card to edit
           </p>
         </div>
 
-        {/* Action Buttons matching Approved Reference */}
+        {/* Action Buttons: + New Task, Table view, Calendar */}
         <div className="flex items-center gap-2">
           <button
             onClick={onOpenNewTask}
@@ -451,21 +472,19 @@ export function KanbanBoard({
             )}
           </button>
 
-          {onNavigateToTimeline && (
-            <button
-              onClick={onNavigateToTimeline}
-              className="px-3.5 py-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-              title="Calendar / თაიმლაინი"
-            >
-              <Calendar size={14} className="text-stone-500" />
-              <span>Calendar</span>
-            </button>
-          )}
+          <button
+            onClick={() => onNavigateToTimeline && onNavigateToTimeline()}
+            className="px-3.5 py-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            title="Calendar / თაიმლაინი"
+          >
+            <Calendar size={14} className="text-stone-500" />
+            <span>Calendar</span>
+          </button>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="px-5 sm:px-8 py-3 bg-white/60 border-b border-stone-200/80 shrink-0 flex items-center gap-2.5 flex-wrap">
+      {/* Filter Bar with Custom Styled Selects Matching Reference Screenshot */}
+      <div className="px-5 sm:px-8 py-3 bg-white border-b border-stone-200/80 shrink-0 flex items-center gap-2.5 flex-wrap">
         {/* Search Input */}
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search
@@ -477,7 +496,7 @@ export function KanbanBoard({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search tasks..."
-            className="w-full pl-8 pr-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            className="w-full pl-8 pr-3 py-1.5 bg-white border border-stone-200 hover:border-stone-300 rounded-lg text-xs font-normal text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-2xs"
           />
           {searchQuery && (
             <button
@@ -489,52 +508,91 @@ export function KanbanBoard({
           )}
         </div>
 
-        {/* Project Filter */}
-        <select
-          value={selectedProject}
-          onChange={(e) => setSelectedProject(e.target.value)}
-          className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
-        >
-          <option value="ALL">All Projects</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        {/* All Companies Filter */}
+        <div className="relative">
+          <select
+            value={selectedCompany}
+            onChange={(e) => setSelectedCompany(e.target.value)}
+            className="appearance-none bg-white border border-stone-200 hover:border-stone-300 rounded-lg pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+          >
+            <option value="ALL">All Companies</option>
+            {companies.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            size={12}
+            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+          />
+        </div>
 
-        {/* Priority Filter */}
-        <select
-          value={selectedPriority}
-          onChange={(e) => setSelectedPriority(e.target.value)}
-          className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
-        >
-          <option value="ALL">All Priorities</option>
-          <option value={Priority.CRITICAL}>Urgent</option>
-          <option value={Priority.HIGH}>High</option>
-          <option value={Priority.MEDIUM}>Medium</option>
-          <option value={Priority.LOW}>Low</option>
-        </select>
+        {/* All Projects Filter */}
+        <div className="relative">
+          <select
+            value={selectedProject}
+            onChange={(e) => setSelectedProject(e.target.value)}
+            className="appearance-none bg-white border border-stone-200 hover:border-stone-300 rounded-lg pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+          >
+            <option value="ALL">All Projects</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            size={12}
+            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+          />
+        </div>
 
-        {/* User Filter */}
-        <select
-          value={selectedUser}
-          onChange={(e) => setSelectedUser(e.target.value)}
-          className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
-        >
-          <option value="ALL">All Assignees</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-            </option>
-          ))}
-        </select>
+        {/* All Priorities Filter */}
+        <div className="relative">
+          <select
+            value={selectedPriority}
+            onChange={(e) => setSelectedPriority(e.target.value)}
+            className="appearance-none bg-white border border-stone-200 hover:border-stone-300 rounded-lg pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+          >
+            <option value="ALL">All Priorities</option>
+            <option value={Priority.CRITICAL}>Urgent</option>
+            <option value={Priority.HIGH}>High</option>
+            <option value={Priority.MEDIUM}>Medium</option>
+            <option value={Priority.LOW}>Low</option>
+          </select>
+          <ChevronDown
+            size={12}
+            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+          />
+        </div>
+
+        {/* All Assignees Filter */}
+        <div className="relative">
+          <select
+            value={selectedUser}
+            onChange={(e) => setSelectedUser(e.target.value)}
+            className="appearance-none bg-white border border-stone-200 hover:border-stone-300 rounded-lg pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+          >
+            <option value="ALL">All Assignees</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            size={12}
+            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+          />
+        </div>
 
         {/* Reset Filters */}
-        {(searchQuery || selectedProject !== "ALL" || selectedPriority !== "ALL" || selectedUser !== "ALL") && (
+        {(searchQuery || selectedCompany !== "ALL" || selectedProject !== "ALL" || selectedPriority !== "ALL" || selectedUser !== "ALL") && (
           <button
             onClick={() => {
               setSearchQuery("");
+              setSelectedCompany("ALL");
               setSelectedProject("ALL");
               setSelectedPriority("ALL");
               setSelectedUser("ALL");
@@ -550,7 +608,7 @@ export function KanbanBoard({
       {/* Main Content Area: Board View or Table View */}
       {viewMode === "table" ? (
         /* ========================================================= */
-        /* TABLE VIEW (MATCHING HEADER SWITCHER)                     */
+        /* TABLE VIEW (WITH INTERACTIVE HEADER SORTING)              */
         /* ========================================================= */
         <div className="flex-1 p-4 sm:p-6 overflow-y-auto min-h-0">
           <div className="bg-white rounded-2xl border border-stone-200/90 shadow-2xs overflow-hidden">
@@ -644,7 +702,7 @@ export function KanbanBoard({
         </div>
       ) : (
         /* ========================================================= */
-        /* 3 KANBAN COLUMNS CONTAINER                                */
+        /* 3 KANBAN COLUMNS (MATCHES EXACT APPROVED SCREENSHOT)      */
         /* ========================================================= */
         <div className="flex-1 p-4 sm:p-6 overflow-x-auto overflow-y-hidden min-h-0">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 h-full min-w-[860px]">
@@ -656,13 +714,13 @@ export function KanbanBoard({
               className={`flex flex-col h-full rounded-2xl border transition-all duration-150 overflow-hidden ${
                 dragOverColumn === "TODO"
                   ? "bg-blue-50/40 border-blue-400 ring-2 ring-blue-300/40"
-                  : "bg-[#F8F9FA] border-stone-200/90"
+                  : "bg-[#FAFAFA] border-stone-200/90 shadow-2xs"
               }`}
             >
               {/* Column Header */}
               <div className="p-3.5 pb-2.5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
-                  <Circle size={15} className="text-stone-400" />
+                  <Circle size={15} strokeWidth={1.8} className="text-stone-400" />
                   <h3 className="text-sm font-bold text-stone-900 tracking-tight">
                     To Do
                   </h3>
@@ -673,7 +731,7 @@ export function KanbanBoard({
               </div>
 
               {/* Column Card List */}
-              <div className="flex-1 overflow-y-auto px-3 py-1 space-y-3 min-h-0">
+              <div className="flex-1 overflow-y-auto px-3.5 py-1 space-y-3 min-h-0">
                 {columnsData.TODO.map((task) => (
                   <KanbanTaskCard
                     key={task.id}
@@ -695,7 +753,7 @@ export function KanbanBoard({
               </div>
 
               {/* Pinned + Add Task button matching reference */}
-              <div className="p-2.5 border-t border-stone-200/60 shrink-0 bg-transparent">
+              <div className="p-2.5 pt-1.5 border-t border-stone-200/60 shrink-0 bg-transparent">
                 <button
                   onClick={onOpenNewTask}
                   className="w-full py-1.5 px-2 text-stone-500 hover:text-stone-900 text-xs font-semibold flex items-center justify-start gap-1.5 transition-colors cursor-pointer rounded-lg hover:bg-stone-200/50"
@@ -714,7 +772,7 @@ export function KanbanBoard({
               className={`flex flex-col h-full rounded-2xl border transition-all duration-150 overflow-hidden border-t-2 border-t-blue-500 ${
                 dragOverColumn === "IN_PROGRESS"
                   ? "bg-blue-50/50 border-blue-400 ring-2 ring-blue-300/40"
-                  : "bg-[#F8F9FA] border-stone-200/90"
+                  : "bg-[#FAFAFA] border-stone-200/90 shadow-2xs"
               }`}
             >
               {/* Column Header */}
@@ -731,7 +789,7 @@ export function KanbanBoard({
               </div>
 
               {/* Column Card List */}
-              <div className="flex-1 overflow-y-auto px-3 py-1 space-y-3 min-h-0">
+              <div className="flex-1 overflow-y-auto px-3.5 py-1 space-y-3 min-h-0">
                 {columnsData.IN_PROGRESS.map((task) => (
                   <KanbanTaskCard
                     key={task.id}
@@ -753,7 +811,7 @@ export function KanbanBoard({
               </div>
 
               {/* Pinned + Add Task button matching reference */}
-              <div className="p-2.5 border-t border-stone-200/60 shrink-0 bg-transparent">
+              <div className="p-2.5 pt-1.5 border-t border-stone-200/60 shrink-0 bg-transparent">
                 <button
                   onClick={onOpenNewTask}
                   className="w-full py-1.5 px-2 text-stone-500 hover:text-stone-900 text-xs font-semibold flex items-center justify-start gap-1.5 transition-colors cursor-pointer rounded-lg hover:bg-stone-200/50"
@@ -772,7 +830,7 @@ export function KanbanBoard({
               className={`flex flex-col h-full rounded-2xl border transition-all duration-150 overflow-hidden border-t-2 border-t-emerald-500 ${
                 dragOverColumn === "DONE"
                   ? "bg-emerald-50/50 border-emerald-400 ring-2 ring-emerald-300/40"
-                  : "bg-[#F8F9FA] border-stone-200/90"
+                  : "bg-[#FAFAFA] border-stone-200/90 shadow-2xs"
               }`}
             >
               {/* Column Header */}
@@ -789,7 +847,7 @@ export function KanbanBoard({
               </div>
 
               {/* Column Card List */}
-              <div className="flex-1 overflow-y-auto px-3 py-1 space-y-3 min-h-0">
+              <div className="flex-1 overflow-y-auto px-3.5 py-1 space-y-3 min-h-0">
                 {columnsData.DONE.map((task) => (
                   <KanbanTaskCard
                     key={task.id}
@@ -811,7 +869,7 @@ export function KanbanBoard({
               </div>
 
               {/* Pinned + Add Task button matching reference */}
-              <div className="p-2.5 border-t border-stone-200/60 shrink-0 bg-transparent">
+              <div className="p-2.5 pt-1.5 border-t border-stone-200/60 shrink-0 bg-transparent">
                 <button
                   onClick={onOpenNewTask}
                   className="w-full py-1.5 px-2 text-stone-500 hover:text-stone-900 text-xs font-semibold flex items-center justify-start gap-1.5 transition-colors cursor-pointer rounded-lg hover:bg-stone-200/50"
@@ -829,7 +887,7 @@ export function KanbanBoard({
 }
 
 // -------------------------------------------------------------
-// KanbanTaskCard Subcomponent (Matches Approved Visual Design)
+// KanbanTaskCard Subcomponent (Matches Exact Visual Reference)
 // -------------------------------------------------------------
 interface KanbanTaskCardProps {
   task: BacklogTask;
@@ -862,84 +920,83 @@ function KanbanTaskCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onSelect}
-      className={`group relative p-3.5 bg-white rounded-xl border transition-all cursor-pointer shadow-2xs hover:shadow-md select-none ${
+      className={`group relative p-3.5 bg-white rounded-xl border transition-all cursor-pointer shadow-2xs hover:shadow-sm select-none flex flex-col justify-between ${
         isSelected
-          ? "border-blue-500 ring-2 ring-blue-200"
+          ? "border-blue-500 ring-2 ring-blue-200 shadow-xs"
           : "border-stone-200/90 hover:border-stone-300"
       }`}
     >
-      {/* Top Row: Priority Badge + Status Dot */}
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-1.5">
-          <GripVertical
-            size={13}
-            className="text-stone-300 group-hover:text-stone-500 cursor-grab shrink-0"
-          />
-          {renderPriorityBadge(task.priority)}
+      <div>
+        {/* Top Row: Priority Badge (Left) + Status Dot & Glyph (Right) */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-1.5">
+            <GripVertical
+              size={13}
+              className="text-stone-300 group-hover:text-stone-500 cursor-grab shrink-0"
+            />
+            {renderPriorityBadge(task.priority)}
+          </div>
+          <div className="flex items-center gap-1">
+            {renderStatusBadge(task.status)}
+            <span className="text-[10px] text-stone-300 ml-0.5 select-none">⊙</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          {renderStatusBadge(task.status)}
-          <span className="text-[10px] text-stone-300 hover:text-stone-500 ml-0.5">⊙</span>
-        </div>
+
+        {/* Task Title */}
+        <h4 className="text-[13px] font-bold text-stone-900 leading-snug line-clamp-2 mb-1">
+          {task.title}
+        </h4>
+
+        {/* Description Snippet */}
+        {task.description && (
+          <p className="text-[11.5px] text-stone-500 line-clamp-2 leading-relaxed mb-3">
+            {task.description}
+          </p>
+        )}
       </div>
 
-      {/* Task Title */}
-      <h4 className="text-[13px] font-bold text-stone-900 leading-snug line-clamp-2 mb-1">
-        {task.title}
-      </h4>
-
-      {/* Description Snippet */}
-      {task.description && (
-        <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed mb-2">
-          {task.description}
-        </p>
-      )}
-
-      {/* Project Folder Tag */}
-      {task.project && (
-        <div className="flex items-center gap-1.5 text-[11px] text-stone-400 mb-2.5 truncate">
+      {/* Card Footer: Project Name (Left) & Deadline with Assignees (Right) */}
+      <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-100 text-xs text-stone-400 mt-1">
+        <div className="flex items-center gap-1.5 min-w-0 max-w-[200px] truncate text-[11px] text-stone-400">
           <Folder size={12} className="shrink-0 text-stone-400" />
-          <span className="truncate">{task.project.name}</span>
+          <span className="truncate">{task.project?.name || "General"}</span>
         </div>
-      )}
 
-      {/* Card Footer: Assignee Avatars (Left) & Due Date (Right) */}
-      <div className="flex items-center justify-between gap-2 pt-1 text-xs">
-        {/* Assignees */}
-        <div className="flex items-center -space-x-1.5">
-          {task.assignments && task.assignments.length > 0 ? (
-            task.assignments.slice(0, 3).map((a) => (
-              <div
-                key={a.user.id}
-                className="w-5 h-5 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-extrabold text-stone-700 shadow-2xs"
-                title={a.user.name}
-              >
-                {a.user.name.charAt(0)}
-              </div>
-            ))
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Subtle Assignee Avatars if present */}
+          {task.assignments && task.assignments.length > 0 && (
+            <div className="flex items-center -space-x-1 shrink-0">
+              {task.assignments.slice(0, 2).map((a) => (
+                <div
+                  key={a.user.id}
+                  className="w-4.5 h-4.5 rounded-full bg-stone-100 border border-white flex items-center justify-center text-[7.5px] font-bold text-stone-600 shadow-2xs"
+                  title={a.user.name}
+                >
+                  {a.user.name.charAt(0)}
+                </div>
+              ))}
+              {task.assignments.length > 2 && (
+                <span className="text-[8px] font-bold text-stone-400 pl-0.5">
+                  +{task.assignments.length - 2}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Due Date matching Reference Screenshot (e.g. Dec 15, Nov 30) */}
+          {task.deadline ? (
+            <div
+              className={`flex items-center gap-1 text-[11px] font-medium shrink-0 ${
+                isOverdue ? "text-rose-600 font-bold" : "text-stone-400"
+              }`}
+            >
+              <Calendar size={11} className="shrink-0 text-stone-400" />
+              <span>{format(new Date(task.deadline), "MMM d")}</span>
+            </div>
           ) : (
-            <span className="text-[10px] text-stone-300 italic">დაუნიშნავი</span>
-          )}
-          {task.assignments && task.assignments.length > 3 && (
-            <span className="text-[9px] font-bold text-stone-400 pl-2">
-              +{task.assignments.length - 3}
-            </span>
+            <span className="text-[10px] text-stone-300">უდედლაინო</span>
           )}
         </div>
-
-        {/* Due Date */}
-        {task.deadline ? (
-          <div
-            className={`flex items-center gap-1 text-[11px] font-medium shrink-0 ${
-              isOverdue ? "text-rose-600 font-bold" : "text-stone-400"
-            }`}
-          >
-            <Calendar size={11} className="shrink-0" />
-            <span>{formatGeorgianDateShort(task.deadline)}</span>
-          </div>
-        ) : (
-          <span className="text-[10px] text-stone-300">უდედლაინო</span>
-        )}
       </div>
     </div>
   );
