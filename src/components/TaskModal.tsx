@@ -7,10 +7,17 @@ import {
   Calendar,
   AlertCircle,
   Loader2,
-  CheckCircle,
   Folder,
   Tag,
   AlertTriangle,
+  ArrowUp,
+  ArrowDown,
+  Link as LinkIcon,
+  Paperclip,
+  Trash2,
+  Plus,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus } from "@prisma/client";
 
@@ -49,6 +56,13 @@ export interface TaskData {
       avatarUrl?: string | null;
     };
   }[];
+  stages?: {
+    id: string;
+    position?: number;
+    title: string;
+    deadline?: string | null;
+    assignments?: { user: { id: string; name: string } }[];
+  }[];
   pauseReason?: string | null;
   blockedReason?: string | null;
 }
@@ -69,6 +83,16 @@ interface TaskModalProps {
   users: UserOption[];
 }
 
+interface AssigneeEntry {
+  userId: string;
+  deadline: string; // "YYYY-MM-DD" or ""
+}
+
+interface LinkEntry {
+  name: string;
+  url: string;
+}
+
 function TaskModalForm({
   onClose,
   onSuccess,
@@ -78,11 +102,9 @@ function TaskModalForm({
   projects,
   users,
 }: Omit<TaskModalProps, "isOpen">) {
+  // 1. Title & Project
   const [title, setTitle] = useState(() =>
     mode === "edit" && initialTask ? initialTask.title : ""
-  );
-  const [description, setDescription] = useState(() =>
-    mode === "edit" && initialTask ? initialTask.description || "" : ""
   );
   const [projectId, setProjectId] = useState(
     () =>
@@ -90,6 +112,44 @@ function TaskModalForm({
         ? initialTask.projectId
         : projects[0]?.id) || ""
   );
+
+  // 2. Assignees & Sequential Order
+  const [assigneeList, setAssigneeList] = useState<AssigneeEntry[]>(() => {
+    if (mode === "edit" && initialTask) {
+      if (initialTask.stages && initialTask.stages.length > 0) {
+        return initialTask.stages.map((s, idx) => ({
+          userId: s.assignments?.[0]?.user?.id || initialTask.assignments?.[idx]?.user?.id || "",
+          deadline: s.deadline ? s.deadline.split("T")[0] : "",
+        })).filter((a) => Boolean(a.userId));
+      }
+      return initialTask.assignments?.map((a) => ({
+        userId: a.user.id,
+        deadline: initialTask.deadline ? initialTask.deadline.split("T")[0] : "",
+      })) || [];
+    }
+    return [];
+  });
+
+  // 3. Overall Task Deadline
+  const [deadline, setDeadline] = useState(() =>
+    mode === "edit" && initialTask?.deadline
+      ? initialTask.deadline.split("T")[0]
+      : ""
+  );
+
+  // 4. Independent Links & Files
+  const [links, setLinks] = useState<LinkEntry[]>([]);
+  const [newLinkName, setNewLinkName] = useState("");
+  const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
+  // 5. Description
+  const [description, setDescription] = useState(() =>
+    mode === "edit" && initialTask ? initialTask.description || "" : ""
+  );
+
+  // 6. Additional Parameters (Collapsible)
+  const [showAdditionalParams, setShowAdditionalParams] = useState(false);
   const [type, setType] = useState<TaskType>(() =>
     mode === "edit" && initialTask ? initialTask.type : TaskType.FEATURE
   );
@@ -99,19 +159,9 @@ function TaskModalForm({
   const [status, setStatus] = useState<TaskStatus>(() =>
     mode === "edit" && initialTask ? initialTask.status : TaskStatus.BACKLOG
   );
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>(() =>
-    mode === "edit" && initialTask
-      ? initialTask.assignments?.map((a) => a.user.id) || []
-      : []
-  );
   const [startDate, setStartDate] = useState(() =>
     mode === "edit" && initialTask?.startDate
       ? initialTask.startDate.split("T")[0]
-      : ""
-  );
-  const [deadline, setDeadline] = useState(() =>
-    mode === "edit" && initialTask?.deadline
-      ? initialTask.deadline.split("T")[0]
       : ""
   );
   const [rescheduleReason, setRescheduleReason] = useState("");
@@ -129,13 +179,108 @@ function TaskModalForm({
   const isDeadlineLocked = Boolean(initialTask?.deadlineLocked);
   const isDeadlineReadOnly = mode === "edit" && isDeadlineLocked && !isAdmin;
 
-  const toggleUserAssignment = (userId: string) => {
-    setSelectedUserIds((prev) =>
-      prev.includes(userId)
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
-    );
+  // Assignee Management
+  const addAssignee = (userId: string) => {
+    if (assigneeList.some((a) => a.userId === userId)) return;
+    setAssigneeList((prev) => [...prev, { userId, deadline: "" }]);
   };
+
+  const removeAssignee = (index: number) => {
+    setAssigneeList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const moveAssignee = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= assigneeList.length) return;
+
+    setAssigneeList((prev) => {
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[targetIndex];
+      next[targetIndex] = temp;
+      return next;
+    });
+  };
+
+  const updateAssigneeDeadline = (index: number, newDate: string) => {
+    setAssigneeList((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], deadline: newDate };
+      return next;
+    });
+  };
+
+  // Links Management
+  const handleAddLink = () => {
+    if (!newLinkName.trim() || !newLinkUrl.trim()) return;
+    let url = newLinkUrl.trim();
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
+    setLinks((prev) => [...prev, { name: newLinkName.trim(), url }]);
+    setNewLinkName("");
+    setNewLinkUrl("");
+  };
+
+  const handleRemoveLink = (index: number) => {
+    setLinks((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Files Management
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Reordering conflict detection
+  const sequenceConflict = (() => {
+    if (assigneeList.length <= 1) return null;
+
+    // Check if 1st assignee deadline is missing
+    if (!assigneeList[0].deadline) {
+      return {
+        severity: "error",
+        message: "თანმიმდევრული სამუშაოსთვის 1-ლი შემსრულებლის დედლაინი სავალდებულოა.",
+      };
+    }
+
+    // Check if any deadline is after overall deadline
+    if (deadline) {
+      const overallTime = new Date(deadline).getTime();
+      for (let i = 0; i < assigneeList.length; i++) {
+        if (assigneeList[i].deadline) {
+          const t = new Date(assigneeList[i].deadline).getTime();
+          if (t > overallTime) {
+            return {
+              severity: "warning",
+              message: `შემსრულებლის (#${i + 1}) დედლაინი აღემატება დავალების საერთო ვადას (${deadline}).`,
+            };
+          }
+        }
+      }
+    }
+
+    // Check sequential order consistency
+    for (let i = 0; i < assigneeList.length; i++) {
+      for (let j = i + 1; j < assigneeList.length; j++) {
+        const dI = assigneeList[i].deadline;
+        const dJ = assigneeList[j].deadline;
+        if (dI && dJ && new Date(dI).getTime() > new Date(dJ).getTime()) {
+          return {
+            severity: "warning",
+            message: `ყურადღება: თარიღების თანმიმდევრობა არ შეესაბამება რიგითობას (#${i + 1} დედლაინი უფრო გვიანია ვიდრე #${j + 1}).`,
+          };
+        }
+      }
+    }
+
+    return null;
+  })();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,24 +291,32 @@ function TaskModalForm({
       return;
     }
 
-    // Business rule: Assigned tasks must have a deadline
-    if (selectedUserIds.length > 0 && !deadline) {
-      setError("შემსრულებლის მინიჭებისას დედლაინის მითითება სავალდებულოა");
+    // Sequential workflow validation
+    if (assigneeList.length > 1 && !assigneeList[0].deadline) {
+      setError("თანმიმდევრული სამუშაოსთვის 1-ლი შემსრულებლის დედლაინი სავალდებულოა");
       return;
     }
 
-    // Business rule: If Admin modifies locked deadline, reason is required
+    // Overall deadline bound validation
+    if (deadline && assigneeList.length > 0) {
+      const overallTime = new Date(deadline).getTime();
+      for (const a of assigneeList) {
+        if (a.deadline && new Date(a.deadline).getTime() > overallTime) {
+          setError("შემსრულებლის დედლაინი არ შეიძლება აღემატებოდეს დავალების საერთო დედლაინს");
+          return;
+        }
+      }
+    }
+
+    // Admin reschedule check
     if (
       mode === "edit" &&
       isDeadlineLocked &&
       isAdmin &&
-      deadline !==
-        (initialTask?.deadline ? initialTask.deadline.split("T")[0] : "") &&
+      deadline !== (initialTask?.deadline ? initialTask.deadline.split("T")[0] : "") &&
       !rescheduleReason.trim()
     ) {
-      setError(
-        "დედლაინის შეცვლისას მიზეზის მითითება სავალდებულოა აუდიტის ლოგისთვის"
-      );
+      setError("დედლაინის შეცვლისას მიზეზის მითითება სავალდებულოა აუდიტის ლოგისთვის");
       return;
     }
 
@@ -171,26 +324,24 @@ function TaskModalForm({
 
     try {
       if (mode === "create") {
-        const payload: {
-          title: string;
-          description?: string;
-          projectId?: string;
-          type: TaskType;
-          priority: Priority;
-          status: TaskStatus;
-          assigneeIds?: string[];
-          startDate?: string | null;
-          deadline?: string | null;
-        } = {
+        const formattedAssignees = assigneeList.map((a, index) => ({
+          userId: a.userId,
+          position: index,
+          deadline: a.deadline ? new Date(a.deadline).toISOString() : null,
+        }));
+
+        const payload = {
           title: title.trim(),
           description: description.trim() || undefined,
           projectId: projectId || undefined,
           type,
           priority,
           status,
-          assigneeIds: selectedUserIds,
+          assignees: formattedAssignees,
+          assigneeIds: assigneeList.map((a) => a.userId),
           startDate: startDate ? new Date(startDate).toISOString() : null,
           deadline: deadline ? new Date(deadline).toISOString() : null,
+          links: links.length > 0 ? links : undefined,
         };
 
         const res = await fetch("/api/tasks", {
@@ -204,9 +355,29 @@ function TaskModalForm({
           throw new Error(data.error || "ტასკის შექმნა ვერ მოხერხდა");
         }
 
+        const createdTaskId = data.task?.id;
+
+        // Upload attached files if any
+        if (createdTaskId && selectedFiles.length > 0) {
+          for (const file of selectedFiles) {
+            const formData = new FormData();
+            formData.append("file", file);
+            await fetch(`/api/tasks/${createdTaskId}/attachments`, {
+              method: "POST",
+              body: formData,
+            });
+          }
+        }
+
         onSuccess();
         onClose();
       } else if (mode === "edit" && initialTask) {
+        const formattedAssignees = assigneeList.map((a, index) => ({
+          userId: a.userId,
+          position: index,
+          deadline: a.deadline ? new Date(a.deadline).toISOString() : null,
+        }));
+
         const payload: {
           title: string;
           description?: string | null;
@@ -214,12 +385,14 @@ function TaskModalForm({
           type: TaskType;
           priority: Priority;
           status: TaskStatus;
-          assigneeIds?: string[];
+          assignees: typeof formattedAssignees;
+          assigneeIds: string[];
           startDate?: string | null;
           deadline?: string | null;
           rescheduleReason?: string;
           pauseReason?: string | null;
           blockedReason?: string | null;
+          links?: LinkEntry[];
         } = {
           title: title.trim(),
           description: description.trim() || null,
@@ -227,10 +400,12 @@ function TaskModalForm({
           type,
           priority,
           status,
-          assigneeIds: selectedUserIds,
+          assignees: formattedAssignees,
+          assigneeIds: assigneeList.map((a) => a.userId),
           startDate: startDate ? new Date(startDate).toISOString() : null,
           pauseReason: status === TaskStatus.PAUSED ? pauseReason : null,
           blockedReason: status === TaskStatus.BLOCKED ? blockedReason : null,
+          links: links.length > 0 ? links : undefined,
         };
 
         if (!isDeadlineReadOnly) {
@@ -251,6 +426,18 @@ function TaskModalForm({
           throw new Error(data.error || "ტასკის განახლება ვერ მოხერხდა");
         }
 
+        // Upload any newly attached files
+        if (selectedFiles.length > 0) {
+          for (const file of selectedFiles) {
+            const formData = new FormData();
+            formData.append("file", file);
+            await fetch(`/api/tasks/${initialTask.id}/attachments`, {
+              method: "POST",
+              body: formData,
+            });
+          }
+        }
+
         onSuccess();
         onClose();
       }
@@ -262,29 +449,27 @@ function TaskModalForm({
   };
 
   return (
-    <div className="bg-white rounded-3xl shadow-2xl border border-stone-200 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="bg-white rounded-3xl shadow-2xl border border-stone-200 w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between shrink-0">
+      <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between shrink-0 bg-stone-50/50">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-600 font-bold text-sm">
+          <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-xs">
             {mode === "create" ? "+" : "#"}
           </div>
           <div>
-            <h3 className="text-base font-bold text-stone-900 tracking-tight">
+            <h3 className="text-base font-black text-stone-900 tracking-tight">
               {mode === "create"
-                ? "ახალი ტასკის შექმნა"
-                : `ტასკის რედაქტირება: TASK-${initialTask?.taskNumber || ""}`}
+                ? "ახალი დავალების შექმნა"
+                : `დავალების რედაქტირება: #${initialTask?.taskNumber || ""}`}
             </h3>
-            <p className="text-[11px] text-stone-500">
-              {mode === "create"
-                ? "შეავსეთ მონაცემები სამუშაოს დასაგეგმად"
-                : "განაახლეთ ტასკის პარამეტრები და შემსრულებლები"}
+            <p className="text-[11px] text-stone-500 font-medium">
+              სწრაფი და გამჭვირვალე დაგეგმვა გუნდისთვის
             </p>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-full transition-colors cursor-pointer"
+          className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-full transition-colors cursor-pointer"
         >
           <X size={18} />
         </button>
@@ -292,9 +477,9 @@ function TaskModalForm({
 
       {/* Error Alert */}
       {error && (
-        <div className="mx-6 mt-4 p-3 bg-rose-50 border border-rose-200/80 rounded-2xl flex items-start gap-2.5 text-rose-800 text-xs animate-in slide-in-from-top-1">
+        <div className="mx-6 mt-4 p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-rose-800 text-xs animate-in slide-in-from-top-1">
           <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
-          <div className="flex-1 font-medium">{error}</div>
+          <div className="flex-1 font-semibold">{error}</div>
           <button
             onClick={() => setError(null)}
             className="text-rose-500 hover:text-rose-700"
@@ -307,34 +492,35 @@ function TaskModalForm({
       {/* Form Body */}
       <form
         onSubmit={handleSubmit}
-        className="flex-1 overflow-y-auto px-6 py-5 space-y-4 text-xs"
+        className="flex-1 overflow-y-auto px-6 py-5 space-y-5 text-xs"
       >
-        {/* Title Field */}
-        <div>
-          <label className="block font-bold text-stone-800 mb-1">
-            სათაური <span className="text-rose-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="მაგ. ახალი ავთენტიფიკაციის მოდული"
-            className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-stone-900 placeholder:text-stone-400 font-medium"
-            required
-          />
-        </div>
-
-        {/* Project & Type Row */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* ========================================================= */}
+        {/* SECTION 1: TITLE & PROJECT                                */}
+        {/* ========================================================= */}
+        <div className="space-y-3 p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80">
           <div>
-            <label className="block font-bold text-stone-800 mb-1 flex items-center gap-1.5">
+            <label className="block font-bold text-stone-800 mb-1 text-xs">
+              სათაური <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="მაგ. მომხმარებელთა მართვის API და ავთენტიფიკაცია"
+              className="w-full px-3.5 py-2.5 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-stone-900 placeholder:text-stone-400 font-semibold text-sm transition-all"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block font-bold text-stone-700 mb-1 flex items-center gap-1.5 text-xs">
               <Folder size={13} className="text-stone-400" />
               <span>პროექტი</span>
             </label>
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
-              className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-stone-900 font-medium"
+              className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-stone-800 font-semibold cursor-pointer"
             >
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -343,241 +529,488 @@ function TaskModalForm({
               ))}
             </select>
           </div>
-
-          <div>
-            <label className="block font-bold text-stone-800 mb-1 flex items-center gap-1.5">
-              <Tag size={13} className="text-stone-400" />
-              <span>ტიპი</span>
-            </label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as TaskType)}
-              className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-stone-900 font-medium"
-            >
-              <option value={TaskType.FEATURE}>Feature (ფუნქცია)</option>
-              <option value={TaskType.BUG}>Bug (ხარვეზი)</option>
-              <option value={TaskType.HOTFIX}>Hotfix (სასწრაფო)</option>
-            </select>
-          </div>
         </div>
 
-        {/* Priority & Status Row */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block font-bold text-stone-800 mb-1">
-              პრიორიტეტი
-            </label>
+        {/* ========================================================= */}
+        {/* SECTION 2: ASSIGNEES & ORDER (SEQUENTIAL WORKFLOW)        */}
+        {/* ========================================================= */}
+        <div className="p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="font-extrabold text-stone-900 text-xs">
+                შემსრულებლები და რიგითობა ({assigneeList.length})
+              </label>
+              <p className="text-[11px] text-stone-500">
+                {assigneeList.length > 1
+                  ? "თანმიმდევრული სამუშაო: სამუშაო გადადის ერთი შემსრულებლიდან მეორეზე"
+                  : "მიუთითეთ პასუხისმგებელი პირი (დედლაინი არასავალდებულოა)"}
+              </p>
+            </div>
+
+            {/* Quick Add Assignee Dropdown */}
             <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as Priority)}
-              className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-stone-900 font-medium"
+              value=""
+              onChange={(e) => {
+                if (e.target.value) addAssignee(e.target.value);
+              }}
+              className="px-2.5 py-1.5 bg-white border border-stone-300 rounded-xl text-xs font-bold text-stone-700 focus:outline-none cursor-pointer hover:border-stone-400 shadow-2xs"
             >
-              <option value={Priority.LOW}>დაბალი (Low)</option>
-              <option value={Priority.MEDIUM}>საშუალო (Medium)</option>
-              <option value={Priority.HIGH}>მაღალი (High)</option>
-              <option value={Priority.CRITICAL}>კრიტიკული (Critical)</option>
+              <option value="">+ წევრის დამატება</option>
+              {users
+                .filter((u) => !assigneeList.some((a) => a.userId === u.id))
+                .map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.role})
+                  </option>
+                ))}
             </select>
           </div>
 
-          {mode === "edit" ? (
-            <div>
-              <label className="block font-bold text-stone-800 mb-1">
-                სტატუსი
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-stone-900 font-medium"
-              >
-                <option value={TaskStatus.BACKLOG}>Backlog</option>
-                <option value={TaskStatus.PLANNED}>Planned</option>
-                <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
-                <option value={TaskStatus.PAUSED}>Paused</option>
-                <option value={TaskStatus.BLOCKED}>Blocked</option>
-                <option value={TaskStatus.DONE}>Done</option>
-                <option value={TaskStatus.CANCELLED}>Cancelled</option>
-              </select>
+          {/* Conflict Alert if dates order is mismatched */}
+          {sequenceConflict && (
+            <div
+              className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-semibold ${
+                sequenceConflict.severity === "error"
+                  ? "bg-rose-50 border-rose-200 text-rose-800"
+                  : "bg-amber-50 border-amber-200 text-amber-800"
+              }`}
+            >
+              <AlertTriangle size={15} className="shrink-0" />
+              <span>{sequenceConflict.message}</span>
+            </div>
+          )}
+
+          {/* Ordered Assignees List */}
+          {assigneeList.length === 0 ? (
+            <div className="py-4 text-center text-xs text-stone-400 bg-white/70 rounded-xl border border-dashed border-stone-200">
+              შემსრულებლები ჯერ არ არის არჩეული (დავალება იქნება ბექლოგში)
             </div>
           ) : (
-            <div>
-              <label className="block font-bold text-stone-800 mb-1">
-                საწყისი სტატუსი
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-stone-900 font-medium"
-              >
-                <option value={TaskStatus.BACKLOG}>Backlog (საწყისი)</option>
-                <option value={TaskStatus.PLANNED}>Planned (დაგეგმილი)</option>
-                <option value={TaskStatus.IN_PROGRESS}>
-                  In Progress (მიმდინარე)
-                </option>
-              </select>
+            <div className="space-y-2">
+              {assigneeList.map((item, index) => {
+                const user = users.find((u) => u.id === item.userId);
+                const isFirst = index === 0;
+                const isLast = index === assigneeList.length - 1;
+
+                return (
+                  <div
+                    key={item.userId}
+                    className="p-2.5 bg-white rounded-xl border border-stone-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 group"
+                  >
+                    {/* Left: Sequence Badge + User info + Reorder Arrows */}
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      {/* Sequence Badge */}
+                      <span className="w-5 h-5 rounded-md bg-stone-100 border border-stone-200 text-stone-700 text-[10px] font-black flex items-center justify-center shrink-0">
+                        #{index + 1}
+                      </span>
+
+                      {/* Reorder Buttons (Accessible Alternative to Drag) */}
+                      {assigneeList.length > 1 && (
+                        <div className="flex flex-col gap-0.5">
+                          <button
+                            type="button"
+                            disabled={isFirst}
+                            onClick={() => moveAssignee(index, "up")}
+                            className="p-0.5 rounded text-stone-400 hover:text-stone-700 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                            title="წინ გადაწევა"
+                          >
+                            <ArrowUp size={11} strokeWidth={2.5} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isLast}
+                            onClick={() => moveAssignee(index, "down")}
+                            className="p-0.5 rounded text-stone-400 hover:text-stone-700 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                            title="უკან გადაწევა"
+                          >
+                            <ArrowDown size={11} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Avatar & Name */}
+                      <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-[10px] shrink-0">
+                        {user?.name.charAt(0) || "U"}
+                      </div>
+                      <div className="truncate">
+                        <span className="font-bold text-stone-800 text-xs truncate">
+                          {user?.name || "მომხმარებელი"}
+                        </span>
+                        {index === 0 && assigneeList.length > 1 && (
+                          <span className="ml-1.5 text-[9px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+                            საწყისი ეტაპი
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Individual Deadline Input + Remove Button */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {assigneeList.length > 1 && (
+                        <div className="flex items-center gap-1">
+                          <label className="text-[10px] font-bold text-stone-500 whitespace-nowrap">
+                            {isFirst ? (
+                              <span className="text-stone-700">
+                                ეტაპის ვადა <span className="text-rose-500">*</span>:
+                              </span>
+                            ) : (
+                              <span>ვადა (optional):</span>
+                            )}
+                          </label>
+                          <input
+                            type="date"
+                            value={item.deadline}
+                            onChange={(e) =>
+                              updateAssigneeDeadline(index, e.target.value)
+                            }
+                            required={isFirst}
+                            className={`px-2 py-1 rounded-lg border text-xs font-semibold focus:outline-none ${
+                              isFirst && !item.deadline
+                                ? "border-rose-300 bg-rose-50/50"
+                                : "border-stone-200 bg-stone-50"
+                            }`}
+                          />
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => removeAssignee(index)}
+                        className="p-1.5 text-stone-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                        title="წაშლა"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* Conditional Reasons for Paused / Blocked */}
-        {status === TaskStatus.PAUSED && (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
-            <label className="block font-bold text-amber-900 mb-1">
-              შეჩერების მიზეზი (სავალდებულო)
+        {/* ========================================================= */}
+        {/* SECTION 3: OVERALL TASK DEADLINE (OPTIONAL)               */}
+        {/* ========================================================= */}
+        <div className="p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="font-extrabold text-stone-900 flex items-center gap-1.5 text-xs">
+              <Calendar size={14} className="text-stone-500" />
+              <span>დავალების საერთო დედლაინი</span>
+              <span className="text-stone-400 font-normal">(არასავალდებულო)</span>
             </label>
-            <input
-              type="text"
-              value={pauseReason}
-              onChange={(e) => setPauseReason(e.target.value)}
-              placeholder="მაგ. შეჩერებულია ჰოტფიქსის გამო"
-              className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs text-amber-950 focus:outline-none"
-              required
-            />
-          </div>
-        )}
 
-        {status === TaskStatus.BLOCKED && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl">
-            <label className="block font-bold text-rose-900 mb-1">
-              დაბლოკვის მიზეზი (სავალდებულო)
-            </label>
-            <input
-              type="text"
-              value={blockedReason}
-              onChange={(e) => setBlockedReason(e.target.value)}
-              placeholder="მაგ. ველოდებით API წვდომას"
-              className="w-full px-3 py-1.5 bg-white border border-rose-300 rounded-lg text-xs text-rose-950 focus:outline-none"
-              required
-            />
-          </div>
-        )}
-
-        {/* Assignees (Multi-select) */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="font-bold text-stone-800">
-              შემსრულებლები ({selectedUserIds.length})
-            </label>
-            {selectedUserIds.length > 0 && (
-              <span className="text-[11px] text-orange-600 font-semibold">
-                დედლაინი სავალდებულოა
+            {isDeadlineLocked && (
+              <span className="flex items-center gap-1 text-[10px] text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full font-bold">
+                <Lock size={10} />
+                <span>დაფიქსირებულია</span>
               </span>
             )}
           </div>
-          <div className="flex flex-wrap gap-1.5 p-2 bg-stone-50 border border-stone-200 rounded-2xl max-h-32 overflow-y-auto">
-            {users.map((u) => {
-              const isSelected = selectedUserIds.includes(u.id);
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => toggleUserAssignment(u.id)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                    isSelected
-                      ? "bg-orange-600 text-white shadow-2xs font-semibold"
-                      : "bg-white border border-stone-200 text-stone-700 hover:bg-stone-100"
-                  }`}
-                >
+
+          <p className="text-[11px] text-stone-500">
+            {assigneeList.length === 1
+              ? "ერთი შემსრულებლის შემთხვევაში დავალება იყენებს ამ ვადას."
+              : "თუ მითითებულია, შემსრულებლების ინდივიდუალური ვადები არ უნდა აღემატებოდეს მას."}
+          </p>
+
+          <input
+            type="date"
+            value={deadline}
+            disabled={isDeadlineReadOnly}
+            onChange={(e) => setDeadline(e.target.value)}
+            className={`w-full px-3 py-2 border rounded-xl font-semibold text-xs focus:outline-none ${
+              isDeadlineReadOnly
+                ? "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
+                : "bg-white border-stone-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-stone-900"
+            }`}
+          />
+
+          {isDeadlineReadOnly ? (
+            <div className="p-2.5 bg-stone-100 border border-stone-200 rounded-xl flex items-center gap-2 text-stone-600 text-xs">
+              <Lock size={13} className="text-stone-500 shrink-0" />
+              <span>დედლაინი დაფიქსირებულია. მის შეცვლა შეუძლია მხოლოდ ადმინისტრატორს.</span>
+            </div>
+          ) : isDeadlineLocked && isAdmin ? (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs">
+                <AlertTriangle size={13} className="text-amber-600" />
+                <span>ადმინისტრატორის მიერ დედლაინის ცვლილების მიზეზი</span>
+              </div>
+              <input
+                type="text"
+                value={rescheduleReason}
+                onChange={(e) => setRescheduleReason(e.target.value)}
+                placeholder="მაგ. კლიენტის მოთხოვნით ვადის გაგრძელება"
+                className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs text-stone-900 focus:outline-none"
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {/* ========================================================= */}
+        {/* SECTION 4: INDEPENDENT LINKS & FILES                      */}
+        {/* ========================================================= */}
+        <div className="p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80 space-y-3">
+          <label className="font-extrabold text-stone-900 text-xs block">
+            დამოუკიდებელი ბმულები და ფაილები
+          </label>
+
+          {/* Links Sub-block */}
+          <div className="space-y-2">
+            <div className="text-[11px] font-bold text-stone-600 flex items-center gap-1">
+              <LinkIcon size={12} className="text-stone-400" />
+              <span>გარე ბმულები (GitLab, Figma, Docs...)</span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={newLinkName}
+                onChange={(e) => setNewLinkName(e.target.value)}
+                placeholder="ბმულის სახელი (მაგ. GitLab MR #12)"
+                className="flex-1 px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium focus:outline-none"
+              />
+              <input
+                type="text"
+                value={newLinkUrl}
+                onChange={(e) => setNewLinkUrl(e.target.value)}
+                placeholder="URL (https://...)"
+                className="flex-1 px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAddLink}
+                disabled={!newLinkName.trim() || !newLinkUrl.trim()}
+                className="px-3 py-1.5 bg-stone-800 hover:bg-stone-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 disabled:opacity-40 cursor-pointer"
+              >
+                <Plus size={13} />
+                <span>დამატება</span>
+              </button>
+            </div>
+
+            {/* List of Added Links */}
+            {links.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                {links.map((link, idx) => (
                   <div
-                    className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      isSelected
-                        ? "bg-white text-orange-600"
-                        : "bg-stone-200 text-stone-600"
-                    }`}
+                    key={idx}
+                    className="p-2 bg-white rounded-xl border border-stone-200 flex items-center justify-between text-xs"
                   >
-                    {u.name.charAt(0)}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <LinkIcon size={12} className="text-blue-600 shrink-0" />
+                      <span className="font-bold text-stone-800 truncate">
+                        {link.name}:
+                      </span>
+                      <span className="text-stone-500 truncate text-[11px]">
+                        {link.url}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLink(idx)}
+                      className="p-1 text-stone-400 hover:text-rose-600 rounded cursor-pointer"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
-                  <span>{u.name}</span>
-                  {isSelected && <CheckCircle size={12} />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Dates: Start Date & Deadline */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block font-bold text-stone-800 mb-1 flex items-center gap-1.5">
-              <Calendar size={13} className="text-stone-400" />
-              <span>დაწყების თარიღი</span>
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-stone-900 font-medium"
-            />
+                ))}
+              </div>
+            )}
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="font-bold text-stone-800 flex items-center gap-1.5">
-                <Calendar size={13} className="text-stone-400" />
-                <span>დედლაინი</span>
-                {selectedUserIds.length > 0 && (
-                  <span className="text-rose-500">*</span>
-                )}
+          {/* Files Sub-block */}
+          <div className="space-y-2 pt-2 border-t border-stone-200/60">
+            <div className="text-[11px] font-bold text-stone-600 flex items-center gap-1">
+              <Paperclip size={12} className="text-stone-400" />
+              <span>ფაილების მიმაგრება</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="px-3 py-2 bg-white border border-stone-300 hover:border-stone-400 rounded-xl text-xs font-bold text-stone-700 cursor-pointer flex items-center gap-1.5 shadow-2xs transition-colors">
+                <Paperclip size={13} />
+                <span>+ ფაილის არჩევა</span>
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
               </label>
-              {isDeadlineLocked && (
-                <span className="flex items-center gap-1 text-[10px] text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded-full font-bold">
-                  <Lock size={10} />
-                  <span>დაბლოკილი</span>
-                </span>
-              )}
+              <span className="text-[11px] text-stone-400">
+                მაქს. 15MB თითო ფაილზე
+              </span>
             </div>
 
-            <input
-              type="date"
-              value={deadline}
-              disabled={isDeadlineReadOnly}
-              onChange={(e) => setDeadline(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-xl font-medium focus:outline-none ${
-                isDeadlineReadOnly
-                  ? "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
-                  : "bg-stone-50 border-stone-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-stone-900"
-              }`}
-              required={selectedUserIds.length > 0}
-            />
+            {/* List of Selected Files */}
+            {selectedFiles.length > 0 && (
+              <div className="space-y-1.5">
+                {selectedFiles.map((file, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 bg-white rounded-xl border border-stone-200 flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <Paperclip size={12} className="text-stone-400 shrink-0" />
+                      <span className="font-semibold text-stone-800 truncate">
+                        {file.name}
+                      </span>
+                      <span className="text-[10px] text-stone-400 shrink-0">
+                        ({Math.round(file.size / 1024)} KB)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(idx)}
+                      className="p-1 text-stone-400 hover:text-rose-600 rounded cursor-pointer"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Deadline Lock Notice / Reschedule Reason for Admin */}
-        {isDeadlineReadOnly ? (
-          <div className="p-3 bg-stone-100 border border-stone-200 rounded-2xl flex items-center gap-2 text-stone-600">
-            <Lock size={14} className="text-stone-500 shrink-0" />
-            <span>
-              დედლაინი დაფიქსირებულია. მის შეცვლა შეუძლია მხოლოდ ადმინისტრატორს.
-            </span>
-          </div>
-        ) : isDeadlineLocked && isAdmin ? (
-          <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl space-y-1.5">
-            <div className="flex items-center gap-1.5 font-bold text-amber-900">
-              <AlertTriangle size={14} className="text-amber-600" />
-              <span>ადმინისტრატორის დედლაინის ცვლილება</span>
-            </div>
-            <p className="text-[11px] text-amber-700">
-              მიუთითეთ დედლაინის შეცვლის დასაბუთებული მიზეზი აუდიტის ლოგისთვის:
-            </p>
-            <input
-              type="text"
-              value={rescheduleReason}
-              onChange={(e) => setRescheduleReason(e.target.value)}
-              placeholder="მაგ. კლიენტის მოთხოვნით ვადის გაგრძელება"
-              className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs text-stone-900 focus:outline-none"
-            />
-          </div>
-        ) : null}
-
-        {/* Description Field */}
-        <div>
-          <label className="block font-bold text-stone-800 mb-1">აღწერა</label>
+        {/* ========================================================= */}
+        {/* SECTION 5: DESCRIPTION                                   */}
+        {/* ========================================================= */}
+        <div className="p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80">
+          <label className="block font-bold text-stone-800 mb-1 text-xs">
+            აღწერა და დეტალები
+          </label>
           <textarea
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="ტასკის დეტალური აღწერა და მოთხოვნები..."
-            className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-stone-900 placeholder:text-stone-400 font-medium resize-none"
+            placeholder="დავალების მოკლე აღწერა, მოთხოვნები და ჩაბარების კრიტერიუმები..."
+            className="w-full px-3.5 py-2.5 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-stone-900 placeholder:text-stone-400 font-medium text-xs resize-none"
           />
+        </div>
+
+        {/* ========================================================= */}
+        {/* SECTION 6: ADDITIONAL OPTIONS (COLLAPSIBLE)              */}
+        {/* ========================================================= */}
+        <div className="border border-stone-200/80 rounded-2xl overflow-hidden bg-stone-50/40">
+          <button
+            type="button"
+            onClick={() => setShowAdditionalParams((prev) => !prev)}
+            className="w-full px-4 py-3 flex items-center justify-between text-xs font-bold text-stone-700 hover:bg-stone-100/60 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Tag size={14} className="text-stone-400" />
+              <span>დამატებითი პარამეტრები (პრიორიტეტი, ტიპი, სტატუსი, დაწყება)</span>
+            </div>
+            {showAdditionalParams ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+
+          {showAdditionalParams && (
+            <div className="p-4 pt-1 space-y-4 border-t border-stone-200/60">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    პრიორიტეტი
+                  </label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value as Priority)}
+                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-800 focus:outline-none cursor-pointer"
+                  >
+                    <option value={Priority.LOW}>დაბალი (Low)</option>
+                    <option value={Priority.MEDIUM}>საშუალო (Medium)</option>
+                    <option value={Priority.HIGH}>მაღალი (High)</option>
+                    <option value={Priority.CRITICAL}>კრიტიკული / Urgent</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    ტიპი
+                  </label>
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value as TaskType)}
+                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-800 focus:outline-none cursor-pointer"
+                  >
+                    <option value={TaskType.FEATURE}>Feature (ფუნქციონალი)</option>
+                    <option value={TaskType.BUG}>Bug (ხარვეზი)</option>
+                    <option value={TaskType.HOTFIX}>Hotfix (სასწრაფო)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    სტატუსი
+                  </label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-800 focus:outline-none cursor-pointer"
+                  >
+                    <option value={TaskStatus.BACKLOG}>To Do / Backlog</option>
+                    <option value={TaskStatus.PLANNED}>Planned</option>
+                    <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
+                    {mode === "edit" && (
+                      <>
+                        <option value={TaskStatus.PAUSED}>Paused</option>
+                        <option value={TaskStatus.BLOCKED}>Blocked</option>
+                        <option value={TaskStatus.DONE}>Completed</option>
+                        <option value={TaskStatus.CANCELLED}>Cancelled</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    დაწყების თარიღი
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-800 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Conditional Reasons for Paused / Blocked */}
+              {status === TaskStatus.PAUSED && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <label className="block font-bold text-amber-900 mb-1">
+                    შეჩერების მიზეზი (სავალდებულო)
+                  </label>
+                  <input
+                    type="text"
+                    value={pauseReason}
+                    onChange={(e) => setPauseReason(e.target.value)}
+                    placeholder="მაგ. შეჩერებულია ჰოტფიქსის გამო"
+                    className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs text-amber-950 focus:outline-none"
+                    required
+                  />
+                </div>
+              )}
+
+              {status === TaskStatus.BLOCKED && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl">
+                  <label className="block font-bold text-rose-900 mb-1">
+                    დაბლოკვის მიზეზი (სავალდებულო)
+                  </label>
+                  <input
+                    type="text"
+                    value={blockedReason}
+                    onChange={(e) => setBlockedReason(e.target.value)}
+                    placeholder="მაგ. ველოდებით API წვდომას"
+                    className="w-full px-3 py-1.5 bg-white border border-rose-300 rounded-lg text-xs text-rose-950 focus:outline-none"
+                    required
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}
@@ -586,14 +1019,14 @@ function TaskModalForm({
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="px-4 py-2 border border-stone-200 text-stone-700 hover:bg-stone-50 rounded-xl font-semibold transition-colors cursor-pointer"
+            className="px-4 py-2 border border-stone-200 text-stone-700 hover:bg-stone-50 rounded-xl font-bold transition-colors cursor-pointer text-xs"
           >
             გაუქმება
           </button>
           <button
             type="submit"
             disabled={isLoading}
-            className="flex items-center gap-2 px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-semibold shadow-xs hover:shadow transition-all cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-xs hover:shadow transition-all cursor-pointer disabled:opacity-50 text-xs"
           >
             {isLoading ? (
               <>
@@ -601,7 +1034,7 @@ function TaskModalForm({
                 <span>ინახება...</span>
               </>
             ) : mode === "create" ? (
-              <span>ტასკის შექმნა</span>
+              <span>დავალების შექმნა</span>
             ) : (
               <span>ცვლილებების შენახვა</span>
             )}

@@ -13,6 +13,8 @@ import {
   Pause,
   Ban,
   RotateCcw,
+  Table as TableIcon,
+  LayoutGrid,
 } from "lucide-react";
 import { Priority, TaskStatus } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
@@ -40,6 +42,7 @@ interface KanbanBoardProps {
   projects: ProjectOption[];
   users: UserOption[];
   isAdmin: boolean;
+  onNavigateToTimeline?: () => void;
 }
 
 type KanbanColumnId = "TODO" | "IN_PROGRESS" | "DONE";
@@ -53,7 +56,11 @@ export function KanbanBoard({
   projects,
   users,
   isAdmin,
+  onNavigateToTimeline,
 }: KanbanBoardProps) {
+  // View mode switcher: Board (დაფა) vs Table (ცხრილი)
+  const [viewMode, setViewMode] = useState<"board" | "table">("board");
+
   // Search and Filters State
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProject, setSelectedProject] = useState<string>("ALL");
@@ -172,75 +179,75 @@ export function KanbanBoard({
     }
   };
 
-  // Helper: Render Priority Badge
+  // Helper: Render Priority Badge matching reference `# Priority` format
   const renderPriorityBadge = (priority: Priority) => {
     switch (priority) {
       case Priority.CRITICAL:
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200">
+          <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            Urgent
+            # Urgent
           </span>
         );
       case Priority.HIGH:
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+          <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            High
+            # High
           </span>
         );
       case Priority.MEDIUM:
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+          <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-blue-50/70 text-blue-700 border border-blue-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            Medium
+            # Medium
           </span>
         );
       case Priority.LOW:
       default:
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200">
+          <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-stone-400" />
-            Low
+            # Low
           </span>
         );
     }
   };
 
-  // Helper: Render Status Dot / Badge
+  // Helper: Render Status Dot / Badge matching reference format
   const renderStatusBadge = (status: TaskStatus) => {
     switch (status) {
       case TaskStatus.DONE:
         return (
-          <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
+          <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             Completed
           </span>
         );
       case TaskStatus.IN_PROGRESS:
         return (
-          <span className="text-[10px] font-semibold text-blue-700 flex items-center gap-1">
+          <span className="text-[11px] font-semibold text-blue-600 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
             In Progress
           </span>
         );
       case TaskStatus.PAUSED:
         return (
-          <span className="text-[10px] font-semibold text-amber-700 flex items-center gap-1">
-            <Pause size={10} className="text-amber-500" />
+          <span className="text-[11px] font-semibold text-amber-600 flex items-center gap-1">
+            <Pause size={11} className="text-amber-500" />
             Paused
           </span>
         );
       case TaskStatus.BLOCKED:
         return (
-          <span className="text-[10px] font-semibold text-rose-700 flex items-center gap-1">
-            <Ban size={10} className="text-rose-500" />
+          <span className="text-[11px] font-semibold text-rose-600 flex items-center gap-1">
+            <Ban size={11} className="text-rose-500" />
             Blocked
           </span>
         );
       case TaskStatus.PLANNED:
         return (
-          <span className="text-[10px] font-semibold text-indigo-700 flex items-center gap-1">
+          <span className="text-[11px] font-semibold text-indigo-600 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
             Planned
           </span>
@@ -248,9 +255,9 @@ export function KanbanBoard({
       case TaskStatus.BACKLOG:
       default:
         return (
-          <span className="text-[10px] font-semibold text-stone-500 flex items-center gap-1">
+          <span className="text-[11px] font-semibold text-stone-500 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-stone-400" />
-            To Do
+            Todo
           </span>
         );
     }
@@ -261,33 +268,52 @@ export function KanbanBoard({
       {/* Top Header Row (Matches Approved Kanban Reference) */}
       <div className="px-5 sm:px-8 py-4 bg-white border-b border-stone-200 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight">
-              Kanban Board
-            </h1>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">
-              ბექლოგის დაფა
-            </span>
-            {isAdmin && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                Admin
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-stone-500 mt-0.5">
-            გადაიტანეთ ტასკები სვეტებს შორის • დააწკაპუნეთ ბარათზე დეტალებისთვის
+          <h1 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight">
+            Kanban Board
+          </h1>
+          <p className="text-xs text-stone-500 mt-1">
+            Drag tasks between columns · click a card to edit
           </p>
         </div>
 
-        {/* Action Button */}
+        {/* Action Buttons matching Approved Reference */}
         <div className="flex items-center gap-2">
           <button
             onClick={onOpenNewTask}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer"
           >
             <Plus size={15} strokeWidth={2.5} />
             <span>+ New Task</span>
           </button>
+
+          <button
+            onClick={() => setViewMode((prev) => (prev === "board" ? "table" : "board"))}
+            className="px-3.5 py-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            title={viewMode === "board" ? "Table view (ცხრილი)" : "Board view (დაფა)"}
+          >
+            {viewMode === "board" ? (
+              <>
+                <TableIcon size={14} className="text-stone-500" />
+                <span>Table view</span>
+              </>
+            ) : (
+              <>
+                <LayoutGrid size={14} className="text-stone-500" />
+                <span>Board view</span>
+              </>
+            )}
+          </button>
+
+          {onNavigateToTimeline && (
+            <button
+              onClick={onNavigateToTimeline}
+              className="px-3.5 py-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+              title="Calendar / თაიმლაინი"
+            >
+              <Calendar size={14} className="text-stone-500" />
+              <span>Calendar</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -304,7 +330,7 @@ export function KanbanBoard({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search tasks..."
-            className="w-full pl-8 pr-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            className="w-full pl-8 pr-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
           />
           {searchQuery && (
             <button
@@ -320,9 +346,9 @@ export function KanbanBoard({
         <select
           value={selectedProject}
           onChange={(e) => setSelectedProject(e.target.value)}
-          className="px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
+          className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
         >
-          <option value="ALL">All Projects (ყველა პროექტი)</option>
+          <option value="ALL">All Projects</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -334,10 +360,10 @@ export function KanbanBoard({
         <select
           value={selectedPriority}
           onChange={(e) => setSelectedPriority(e.target.value)}
-          className="px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
+          className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
         >
-          <option value="ALL">All Priorities (ყველა პრიორიტეტი)</option>
-          <option value={Priority.CRITICAL}>Urgent / Critical</option>
+          <option value="ALL">All Priorities</option>
+          <option value={Priority.CRITICAL}>Urgent</option>
           <option value={Priority.HIGH}>High</option>
           <option value={Priority.MEDIUM}>Medium</option>
           <option value={Priority.LOW}>Low</option>
@@ -347,9 +373,9 @@ export function KanbanBoard({
         <select
           value={selectedUser}
           onChange={(e) => setSelectedUser(e.target.value)}
-          className="px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
+          className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
         >
-          <option value="ALL">All Assignees (ყველა წევრი)</option>
+          <option value="ALL">All Assignees</option>
           {users.map((u) => (
             <option key={u.id} value={u.id}>
               {u.name}
@@ -369,180 +395,288 @@ export function KanbanBoard({
             className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 px-2 py-1 cursor-pointer"
           >
             <RotateCcw size={12} />
-            <span>გასუფთავება</span>
+            <span>Reset</span>
           </button>
         )}
       </div>
 
-      {/* 3 Kanban Columns Container */}
-      <div className="flex-1 p-4 sm:p-6 overflow-x-auto overflow-y-hidden min-h-0">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 h-full min-w-[860px]">
-          {/* ========================================================= */}
-          {/* COLUMN 1: TO DO (შესასრულებელი / ბექლოგი)                  */}
-          {/* ========================================================= */}
-          <div
-            onDragOver={(e) => handleDragOver(e, "TODO")}
-            onDragLeave={() => handleDragLeave("TODO")}
-            onDrop={(e) => handleDrop(e, "TODO")}
-            className={`flex flex-col h-full rounded-2xl border transition-all duration-150 overflow-hidden ${
-              dragOverColumn === "TODO"
-                ? "bg-blue-50/40 border-blue-400 ring-2 ring-blue-300/40"
-                : "bg-stone-100/50 border-stone-200/90"
-            }`}
-          >
-            {/* Column Header */}
-            <div className="p-3.5 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <Circle size={15} className="text-stone-400" />
-                <h3 className="text-sm font-black text-stone-900 tracking-tight">
-                  To Do
-                </h3>
-                <span className="text-xs text-stone-500 font-semibold">
-                  (შესასრულებელი)
-                </span>
-              </div>
-              <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200">
-                {columnsData.TODO.length}
-              </span>
-            </div>
-
-            {/* Column Card List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
-              {columnsData.TODO.map((task) => (
-                <KanbanTaskCard
-                  key={task.id}
-                  task={task}
-                  isSelected={selectedTaskId === task.id}
-                  onSelect={() => onSelectTask(task.id)}
-                  onDragStart={(e) => handleDragStart(e, task.id)}
-                  onDragEnd={handleDragEnd}
-                  renderPriorityBadge={renderPriorityBadge}
-                  renderStatusBadge={renderStatusBadge}
-                />
-              ))}
-
-              {columnsData.TODO.length === 0 && (
-                <div className="py-10 text-center text-xs text-stone-400">
-                  ტასკები არ არის
-                </div>
-              )}
-
-              {/* + Add Task button inside To Do column (matching reference) */}
-              <button
-                onClick={onOpenNewTask}
-                className="w-full py-2.5 rounded-xl border border-dashed border-stone-300 hover:border-stone-400 text-stone-600 hover:text-stone-900 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors bg-white/70 hover:bg-white cursor-pointer"
-              >
-                <Plus size={14} />
-                <span>Add Task</span>
-              </button>
-            </div>
-          </div>
-
-          {/* ========================================================= */}
-          {/* COLUMN 2: IN PROGRESS (მიმდინარე / მუშაობაში)             */}
-          {/* ========================================================= */}
-          <div
-            onDragOver={(e) => handleDragOver(e, "IN_PROGRESS")}
-            onDragLeave={() => handleDragLeave("IN_PROGRESS")}
-            onDrop={(e) => handleDrop(e, "IN_PROGRESS")}
-            className={`flex flex-col h-full rounded-2xl border transition-all duration-150 overflow-hidden border-t-4 border-t-blue-500 ${
-              dragOverColumn === "IN_PROGRESS"
-                ? "bg-blue-50/50 border-blue-400 ring-2 ring-blue-300/40"
-                : "bg-stone-100/50 border-stone-200/90"
-            }`}
-          >
-            {/* Column Header */}
-            <div className="p-3.5 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <Clock size={15} className="text-blue-600" />
-                <h3 className="text-sm font-black text-stone-900 tracking-tight">
-                  In Progress
-                </h3>
-                <span className="text-xs text-stone-500 font-semibold">
-                  (მიმდინარე)
-                </span>
-              </div>
-              <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                {columnsData.IN_PROGRESS.length}
-              </span>
-            </div>
-
-            {/* Column Card List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
-              {columnsData.IN_PROGRESS.map((task) => (
-                <KanbanTaskCard
-                  key={task.id}
-                  task={task}
-                  isSelected={selectedTaskId === task.id}
-                  onSelect={() => onSelectTask(task.id)}
-                  onDragStart={(e) => handleDragStart(e, task.id)}
-                  onDragEnd={handleDragEnd}
-                  renderPriorityBadge={renderPriorityBadge}
-                  renderStatusBadge={renderStatusBadge}
-                />
-              ))}
-
-              {columnsData.IN_PROGRESS.length === 0 && (
-                <div className="py-10 text-center text-xs text-stone-400">
-                  მიმდინარე სამუშაოები არ არის
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ========================================================= */}
-          {/* COLUMN 3: COMPLETED (დასრულებული)                         */}
-          {/* ========================================================= */}
-          <div
-            onDragOver={(e) => handleDragOver(e, "DONE")}
-            onDragLeave={() => handleDragLeave("DONE")}
-            onDrop={(e) => handleDrop(e, "DONE")}
-            className={`flex flex-col h-full rounded-2xl border transition-all duration-150 overflow-hidden border-t-4 border-t-emerald-500 ${
-              dragOverColumn === "DONE"
-                ? "bg-emerald-50/50 border-emerald-400 ring-2 ring-emerald-300/40"
-                : "bg-stone-100/50 border-stone-200/90"
-            }`}
-          >
-            {/* Column Header */}
-            <div className="p-3.5 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={15} className="text-emerald-600" />
-                <h3 className="text-sm font-black text-stone-900 tracking-tight">
-                  Completed
-                </h3>
-                <span className="text-xs text-stone-500 font-semibold">
-                  (დასრულებული)
-                </span>
-              </div>
-              <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                {columnsData.DONE.length}
-              </span>
-            </div>
-
-            {/* Column Card List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
-              {columnsData.DONE.map((task) => (
-                <KanbanTaskCard
-                  key={task.id}
-                  task={task}
-                  isSelected={selectedTaskId === task.id}
-                  onSelect={() => onSelectTask(task.id)}
-                  onDragStart={(e) => handleDragStart(e, task.id)}
-                  onDragEnd={handleDragEnd}
-                  renderPriorityBadge={renderPriorityBadge}
-                  renderStatusBadge={renderStatusBadge}
-                />
-              ))}
-
-              {columnsData.DONE.length === 0 && (
-                <div className="py-10 text-center text-xs text-stone-400">
-                  დასრულებული ტასკები არ არის
-                </div>
-              )}
+      {/* Main Content Area: Board View or Table View */}
+      {viewMode === "table" ? (
+        /* ========================================================= */
+        /* TABLE VIEW (MATCHING HEADER SWITCHER)                     */
+        /* ========================================================= */
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto min-h-0">
+          <div className="bg-white rounded-2xl border border-stone-200/90 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-stone-200 bg-stone-50/80 text-stone-600 font-extrabold uppercase text-[10px] tracking-wider">
+                    <th className="py-3 px-4">დავალება</th>
+                    <th className="py-3 px-4">პროექტი</th>
+                    <th className="py-3 px-4">პრიორიტეტი</th>
+                    <th className="py-3 px-4">სტატუსი</th>
+                    <th className="py-3 px-4">შემსრულებლები</th>
+                    <th className="py-3 px-4">პროგრესი</th>
+                    <th className="py-3 px-4">დედლაინი</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {filteredTasks.map((task) => (
+                    <tr
+                      key={task.id}
+                      onClick={() => onSelectTask(task.id)}
+                      className={`hover:bg-blue-50/40 transition-colors cursor-pointer ${
+                        selectedTaskId === task.id ? "bg-blue-50/70" : ""
+                      }`}
+                    >
+                      <td className="py-3 px-4 font-bold text-stone-900 max-w-xs truncate">
+                        <span className="font-mono text-stone-400 mr-2 text-[11px]">
+                          #{task.taskNumber}
+                        </span>
+                        {task.title}
+                      </td>
+                      <td className="py-3 px-4 text-stone-600">
+                        {task.project ? (
+                          <span className="inline-flex items-center gap-1 font-medium">
+                            <Folder size={12} className="text-stone-400" />
+                            {task.project.name}
+                          </span>
+                        ) : (
+                          <span className="text-stone-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {renderPriorityBadge(task.priority)}
+                      </td>
+                      <td className="py-3 px-4">
+                        {renderStatusBadge(task.status)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center -space-x-1.5">
+                          {task.assignments && task.assignments.length > 0 ? (
+                            task.assignments.slice(0, 3).map((a) => (
+                              <div
+                                key={a.user.id}
+                                className="w-5 h-5 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-bold text-stone-700 shadow-2xs"
+                                title={a.user.name}
+                              >
+                                {a.user.name.charAt(0)}
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-stone-400 italic">დაუნიშნავი</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-stone-700">
+                        {task.progress}%
+                      </td>
+                      <td className="py-3 px-4 text-stone-600 font-medium">
+                        {task.deadline ? (
+                          <span className="flex items-center gap-1 font-semibold text-stone-700">
+                            <Calendar size={12} className="text-stone-400" />
+                            {formatGeorgianDateShort(task.deadline)}
+                          </span>
+                        ) : (
+                          <span className="text-stone-400 italic">უდედლაინო</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredTasks.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-xs text-stone-400">
+                        დავალებები ვერ მოიძებნა
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        /* ========================================================= */
+        /* 3 KANBAN COLUMNS CONTAINER                                */
+        /* ========================================================= */
+        <div className="flex-1 p-4 sm:p-6 overflow-x-auto overflow-y-hidden min-h-0">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 h-full min-w-[860px]">
+            {/* COLUMN 1: TO DO */}
+            <div
+              onDragOver={(e) => handleDragOver(e, "TODO")}
+              onDragLeave={() => handleDragLeave("TODO")}
+              onDrop={(e) => handleDrop(e, "TODO")}
+              className={`flex flex-col h-full rounded-2xl border transition-all duration-150 overflow-hidden ${
+                dragOverColumn === "TODO"
+                  ? "bg-blue-50/40 border-blue-400 ring-2 ring-blue-300/40"
+                  : "bg-[#F8F9FA] border-stone-200/90"
+              }`}
+            >
+              {/* Column Header */}
+              <div className="p-3.5 pb-2.5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Circle size={15} className="text-stone-400" />
+                  <h3 className="text-sm font-bold text-stone-900 tracking-tight">
+                    To Do
+                  </h3>
+                </div>
+                <span className="text-xs font-semibold text-stone-400">
+                  {columnsData.TODO.length}
+                </span>
+              </div>
+
+              {/* Column Card List */}
+              <div className="flex-1 overflow-y-auto px-3 py-1 space-y-3 min-h-0">
+                {columnsData.TODO.map((task) => (
+                  <KanbanTaskCard
+                    key={task.id}
+                    task={task}
+                    isSelected={selectedTaskId === task.id}
+                    onSelect={() => onSelectTask(task.id)}
+                    onDragStart={(e) => handleDragStart(e, task.id)}
+                    onDragEnd={handleDragEnd}
+                    renderPriorityBadge={renderPriorityBadge}
+                    renderStatusBadge={renderStatusBadge}
+                  />
+                ))}
+
+                {columnsData.TODO.length === 0 && (
+                  <div className="py-12 text-center text-xs text-stone-400">
+                    No tasks in To Do
+                  </div>
+                )}
+              </div>
+
+              {/* Pinned + Add Task button matching reference */}
+              <div className="p-2.5 border-t border-stone-200/60 shrink-0 bg-transparent">
+                <button
+                  onClick={onOpenNewTask}
+                  className="w-full py-1.5 px-2 text-stone-500 hover:text-stone-900 text-xs font-semibold flex items-center justify-start gap-1.5 transition-colors cursor-pointer rounded-lg hover:bg-stone-200/50"
+                >
+                  <Plus size={14} className="text-stone-400" />
+                  <span>Add Task</span>
+                </button>
+              </div>
+            </div>
+
+            {/* COLUMN 2: IN PROGRESS */}
+            <div
+              onDragOver={(e) => handleDragOver(e, "IN_PROGRESS")}
+              onDragLeave={() => handleDragLeave("IN_PROGRESS")}
+              onDrop={(e) => handleDrop(e, "IN_PROGRESS")}
+              className={`flex flex-col h-full rounded-2xl border transition-all duration-150 overflow-hidden border-t-2 border-t-blue-500 ${
+                dragOverColumn === "IN_PROGRESS"
+                  ? "bg-blue-50/50 border-blue-400 ring-2 ring-blue-300/40"
+                  : "bg-[#F8F9FA] border-stone-200/90"
+              }`}
+            >
+              {/* Column Header */}
+              <div className="p-3.5 pb-2.5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Clock size={15} className="text-blue-500" />
+                  <h3 className="text-sm font-bold text-stone-900 tracking-tight">
+                    In Progress
+                  </h3>
+                </div>
+                <span className="text-xs font-semibold text-stone-400">
+                  {columnsData.IN_PROGRESS.length}
+                </span>
+              </div>
+
+              {/* Column Card List */}
+              <div className="flex-1 overflow-y-auto px-3 py-1 space-y-3 min-h-0">
+                {columnsData.IN_PROGRESS.map((task) => (
+                  <KanbanTaskCard
+                    key={task.id}
+                    task={task}
+                    isSelected={selectedTaskId === task.id}
+                    onSelect={() => onSelectTask(task.id)}
+                    onDragStart={(e) => handleDragStart(e, task.id)}
+                    onDragEnd={handleDragEnd}
+                    renderPriorityBadge={renderPriorityBadge}
+                    renderStatusBadge={renderStatusBadge}
+                  />
+                ))}
+
+                {columnsData.IN_PROGRESS.length === 0 && (
+                  <div className="py-12 text-center text-xs text-stone-400">
+                    No active tasks
+                  </div>
+                )}
+              </div>
+
+              {/* Pinned + Add Task button matching reference */}
+              <div className="p-2.5 border-t border-stone-200/60 shrink-0 bg-transparent">
+                <button
+                  onClick={onOpenNewTask}
+                  className="w-full py-1.5 px-2 text-stone-500 hover:text-stone-900 text-xs font-semibold flex items-center justify-start gap-1.5 transition-colors cursor-pointer rounded-lg hover:bg-stone-200/50"
+                >
+                  <Plus size={14} className="text-stone-400" />
+                  <span>Add Task</span>
+                </button>
+              </div>
+            </div>
+
+            {/* COLUMN 3: COMPLETED */}
+            <div
+              onDragOver={(e) => handleDragOver(e, "DONE")}
+              onDragLeave={() => handleDragLeave("DONE")}
+              onDrop={(e) => handleDrop(e, "DONE")}
+              className={`flex flex-col h-full rounded-2xl border transition-all duration-150 overflow-hidden border-t-2 border-t-emerald-500 ${
+                dragOverColumn === "DONE"
+                  ? "bg-emerald-50/50 border-emerald-400 ring-2 ring-emerald-300/40"
+                  : "bg-[#F8F9FA] border-stone-200/90"
+              }`}
+            >
+              {/* Column Header */}
+              <div className="p-3.5 pb-2.5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-emerald-500" />
+                  <h3 className="text-sm font-bold text-stone-900 tracking-tight">
+                    Completed
+                  </h3>
+                </div>
+                <span className="text-xs font-semibold text-stone-400">
+                  {columnsData.DONE.length}
+                </span>
+              </div>
+
+              {/* Column Card List */}
+              <div className="flex-1 overflow-y-auto px-3 py-1 space-y-3 min-h-0">
+                {columnsData.DONE.map((task) => (
+                  <KanbanTaskCard
+                    key={task.id}
+                    task={task}
+                    isSelected={selectedTaskId === task.id}
+                    onSelect={() => onSelectTask(task.id)}
+                    onDragStart={(e) => handleDragStart(e, task.id)}
+                    onDragEnd={handleDragEnd}
+                    renderPriorityBadge={renderPriorityBadge}
+                    renderStatusBadge={renderStatusBadge}
+                  />
+                ))}
+
+                {columnsData.DONE.length === 0 && (
+                  <div className="py-12 text-center text-xs text-stone-400">
+                    No completed tasks
+                  </div>
+                )}
+              </div>
+
+              {/* Pinned + Add Task button matching reference */}
+              <div className="p-2.5 border-t border-stone-200/60 shrink-0 bg-transparent">
+                <button
+                  onClick={onOpenNewTask}
+                  className="w-full py-1.5 px-2 text-stone-500 hover:text-stone-900 text-xs font-semibold flex items-center justify-start gap-1.5 transition-colors cursor-pointer rounded-lg hover:bg-stone-200/50"
+                >
+                  <Plus size={14} className="text-stone-400" />
+                  <span>Add Task</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -596,54 +730,34 @@ function KanbanTaskCard({
           />
           {renderPriorityBadge(task.priority)}
         </div>
-        <div>{renderStatusBadge(task.status)}</div>
+        <div className="flex items-center gap-1">
+          {renderStatusBadge(task.status)}
+          <span className="text-[10px] text-stone-300 hover:text-stone-500 ml-0.5">⊙</span>
+        </div>
       </div>
 
       {/* Task Title */}
-      <h4 className="text-xs sm:text-[13px] font-bold text-stone-900 leading-snug line-clamp-2 mb-1">
-        <span className="font-mono text-stone-400 font-medium mr-1.5">
-          #{task.taskNumber}
-        </span>
+      <h4 className="text-[13px] font-bold text-stone-900 leading-snug line-clamp-2 mb-1">
         {task.title}
       </h4>
 
       {/* Description Snippet */}
       {task.description && (
-        <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed mb-2.5">
+        <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed mb-2">
           {task.description}
         </p>
       )}
 
       {/* Project Folder Tag */}
       {task.project && (
-        <div className="flex items-center gap-1 text-[10px] font-semibold text-stone-500 mb-2.5 truncate">
+        <div className="flex items-center gap-1.5 text-[11px] text-stone-400 mb-2.5 truncate">
           <Folder size={12} className="shrink-0 text-stone-400" />
           <span className="truncate">{task.project.name}</span>
         </div>
       )}
 
-      {/* Progress Bar (if in progress or completed) */}
-      {task.progress > 0 && (
-        <div className="mb-2.5">
-          <div className="flex items-center justify-between text-[10px] font-bold text-stone-500 mb-0.5">
-            <span>პროგრესი</span>
-            <span>{task.progress}%</span>
-          </div>
-          <div className="w-full h-1.5 bg-stone-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${
-                task.status === TaskStatus.DONE
-                  ? "bg-emerald-500"
-                  : "bg-blue-500"
-              }`}
-              style={{ width: `${task.progress}%` }}
-            />
-          </div>
-        </div>
-      )}
-
       {/* Card Footer: Assignee Avatars (Left) & Due Date (Right) */}
-      <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-100 text-xs">
+      <div className="flex items-center justify-between gap-2 pt-1 text-xs">
         {/* Assignees */}
         <div className="flex items-center -space-x-1.5">
           {task.assignments && task.assignments.length > 0 ? (
@@ -657,7 +771,7 @@ function KanbanTaskCard({
               </div>
             ))
           ) : (
-            <span className="text-[10px] text-stone-400 italic">დაუნიშნავი</span>
+            <span className="text-[10px] text-stone-300 italic">დაუნიშნავი</span>
           )}
           {task.assignments && task.assignments.length > 3 && (
             <span className="text-[9px] font-bold text-stone-400 pl-2">
@@ -669,15 +783,15 @@ function KanbanTaskCard({
         {/* Due Date */}
         {task.deadline ? (
           <div
-            className={`flex items-center gap-1 text-[10px] font-semibold shrink-0 ${
-              isOverdue ? "text-rose-600 font-bold" : "text-stone-500"
+            className={`flex items-center gap-1 text-[11px] font-medium shrink-0 ${
+              isOverdue ? "text-rose-600 font-bold" : "text-stone-400"
             }`}
           >
             <Calendar size={11} className="shrink-0" />
             <span>{formatGeorgianDateShort(task.deadline)}</span>
           </div>
         ) : (
-          <span className="text-[10px] text-stone-400">უდედლაინო</span>
+          <span className="text-[10px] text-stone-300">უდედლაინო</span>
         )}
       </div>
     </div>

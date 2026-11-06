@@ -422,6 +422,14 @@ export default function WorkspacePage({
                 projects={projects}
                 users={users}
                 isAdmin={currentUser.role === "ADMIN"}
+                onNavigateToTimeline={() => {
+                  setCurrentView("timeline");
+                  if (typeof window !== "undefined") {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("view", "timeline");
+                    window.history.pushState({}, "", url.toString());
+                  }
+                }}
               />
             </div>
           ) : currentView === "reports" ? (
@@ -443,7 +451,7 @@ export default function WorkspacePage({
               />
             </div>
           ) : currentView === "workload" ? (
-            <div className="flex-1 overflow-y-auto min-h-0 bg-stone-50/50">
+            <div id="workload-scroll-container" className="flex-1 overflow-y-auto min-h-0 bg-[#F8F7F4]">
               <WorkloadDashboard
                 onSelectTask={handleSelectTask}
                 selectedTaskId={selectedTaskId}

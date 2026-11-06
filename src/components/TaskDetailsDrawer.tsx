@@ -26,6 +26,7 @@ import {
   Play,
   AlertTriangle,
   RotateCcw,
+  Clock,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus, SubtaskStatus } from "@prisma/client";
 import { formatGeorgianDate, formatGeorgianDateShort } from "@/lib/dateUtils";
@@ -222,6 +223,21 @@ export function TaskDetailsDrawer({
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
 
+  // Deadline Change Request State (Successor / Admin)
+  const [pendingDeadlineRequest, setPendingDeadlineRequest] = useState<{
+    id: string;
+    createdAt: string;
+    actor: { id: string; name: string };
+    requestedDeadline: string;
+    reason: string;
+    stageId?: string | null;
+  } | null>(null);
+  const [isDeadlineRequestModalOpen, setIsDeadlineRequestModalOpen] = useState(false);
+  const [targetRequestStageId, setTargetRequestStageId] = useState<string | null>(null);
+  const [reqNewDeadline, setReqNewDeadline] = useState("");
+  const [reqReason, setReqReason] = useState("");
+  const [isSubmittingDeadlineReq, setIsSubmittingDeadlineReq] = useState(false);
+
   const isAdmin = currentUser.role === "ADMIN";
 
   // Step 9.B: Outside-click handling and Tabs accessibility
@@ -285,6 +301,11 @@ export function TaskDetailsDrawer({
         setTask(data.task);
         setDescValue(data.task.description || "");
       }
+      const reqRes = await fetch(`/api/tasks/${taskId}/deadline-request`);
+      if (reqRes.ok) {
+        const reqData = await reqRes.json();
+        setPendingDeadlineRequest(reqData.pendingRequest || null);
+      }
     } catch (err: unknown) {
       console.error("Failed to refresh task details:", err);
     }
@@ -306,6 +327,11 @@ export function TaskDetailsDrawer({
         if (active) {
           setTask(data.task);
           setDescValue(data.task.description || "");
+        }
+        const reqRes = await fetch(`/api/tasks/${taskId}/deadline-request`);
+        if (reqRes.ok && active) {
+          const reqData = await reqRes.json();
+          setPendingDeadlineRequest(reqData.pendingRequest || null);
         }
       } catch (err: unknown) {
         if (active) {
@@ -676,6 +702,74 @@ export function TaskDetailsDrawer({
     onTaskUpdated();
   };
 
+  // Deadline Change Request Handlers
+  const handleAdminApproveRequest = async () => {
+    if (!taskId) return;
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/deadline-request`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "APPROVE" }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "მოთხოვნის დამტკიცება ვერ მოხერხდა");
+      }
+      await refreshTaskDetails();
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
+  };
+
+  const handleAdminRejectRequest = async () => {
+    if (!taskId) return;
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/deadline-request`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REJECT" }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "მოთხოვნის უარყოფა ვერ მოხერხდა");
+      }
+      await refreshTaskDetails();
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
+  };
+
+  const handleSubmitDeadlineRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!taskId || !reqNewDeadline || !reqReason.trim()) return;
+    try {
+      setIsSubmittingDeadlineReq(true);
+      const res = await fetch(`/api/tasks/${taskId}/deadline-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestedDeadline: reqNewDeadline,
+          reason: reqReason.trim(),
+          stageId: targetRequestStageId,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "მოთხოვნის გაგზავნა ვერ მოხერხდა");
+      setIsDeadlineRequestModalOpen(false);
+      setReqNewDeadline("");
+      setReqReason("");
+      setTargetRequestStageId(null);
+      await refreshTaskDetails();
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    } finally {
+      setIsSubmittingDeadlineReq(false);
+    }
+  };
+
   // --- File Upload Handler (Preserved for Attachments & Paste Confirm) ---
   const handleFileUpload = useCallback(
     async (file: File) => {
@@ -940,6 +1034,52 @@ export function TaskDetailsDrawer({
               </button>
             )}
           </div>
+
+          {/* Pending Deadline Change Request Banner */}
+          {pendingDeadlineRequest && (
+            <div className="mt-2.5 p-3 bg-amber-50 border border-amber-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+              <div className="flex items-start gap-2 min-w-0">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-extrabold text-amber-950">
+                    დედლაინის შეცვლის მოთხოვნა
+                  </div>
+                  <div className="text-[11px] text-amber-800 mt-0.5">
+                    <span className="font-bold">{pendingDeadlineRequest.actor.name}</span> ითხოვს ახალ ვადას:{" "}
+                    <span className="font-bold font-mono">
+                      {formatGeorgianDateShort(pendingDeadlineRequest.requestedDeadline)}
+                    </span>
+                    {pendingDeadlineRequest.reason && (
+                      <span className="italic block text-stone-600 mt-0.5">
+                        &quot;{pendingDeadlineRequest.reason}&quot;
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {isAdmin ? (
+                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                  <button
+                    onClick={handleAdminApproveRequest}
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                  >
+                    დამტკიცება
+                  </button>
+                  <button
+                    onClick={handleAdminRejectRequest}
+                    className="px-3 py-1 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  >
+                    უარყოფა
+                  </button>
+                </div>
+              ) : (
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-full shrink-0">
+                  მოლოდინში (ადმინისტრატორი განიხილავს)
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Progress Banner & Responsible Users */}
           <div className="flex items-center justify-between gap-3 pt-1 text-xs">
@@ -1312,15 +1452,22 @@ export function TaskDetailsDrawer({
                             st.status === SubtaskStatus.CANCELLED
                         );
 
+                      const isStageOverdue =
+                        stage.isActive &&
+                        Boolean(stage.deadline) &&
+                        new Date(stage.deadline!) < new Date();
+
                       return (
                         <div
                           key={stage.id}
                           className={`rounded-2xl border transition-all ${
-                            stage.isActive
-                              ? "bg-white border-orange-500/80 shadow-xs ring-2 ring-orange-500/10"
+                            isStageOverdue
+                              ? "bg-rose-50/20 border-rose-300 ring-2 ring-rose-200/40"
+                              : stage.isActive
+                              ? "bg-white border-blue-500/80 shadow-xs ring-2 ring-blue-500/10"
                               : stage.isCompleted
                               ? "bg-emerald-50/30 border-emerald-200/80"
-                              : "bg-stone-50/70 border-stone-200/80 opacity-80"
+                              : "bg-stone-50/70 border-stone-200/80 opacity-85"
                           }`}
                         >
                           {/* Stage Header */}
@@ -1331,8 +1478,10 @@ export function TaskDetailsDrawer({
                                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
                                   stage.isCompleted
                                     ? "bg-emerald-500 text-white"
+                                    : isStageOverdue
+                                    ? "bg-rose-600 text-white shadow-2xs"
                                     : stage.isActive
-                                    ? "bg-orange-600 text-white shadow-2xs"
+                                    ? "bg-blue-600 text-white shadow-2xs"
                                     : "bg-stone-200 text-stone-600"
                                 }`}
                               >
@@ -1353,9 +1502,15 @@ export function TaskDetailsDrawer({
                                       {doneStageSubtasks}/{totalStageSubtasks} საბტასკი
                                     </span>
                                   )}
-                                  {stage.isActive && (
-                                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-orange-100 text-orange-700 uppercase">
-                                      მიმდინარე
+                                  {stage.isActive && isStageOverdue && (
+                                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-700 flex items-center gap-0.5">
+                                      <AlertCircle size={10} />
+                                      <span>ვადაგადაცილებული</span>
+                                    </span>
+                                  )}
+                                  {stage.isActive && !isStageOverdue && (
+                                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-blue-100 text-blue-700 uppercase">
+                                      აქტიური
                                     </span>
                                   )}
                                   {stage.isCompleted && (
@@ -1364,14 +1519,14 @@ export function TaskDetailsDrawer({
                                     </span>
                                   )}
                                   {!stage.isActive && !stage.isCompleted && (
-                                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-stone-200/80 text-stone-500">
+                                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-stone-200/80 text-stone-600">
                                       მოლოდინში
                                     </span>
                                   )}
                                 </div>
 
                                 {/* Assignees & Dates */}
-                                <div className="flex items-center gap-2 text-[11px] text-stone-500 mt-0.5">
+                                <div className="flex items-center gap-2 text-[11px] text-stone-500 mt-0.5 flex-wrap">
                                   <div className="flex items-center gap-1 font-medium">
                                     {stage.assignments.length > 0 ? (
                                       stage.assignments.map((a) => (
@@ -1391,7 +1546,9 @@ export function TaskDetailsDrawer({
                                   {stage.deadline && (
                                     <>
                                       <span>•</span>
-                                      <span className="flex items-center gap-0.5 font-semibold text-stone-600">
+                                      <span className={`flex items-center gap-0.5 font-semibold ${
+                                        isStageOverdue ? "text-rose-600 font-bold" : "text-stone-600"
+                                      }`}>
                                         <Calendar size={11} className="text-stone-400" />
                                         <span>
                                           {formatGeorgianDateShort(stage.deadline)}
@@ -1401,6 +1558,25 @@ export function TaskDetailsDrawer({
                                         )}
                                       </span>
                                     </>
+                                  )}
+
+                                  {/* Request Deadline Change Button */}
+                                  {!stage.isCompleted && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setTargetRequestStageId(stage.id);
+                                        setReqNewDeadline(
+                                          stage.deadline ? stage.deadline.split("T")[0] : ""
+                                        );
+                                        setIsDeadlineRequestModalOpen(true);
+                                      }}
+                                      className="ml-1 px-1.5 py-0.5 bg-stone-100 hover:bg-blue-50 text-stone-600 hover:text-blue-700 border border-stone-200 hover:border-blue-200 rounded text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                      title="დედლაინის შეცვლის მოთხოვნა"
+                                    >
+                                      <Clock size={10} />
+                                      <span>ვადის მოთხოვნა</span>
+                                    </button>
                                   )}
                                 </div>
                               </div>
@@ -2015,6 +2191,80 @@ export function TaskDetailsDrawer({
             }))}
             onRescheduleConfirmed={handleReschedule}
           />
+        )}
+
+        {/* Deadline Change Request Modal for Successors / Assignees */}
+        {isDeadlineRequestModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs">
+            <div className="bg-white rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl border border-stone-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                    <Clock size={15} />
+                  </div>
+                  <h3 className="text-sm font-black text-stone-900">
+                    დედლაინის შეცვლის მოთხოვნა
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsDeadlineRequestModalOpen(false)}
+                  className="text-stone-400 hover:text-stone-600 p-1 rounded-full cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <p className="text-xs text-stone-500">
+                მიუთითეთ ახალი სასურველი ვადა და მიზეზი. მოთხოვნა გადაეგზავნება ადმინისტრატორს დასამტკიცებლად.
+              </p>
+
+              <form onSubmit={handleSubmitDeadlineRequest} className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    სასურველი ახალი ვადა <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={reqNewDeadline}
+                    onChange={(e) => setReqNewDeadline(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-xl font-semibold focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">
+                    მიზეზი <span className="text-rose-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={reqReason}
+                    onChange={(e) => setReqReason(e.target.value)}
+                    placeholder="მაგ. წინა ეტაპის დაგვიანების გამო მჭირდება ვადის გადაწევა"
+                    className="w-full px-3 py-2 border border-stone-300 rounded-xl font-medium focus:outline-none resize-none"
+                    required
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsDeadlineRequestModalOpen(false)}
+                    className="px-3.5 py-1.5 border border-stone-200 text-stone-600 rounded-xl font-bold hover:bg-stone-50 cursor-pointer"
+                  >
+                    გაუქმება
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingDeadlineReq}
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-xs hover:shadow transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmittingDeadlineReq ? "იგზავნება..." : "მოთხოვნის გაგზავნა"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </div>
     </div>

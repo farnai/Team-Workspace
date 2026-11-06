@@ -246,7 +246,7 @@ export function WorkloadDashboard({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#F8F7F4] overflow-y-auto p-4 sm:p-6 space-y-6 text-stone-900">
+    <div className="w-full bg-[#F8F7F4] p-4 sm:p-6 space-y-6 text-stone-900 pb-16">
       {/* 1. Header & Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-stone-200/90 shadow-2xs">
         <div>

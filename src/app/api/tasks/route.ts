@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 import { z } from "zod";
+import crypto from "crypto";
 import { TaskType, Priority, TaskStatus, Prisma } from "@prisma/client";
 
 const createTaskSchema = z.object({
@@ -14,6 +15,23 @@ const createTaskSchema = z.object({
   startDate: z.string().nullable().optional(),
   deadline: z.string().nullable().optional(),
   assigneeIds: z.array(z.string()).optional(),
+  assignees: z
+    .array(
+      z.object({
+        userId: z.string(),
+        position: z.number().optional(),
+        deadline: z.string().nullable().optional(),
+      })
+    )
+    .optional(),
+  links: z
+    .array(
+      z.object({
+        name: z.string(),
+        url: z.string(),
+      })
+    )
+    .optional(),
   status: z.nativeEnum(TaskStatus).default(TaskStatus.BACKLOG),
 });
 
@@ -147,14 +165,73 @@ export async function POST(req: NextRequest) {
 
     const parsedStart = data.startDate ? new Date(data.startDate) : null;
     const parsedDeadline = data.deadline ? new Date(data.deadline) : null;
-    const hasInitialAssignees = Boolean(data.assigneeIds && data.assigneeIds.length > 0);
 
-    // Business rule: An assigned task requires an initial deadline
-    if (hasInitialAssignees && !parsedDeadline) {
-      return NextResponse.json(
-        { error: "შემსრულებლის მინიჭებისას საწყისი დედლაინის მითითება სავალდებულოა" },
-        { status: 400 }
-      );
+    // 1. Resolve assignees list
+    let resolvedAssignees: {
+      userId: string;
+      position: number;
+      deadline: Date | null;
+    }[] = [];
+
+    if (data.assignees && data.assignees.length > 0) {
+      resolvedAssignees = data.assignees
+        .map((a, idx) => ({
+          userId: a.userId,
+          position: a.position !== undefined ? a.position : idx,
+          deadline: a.deadline ? new Date(a.deadline) : null,
+        }))
+        .sort((a, b) => a.position - b.position);
+    } else if (data.assigneeIds && data.assigneeIds.length > 0) {
+      resolvedAssignees = data.assigneeIds.map((uid, idx) => ({
+        userId: uid,
+        position: idx,
+        deadline: parsedDeadline,
+      }));
+    }
+
+    // 2. Validate Phase 1 rules:
+    // - Task overall deadline is optional.
+    // - Adding an assignee does not require a mandatory task deadline.
+    // - Single assignee: uses task overall deadline if set, otherwise optional.
+    // - Multiple sequential assignees: 1st assignee deadline is mandatory, subsequent optional.
+    // - No individual deadline can exceed task overall deadline.
+    // - Sequential consistency: d_i <= d_j for i < j.
+    if (resolvedAssignees.length > 1) {
+      const firstAssignee = resolvedAssignees[0];
+      if (!firstAssignee.deadline) {
+        return NextResponse.json(
+          { error: "თანმიმდევრული სამუშაოსთვის 1-ლი შემსრულებლის დედლაინი სავალდებულოა" },
+          { status: 400 }
+        );
+      }
+
+      if (parsedDeadline) {
+        for (const a of resolvedAssignees) {
+          if (a.deadline && a.deadline.getTime() > parsedDeadline.getTime()) {
+            return NextResponse.json(
+              { error: "შემსრულებლის დედლაინი არ შეიძლება აღემატებოდეს დავალების საერთო დედლაინს" },
+              { status: 400 }
+            );
+          }
+        }
+      }
+
+      for (let i = 0; i < resolvedAssignees.length; i++) {
+        for (let j = i + 1; j < resolvedAssignees.length; j++) {
+          const dI = resolvedAssignees[i].deadline;
+          const dJ = resolvedAssignees[j].deadline;
+          if (dI && dJ && dI.getTime() > dJ.getTime()) {
+            return NextResponse.json(
+              { error: "თანმიმდევრული შემსრულებლების დედლაინები უნდა შეესაბამებოდეს რიგითობას" },
+              { status: 400 }
+            );
+          }
+        }
+      }
+    } else if (resolvedAssignees.length === 1) {
+      if (parsedDeadline && !resolvedAssignees[0].deadline) {
+        resolvedAssignees[0].deadline = parsedDeadline;
+      }
     }
 
     // Resolve or default project
@@ -192,13 +269,69 @@ export async function POST(req: NextRequest) {
       });
 
       // Create assignments
-      if (hasInitialAssignees) {
+      if (resolvedAssignees.length > 0) {
+        const uniqueUserIds = Array.from(
+          new Set(resolvedAssignees.map((a) => a.userId))
+        );
+
         await tx.taskAssignment.createMany({
-          data: data.assigneeIds!.map((uid) => ({
+          data: uniqueUserIds.map((uid) => ({
             taskId: created.id,
             userId: uid,
           })),
         });
+
+        // If multiple sequential assignees, create workflow stages
+        if (resolvedAssignees.length > 1) {
+          const assigneeUsers = await tx.user.findMany({
+            where: { id: { in: uniqueUserIds } },
+            select: { id: true, name: true },
+          });
+          const userNameMap = new Map(assigneeUsers.map((u) => [u.id, u.name]));
+
+          for (let i = 0; i < resolvedAssignees.length; i++) {
+            const a = resolvedAssignees[i];
+            const uName = userNameMap.get(a.userId) || `შემსრულებელი ${i + 1}`;
+            const stage = await tx.workflowStage.create({
+              data: {
+                taskId: created.id,
+                position: i,
+                title: `ეტაპი ${i + 1}: ${uName}`,
+                isActive: i === 0,
+                startDate: i === 0 ? parsedStart : null,
+                deadline: a.deadline,
+                deadlineLocked: Boolean(a.deadline),
+              },
+            });
+
+            await tx.stageAssignment.create({
+              data: {
+                stageId: stage.id,
+                userId: a.userId,
+              },
+            });
+          }
+        }
+      }
+
+      // Create external links as attachments if provided
+      if (data.links && data.links.length > 0) {
+        for (const link of data.links) {
+          if (link.name?.trim() && link.url?.trim()) {
+            await tx.attachment.create({
+              data: {
+                taskId: created.id,
+                userId: user.id,
+                originalName: link.name.trim(),
+                storedName: "link-" + crypto.randomUUID(),
+                mimeType: "text/html",
+                sizeBytes: 0,
+                url: link.url.trim(),
+                isExternal: true,
+              },
+            });
+          }
+        }
       }
 
       await logAuditEvent({
@@ -212,7 +345,7 @@ export async function POST(req: NextRequest) {
           type: created.type,
           priority: created.priority,
           deadline: created.deadline,
-          assigneeIds: data.assigneeIds,
+          assignees: resolvedAssignees,
         },
         reason: "ახალი ტასკის შექმნა",
         tx,

@@ -39,6 +39,7 @@ export interface TimelineTask {
     id: string;
     title: string;
     position: number;
+    deadline?: string | null;
     assignees: { id: string; name: string; avatarUrl: string | null }[];
   } | null;
   totalSubtasks: number;
@@ -501,10 +502,8 @@ export function VerticalTimeline({
                   {/* Circular Node Marker positioned directly on the rail */}
                   <div
                     className={`relative z-10 mt-3 rounded-full border-2 transition-all shrink-0 ${
-                      isActiveDate
-                        ? "w-3.5 h-3.5 border-orange-600 bg-white ring-4 ring-orange-200 scale-125 shadow-xs"
-                        : isTodayDate
-                        ? "w-3 h-3 border-emerald-600 bg-emerald-500 ring-2 ring-emerald-100 shadow-2xs"
+                      isTodayDate
+                        ? "w-3.5 h-3.5 border-blue-600 bg-blue-500 ring-4 ring-blue-100 scale-125 shadow-xs"
                         : day.holidayName
                         ? "w-2.5 h-2.5 border-amber-500 bg-amber-100"
                         : day.isWeekend
@@ -518,12 +517,10 @@ export function VerticalTimeline({
                 <div className="flex-1 min-w-0 pb-2.5 sm:pb-3">
                   <div
                     className={`transition-all duration-150 ${
-                      isTodayAndActive || isOtherActive
-                        ? "bg-white border-2 border-orange-500/90 shadow-md ring-2 ring-orange-100/60 p-3 sm:p-3.5 rounded-2xl"
-                        : isTodayNotActive
-                        ? "bg-emerald-50/25 border border-emerald-300/80 shadow-2xs p-2.5 sm:p-3 rounded-2xl"
+                      isTodayDate
+                        ? "bg-white border-2 border-blue-500/90 shadow-md ring-2 ring-blue-100/70 p-3 sm:p-3.5 rounded-2xl"
                         : day.isWeekend || !day.isWorking
-                        ? "bg-stone-100/50 border border-stone-200/50 p-2 sm:p-2.5 rounded-xl"
+                        ? "bg-stone-100/40 border border-stone-200/50 p-2 sm:p-2.5 rounded-xl"
                         : "bg-stone-100/60 hover:bg-stone-100/80 border border-stone-200/60 p-2 sm:p-2.5 rounded-xl"
                     }`}
                   >
@@ -531,10 +528,8 @@ export function VerticalTimeline({
                   <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                     <span
                       className={`tracking-tight ${
-                        isTodayAndActive || isOtherActive
+                        isTodayDate
                           ? "text-base sm:text-lg font-black text-stone-900"
-                          : isTodayNotActive
-                          ? "text-sm sm:text-base font-extrabold text-stone-800"
                           : "text-xs sm:text-[13px] font-semibold text-stone-600"
                       }`}
                     >
@@ -543,10 +538,8 @@ export function VerticalTimeline({
 
                     <span
                       className={`${
-                        isTodayAndActive || isOtherActive
+                        isTodayDate
                           ? "text-xs text-stone-600 font-semibold"
-                          : isTodayDate
-                          ? "text-xs text-stone-500 font-semibold"
                           : "text-[11px] text-stone-400 font-medium"
                       }`}
                     >
@@ -555,15 +548,8 @@ export function VerticalTimeline({
 
                     {/* Today Badge */}
                     {isTodayDate && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200/60 shadow-2xs">
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200/60 shadow-2xs">
                         • დღეს
-                      </span>
-                    )}
-
-                    {/* Active Indicator Badge */}
-                    {isActiveDate && (
-                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-600 text-white shadow-2xs">
-                        აქტიური
                       </span>
                     )}
 
@@ -625,6 +611,41 @@ export function VerticalTimeline({
                           t.isMultiDay && !t.isSpanStart
                         );
 
+                        const isOverdue =
+                          Boolean(t.deadline) &&
+                          new Date(t.deadline!) < new Date() &&
+                          t.status !== "DONE" &&
+                          t.status !== "CANCELLED";
+
+                        const isDeadlineTomorrow = (() => {
+                          if (!t.deadline || t.status === "DONE" || t.status === "CANCELLED") return false;
+                          const d = new Date(t.deadline);
+                          const tomorrow = new Date();
+                          tomorrow.setDate(tomorrow.getDate() + 1);
+                          return (
+                            d.getFullYear() === tomorrow.getFullYear() &&
+                            d.getMonth() === tomorrow.getMonth() &&
+                            d.getDate() === tomorrow.getDate()
+                          );
+                        })();
+
+                        const isStageDelayed =
+                          !isOverdue &&
+                          Boolean(t.activeStage?.deadline) &&
+                          new Date(t.activeStage!.deadline!) < new Date() &&
+                          t.status !== "DONE" &&
+                          t.status !== "CANCELLED";
+
+                        const cardHighlightClass = isSelected
+                          ? "bg-blue-50/70 border-blue-500 ring-2 ring-blue-200 shadow-xs"
+                          : isOverdue
+                          ? "bg-rose-50/40 border-rose-400 text-rose-900 shadow-2xs hover:shadow-xs"
+                          : isDeadlineTomorrow
+                          ? "bg-amber-50/40 border-amber-400 text-amber-900 shadow-2xs hover:shadow-xs"
+                          : isStageDelayed
+                          ? "bg-amber-50/30 border-amber-300 text-amber-900 shadow-2xs hover:shadow-xs"
+                          : "bg-white hover:bg-stone-50 border-stone-200 shadow-2xs hover:shadow-xs";
+
                         // Continuation Card (single-line dashed row)
                         if (isContinuation) {
                           return (
@@ -634,10 +655,10 @@ export function VerticalTimeline({
                               onClick={() => onSelectTask(t.id)}
                               className={`px-2.5 py-1 rounded-lg border border-dashed transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
                                 isSelected
-                                  ? "bg-orange-50/70 border-orange-500 ring-1 ring-orange-200"
-                                  : isActiveDate
-                                  ? "bg-stone-50/90 hover:bg-white border-stone-300"
-                                  : "bg-white/60 hover:bg-white border-stone-200/60 opacity-75 hover:opacity-100"
+                                  ? "bg-blue-50/70 border-blue-500 ring-1 ring-blue-200"
+                                  : isOverdue
+                                  ? "bg-rose-50/30 border-rose-300 text-rose-900"
+                                  : "bg-white/80 hover:bg-white border-stone-200/80"
                               }`}
                             >
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -667,14 +688,19 @@ export function VerticalTimeline({
                                       ))}
                                     </div>
                                   )}
-                                <span className="text-[10px] font-semibold text-stone-500">
-                                  {t.progress}%
-                                </span>
-                                {t.isSpanEnd && (
-                                  <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1 py-0.2 rounded border border-amber-200">
-                                    დედლაინი
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <span className="text-[10px] font-bold text-stone-700">
+                                    {t.progress}%
                                   </span>
-                                )}
+                                  <span className="text-stone-300">•</span>
+                                  {t.deadline ? (
+                                    <span className={`text-[10px] font-bold ${isOverdue ? "text-rose-600 font-extrabold" : "text-stone-600"}`}>
+                                      {formatGeorgianDateShort(t.deadline)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-stone-400 italic">უდედლაინო</span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
@@ -686,13 +712,7 @@ export function VerticalTimeline({
                             key={`${t.id}-${day.date}`}
                             data-task-id={t.id}
                             onClick={() => onSelectTask(t.id)}
-                            className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${
-                              isSelected
-                                ? "bg-orange-50/70 border-orange-500 ring-2 ring-orange-200 shadow-xs"
-                                : isActiveDate
-                                ? "bg-white hover:bg-stone-50 border-stone-300 shadow-2xs hover:shadow-xs"
-                                : "bg-white/80 hover:bg-white border-stone-200/70 opacity-80 hover:opacity-100 shadow-2xs"
-                            }`}
+                            className={`px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 text-xs ${cardHighlightClass}`}
                           >
                             {/* Left: Type, Task#, Title, Active Stage */}
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -708,18 +728,28 @@ export function VerticalTimeline({
                                 {t.title}
                               </h4>
                               {t.activeStage && (
-                                <span className="hidden md:inline-flex text-[9px] font-bold text-orange-800 bg-orange-100/70 px-1.5 py-0.2 rounded shrink-0 truncate max-w-[120px]">
+                                <span className="hidden md:inline-flex text-[9px] font-bold text-blue-800 bg-blue-100/70 px-1.5 py-0.2 rounded shrink-0 truncate max-w-[120px]">
                                   {t.activeStage.title}
                                 </span>
                               )}
                             </div>
 
-                            {/* Right: Overdue, Done, Responsibles, Progress, Deadline */}
+                            {/* Right: Overdue / Warning, Done, Responsibles, Progress, Deadline */}
                             <div className="flex items-center gap-2 shrink-0">
-                              {t.isOverdue && (
-                                <span className="flex items-center gap-0.5 text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                              {isOverdue && (
+                                <span className="flex items-center gap-0.5 text-[9px] font-bold text-rose-700 bg-rose-100/90 px-1.5 py-0.2 rounded border border-rose-200 shrink-0">
                                   <AlertCircle size={9} />
                                   <span>ვადაგადაცილებული</span>
+                                </span>
+                              )}
+                              {isStageDelayed && !isOverdue && (
+                                <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-200 shrink-0">
+                                  <span>ეტაპი შეფერხებულია</span>
+                                </span>
+                              )}
+                              {isDeadlineTomorrow && !isOverdue && (
+                                <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-200 shrink-0">
+                                  ხვალ იწურება
                                 </span>
                               )}
                               {t.status === "DONE" && (
@@ -750,18 +780,31 @@ export function VerticalTimeline({
                                     ))}
                                   </div>
                                 )}
-                              <span className="text-[10px] font-bold text-stone-700">
-                                {t.progress}%
-                              </span>
-                              {t.deadline && (t.isSpanEnd || t.isOverdue) && (
-                                <div className="flex items-center gap-0.5 text-[10px] font-medium text-stone-500">
-                                  <CalendarIcon size={10} className="text-stone-400" />
-                                  <span>{formatGeorgianDateShort(t.deadline)}</span>
-                                  {t.deadlineLocked && (
-                                    <Lock size={8} className="text-stone-400" />
-                                  )}
-                                </div>
-                              )}
+                              {/* Tail: Always progress% and deadline or "უდედლაინო" */}
+                              <div className="flex items-center gap-1.5 shrink-0 text-xs font-semibold">
+                                <span className="text-[10px] font-bold text-stone-700">
+                                  {t.progress}%
+                                </span>
+                                <span className="text-stone-300">•</span>
+                                {t.deadline ? (
+                                  <div
+                                    className={`flex items-center gap-0.5 text-[10px] font-bold shrink-0 ${
+                                      isOverdue
+                                        ? "text-rose-600 font-extrabold"
+                                        : isDeadlineTomorrow
+                                        ? "text-amber-700"
+                                        : "text-stone-600"
+                                    }`}
+                                  >
+                                    <CalendarIcon size={10} className="text-stone-400 shrink-0" />
+                                    <span>{formatGeorgianDateShort(t.deadline)}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-stone-400 italic">
+                                    უდედლაინო
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );

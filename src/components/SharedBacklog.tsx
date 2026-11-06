@@ -32,6 +32,8 @@ export interface BacklogTask {
   deadline?: string | null;
   deadlineLocked: boolean;
   progress: number;
+  createdAt?: string | null;
+  completedAt?: string | null;
   projectId: string;
   project?: { id: string; name: string; color?: string | null };
   assignments: {

@@ -5,6 +5,7 @@ import { logAuditEvent } from "@/lib/audit";
 import { validateDeadlineModification, calculateAndSyncTaskProgress } from "@/lib/workflow";
 import { TaskType, Priority, TaskStatus, Role, Prisma } from "@prisma/client";
 import { z } from "zod";
+import crypto from "crypto";
 
 const updateTaskSchema = z.object({
   projectId: z.string().optional(),
@@ -18,6 +19,23 @@ const updateTaskSchema = z.object({
   pauseReason: z.string().nullable().optional(),
   blockedReason: z.string().nullable().optional(),
   assigneeIds: z.array(z.string()).optional(),
+  assignees: z
+    .array(
+      z.object({
+        userId: z.string(),
+        position: z.number().optional(),
+        deadline: z.string().nullable().optional(),
+      })
+    )
+    .optional(),
+  links: z
+    .array(
+      z.object({
+        name: z.string(),
+        url: z.string(),
+      })
+    )
+    .optional(),
   rescheduleReason: z.string().optional(),
 });
 
@@ -166,19 +184,42 @@ export async function PATCH(
       );
     }
 
-    // Business rule: Assigned task requires a deadline
-    const willBeAssigned =
-      data.assigneeIds !== undefined
-        ? data.assigneeIds.length > 0
-        : existing.assignments.length > 0;
     const effectiveDeadline =
       incomingDeadline !== undefined ? incomingDeadline : existing.deadline;
 
-    if (willBeAssigned && !effectiveDeadline) {
-      return NextResponse.json(
-        { error: "შემსრულებლის მინიჭებისას დედლაინის მითითება სავალდებულოა" },
-        { status: 400 }
+    // Validate sequential assignees if provided
+    if (data.assignees && data.assignees.length > 1) {
+      const sorted = [...data.assignees].sort(
+        (a, b) => (a.position ?? 0) - (b.position ?? 0)
       );
+      if (!sorted[0].deadline) {
+        return NextResponse.json(
+          { error: "თანმიმდევრული სამუშაოსთვის 1-ლი შემსრულებლის დედლაინი სავალდებულოა" },
+          { status: 400 }
+        );
+      }
+      if (effectiveDeadline) {
+        for (const a of sorted) {
+          if (a.deadline && new Date(a.deadline).getTime() > effectiveDeadline.getTime()) {
+            return NextResponse.json(
+              { error: "შემსრულებლის დედლაინი არ შეიძლება აღემატებოდეს დავალების საერთო დედლაინს" },
+              { status: 400 }
+            );
+          }
+        }
+      }
+      for (let i = 0; i < sorted.length; i++) {
+        for (let j = i + 1; j < sorted.length; j++) {
+          const dI = sorted[i].deadline ? new Date(sorted[i].deadline!) : null;
+          const dJ = sorted[j].deadline ? new Date(sorted[j].deadline!) : null;
+          if (dI && dJ && dI.getTime() > dJ.getTime()) {
+            return NextResponse.json(
+              { error: "თანმიმდევრული შემსრულებლების დედლაინები უნდა შეესაბამებოდეს რიგითობას" },
+              { status: 400 }
+            );
+          }
+        }
+      }
     }
 
     const incomingStart =
@@ -292,15 +333,88 @@ export async function PATCH(
     }
 
     const updatedTask = await prisma.$transaction(async (tx) => {
-      // Handle assignee updates
       const assigneesChanged =
-        data.assigneeIds !== undefined &&
-        (data.assigneeIds.length !== existing.assignments.length ||
-          !data.assigneeIds.every((id) =>
-            existing.assignments.some((a) => a.userId === id)
-          ));
+        data.assignees !== undefined || data.assigneeIds !== undefined;
 
-      if (data.assigneeIds !== undefined) {
+      // Handle structured assignees updates
+      if (data.assignees !== undefined) {
+        const sorted = [...data.assignees].sort(
+          (a, b) => (a.position ?? 0) - (b.position ?? 0)
+        );
+        const uniqueUserIds = Array.from(new Set(sorted.map((a) => a.userId)));
+
+        await tx.taskAssignment.deleteMany({ where: { taskId: id } });
+        if (uniqueUserIds.length > 0) {
+          await tx.taskAssignment.createMany({
+            data: uniqueUserIds.map((uid) => ({
+              taskId: id,
+              userId: uid,
+            })),
+          });
+        }
+
+        // If multiple sequential assignees, update or create workflow stages
+        if (sorted.length > 1) {
+          const existingStages = await tx.workflowStage.findMany({
+            where: { taskId: id },
+            orderBy: { position: "asc" },
+          });
+
+          const assigneeUsers = await tx.user.findMany({
+            where: { id: { in: uniqueUserIds } },
+            select: { id: true, name: true },
+          });
+          const userNameMap = new Map(assigneeUsers.map((u) => [u.id, u.name]));
+
+          for (let i = 0; i < sorted.length; i++) {
+            const a = sorted[i];
+            const uName = userNameMap.get(a.userId) || `შემსრულებელი ${i + 1}`;
+            const parsedStageDeadline = a.deadline ? new Date(a.deadline) : null;
+            const existingStage = existingStages[i];
+
+            if (existingStage) {
+              await tx.workflowStage.update({
+                where: { id: existingStage.id },
+                data: {
+                  position: i,
+                  title: `ეტაპი ${i + 1}: ${uName}`,
+                  deadline: parsedStageDeadline ?? existingStage.deadline,
+                  deadlineLocked: Boolean(
+                    parsedStageDeadline ?? existingStage.deadline
+                  ),
+                },
+              });
+              await tx.stageAssignment.deleteMany({
+                where: { stageId: existingStage.id },
+              });
+              await tx.stageAssignment.create({
+                data: { stageId: existingStage.id, userId: a.userId },
+              });
+            } else {
+              const newStage = await tx.workflowStage.create({
+                data: {
+                  taskId: id,
+                  position: i,
+                  title: `ეტაპი ${i + 1}: ${uName}`,
+                  isActive: i === 0 && !existingStages.some((s) => s.isActive),
+                  deadline: parsedStageDeadline,
+                  deadlineLocked: Boolean(parsedStageDeadline),
+                },
+              });
+              await tx.stageAssignment.create({
+                data: { stageId: newStage.id, userId: a.userId },
+              });
+            }
+          }
+
+          if (existingStages.length > sorted.length) {
+            const extras = existingStages.slice(sorted.length);
+            for (const extra of extras) {
+              await tx.workflowStage.delete({ where: { id: extra.id } });
+            }
+          }
+        }
+      } else if (data.assigneeIds !== undefined) {
         await tx.taskAssignment.deleteMany({ where: { taskId: id } });
         if (data.assigneeIds.length > 0) {
           await tx.taskAssignment.createMany({
@@ -309,6 +423,26 @@ export async function PATCH(
               userId: uid,
             })),
           });
+        }
+      }
+
+      // Handle links
+      if (data.links && data.links.length > 0) {
+        for (const link of data.links) {
+          if (link.name?.trim() && link.url?.trim()) {
+            await tx.attachment.create({
+              data: {
+                taskId: id,
+                userId: user.id,
+                originalName: link.name.trim(),
+                storedName: "link-" + crypto.randomUUID(),
+                mimeType: "text/html",
+                sizeBytes: 0,
+                url: link.url.trim(),
+                isExternal: true,
+              },
+            });
+          }
         }
       }
 

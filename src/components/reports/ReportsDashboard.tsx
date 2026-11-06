@@ -41,8 +41,9 @@ export function ReportsDashboard({
 }: ReportsDashboardProps) {
   const [timeframe, setTimeframe] = useState<Timeframe>("30D");
   const [selectedProject, setSelectedProject] = useState<string>("ALL");
+  const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
 
-  // Filter tasks based on project and timeframe
+  // Filter tasks based on project, timeframe, and monthly interval intersection
   const filteredTasks = useMemo(() => {
     const now = new Date();
     const cutoffDate = new Date();
@@ -55,6 +56,18 @@ export function ReportsDashboard({
       cutoffDate.setDate(now.getDate() - 90);
     }
 
+    // Monthly interval bounds
+    let monthStart: Date | null = null;
+    let monthEnd: Date | null = null;
+
+    if (selectedMonth !== "ALL") {
+      const [yStr, mStr] = selectedMonth.split("-");
+      const year = parseInt(yStr, 10);
+      const monthIndex = parseInt(mStr, 10) - 1;
+      monthStart = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+      monthEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+    }
+
     return tasks.filter((task) => {
       // Exclude cancelled tasks from normal progress reports
       if (task.status === TaskStatus.CANCELLED) return false;
@@ -64,22 +77,44 @@ export function ReportsDashboard({
         return false;
       }
 
-      // Timeframe filter based on createdAt, startDate or deadline
-      if (timeframe !== "ALL") {
+      // Monthly Interval Intersection Logic:
+      // If task interval intersects [monthStart, monthEnd], it is included!
+      // (e.g. Oct 27 - Nov 5 intersects both October and November)
+      if (monthStart && monthEnd) {
+        const taskStart = task.startDate
+          ? new Date(task.startDate)
+          : task.createdAt
+          ? new Date(task.createdAt)
+          : null;
+
+        const taskEnd = task.completedAt
+          ? new Date(task.completedAt)
+          : task.deadline
+          ? new Date(task.deadline)
+          : null;
+
+        if (taskStart && taskEnd) {
+          if (taskStart > monthEnd || taskEnd < monthStart) return false;
+        } else if (taskStart) {
+          if (taskStart > monthEnd) return false;
+        } else if (taskEnd) {
+          if (taskEnd < monthStart) return false;
+        }
+      } else if (timeframe !== "ALL") {
+        // Timeframe filter based on cutoffDate
         const taskDate = task.startDate
           ? new Date(task.startDate)
           : task.deadline
           ? new Date(task.deadline)
           : null;
         if (taskDate && taskDate < cutoffDate) {
-          // If task was completed long ago, skip
           if (task.status === TaskStatus.DONE) return false;
         }
       }
 
       return true;
     });
-  }, [tasks, timeframe, selectedProject]);
+  }, [tasks, timeframe, selectedProject, selectedMonth]);
 
   // Aggregate Metrics
   const metrics = useMemo(() => {
@@ -249,6 +284,20 @@ export function ReportsDashboard({
               </button>
             ))}
           </div>
+
+          {/* Month Selector with Interval Intersection */}
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-bold text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs"
+            title="თვიური ფილტრაცია (ინტერვალის გადაკვეთა)"
+          >
+            <option value="ALL">ყველა თვე (დროითი ინტერვალი)</option>
+            <option value="2026-11">ნოემბერი 2026 (მიმდინარე)</option>
+            <option value="2026-10">ოქტომბერი 2026</option>
+            <option value="2026-09">სექტემბერი 2026</option>
+            <option value="2026-08">აგვისტო 2026</option>
+          </select>
 
           {/* Project Dropdown */}
           <select
