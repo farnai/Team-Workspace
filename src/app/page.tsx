@@ -37,6 +37,8 @@ interface OverviewMetrics {
   activeCount: number;
   overdueCount: number;
   completedLast7Days: number;
+  completedThisMonth?: number;
+  monthName?: string;
 }
 
 export default function WorkspacePage({

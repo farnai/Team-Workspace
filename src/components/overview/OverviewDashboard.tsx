@@ -21,10 +21,12 @@ export interface OverviewMetrics {
   completedTodayCount: number;
   overdueCount: number;
   completedLast7Days: number;
+  completedThisMonth?: number;
   pausedCount: number;
   blockedCount: number;
   dueSoonCount: number;
   activeMembersCount: number;
+  monthName?: string;
 }
 
 export interface TeamMemberActivity {
@@ -235,7 +237,7 @@ export function OverviewDashboard({
         >
           <div className="flex items-center justify-between text-stone-400 group-hover:text-emerald-600 transition-colors">
             <span className="text-[11px] font-bold uppercase tracking-wider text-stone-600">
-              აქტიური ტასკები
+              აქტიური ტასკები (თვეში)
             </span>
             <CheckCircle2 size={16} />
           </div>
@@ -243,7 +245,7 @@ export function OverviewDashboard({
             <span className="text-2xl font-black text-stone-900">
               {metrics.activeCount}
             </span>
-            <span className="text-[10px] text-stone-400 font-semibold">მუშაობაში</span>
+            <span className="text-[10px] text-stone-400 font-semibold">{metrics.monthName || "მიმდინარე თვე"}</span>
           </div>
         </div>
 
@@ -273,7 +275,7 @@ export function OverviewDashboard({
         >
           <div className="flex items-center justify-between text-stone-400 group-hover:text-rose-600 transition-colors">
             <span className="text-[11px] font-bold uppercase tracking-wider text-rose-800">
-              გადაცილებული
+              გადაცილებული (თვეში)
             </span>
             <AlertCircle size={16} className="text-rose-600" />
           </div>
@@ -281,7 +283,7 @@ export function OverviewDashboard({
             <span className={`text-2xl font-black ${metrics.overdueCount > 0 ? "text-rose-600" : "text-stone-900"}`}>
               {metrics.overdueCount}
             </span>
-            <span className="text-[10px] text-rose-500 font-semibold">ვადაგასული</span>
+            <span className="text-[10px] text-rose-500 font-semibold">მიმდინარე თვე</span>
           </div>
         </div>
 

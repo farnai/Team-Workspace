@@ -41,7 +41,24 @@ export function ReportsDashboard({
 }: ReportsDashboardProps) {
   const [timeframe, setTimeframe] = useState<Timeframe>("30D");
   const [selectedProject, setSelectedProject] = useState<string>("ALL");
-  const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
+  // Default to current month for monthly report
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+  });
+
+  // Calculate month interval bounds for selectedMonth
+  const monthBounds = useMemo(() => {
+    if (selectedMonth === "ALL") return null;
+    const [yStr, mStr] = selectedMonth.split("-");
+    const year = parseInt(yStr, 10);
+    const monthIndex = parseInt(mStr, 10) - 1;
+    const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+    const end = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+    return { start, end };
+  }, [selectedMonth]);
 
   // Filter tasks based on project, timeframe, and monthly interval intersection
   const filteredTasks = useMemo(() => {
@@ -56,18 +73,6 @@ export function ReportsDashboard({
       cutoffDate.setDate(now.getDate() - 90);
     }
 
-    // Monthly interval bounds
-    let monthStart: Date | null = null;
-    let monthEnd: Date | null = null;
-
-    if (selectedMonth !== "ALL") {
-      const [yStr, mStr] = selectedMonth.split("-");
-      const year = parseInt(yStr, 10);
-      const monthIndex = parseInt(mStr, 10) - 1;
-      monthStart = new Date(year, monthIndex, 1, 0, 0, 0, 0);
-      monthEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
-    }
-
     return tasks.filter((task) => {
       // Exclude cancelled tasks from normal progress reports
       if (task.status === TaskStatus.CANCELLED) return false;
@@ -79,8 +84,10 @@ export function ReportsDashboard({
 
       // Monthly Interval Intersection Logic:
       // If task interval intersects [monthStart, monthEnd], it is included!
-      // (e.g. Oct 27 - Nov 5 intersects both October and November)
-      if (monthStart && monthEnd) {
+      // (e.g. Oct 27 - Nov 4 intersects both October and November)
+      if (monthBounds) {
+        const { start: monthStart, end: monthEnd } = monthBounds;
+
         const taskStart = task.startDate
           ? new Date(task.startDate)
           : task.createdAt
@@ -96,7 +103,11 @@ export function ReportsDashboard({
         if (taskStart && taskEnd) {
           if (taskStart > monthEnd || taskEnd < monthStart) return false;
         } else if (taskStart) {
-          if (taskStart > monthEnd) return false;
+          if (task.status !== TaskStatus.DONE) {
+            if (taskStart > monthEnd) return false;
+          } else {
+            if (taskStart < monthStart || taskStart > monthEnd) return false;
+          }
         } else if (taskEnd) {
           if (taskEnd < monthStart) return false;
         }
@@ -114,12 +125,24 @@ export function ReportsDashboard({
 
       return true;
     });
-  }, [tasks, timeframe, selectedProject, selectedMonth]);
+  }, [tasks, timeframe, selectedProject, monthBounds]);
 
-  // Aggregate Metrics
+  // Aggregate Metrics (scoped to monthly interval if selected)
   const metrics = useMemo(() => {
     const total = filteredTasks.length;
-    const completed = filteredTasks.filter((t) => t.status === TaskStatus.DONE).length;
+    const now = new Date();
+
+    // Completed: in monthly view, only tasks completed in this month
+    const completed = filteredTasks.filter((t) => {
+      if (t.status !== TaskStatus.DONE) return false;
+      if (monthBounds) {
+        if (!t.completedAt) return true;
+        const cDate = new Date(t.completedAt);
+        return cDate >= monthBounds.start && cDate <= monthBounds.end;
+      }
+      return true;
+    }).length;
+
     const inProgress = filteredTasks.filter(
       (t) => t.status === TaskStatus.IN_PROGRESS || t.status === TaskStatus.PAUSED
     ).length;
@@ -128,13 +151,18 @@ export function ReportsDashboard({
       (t) => t.status === TaskStatus.BACKLOG || t.status === TaskStatus.PLANNED
     ).length;
 
-    const now = new Date();
-    const overdue = filteredTasks.filter(
-      (t) =>
-        Boolean(t.deadline) &&
-        new Date(t.deadline!) < now &&
-        t.status !== TaskStatus.DONE
-    ).length;
+    // Overdue: Every month starts fresh ("ყველა თვიდან ახლიდან დაიწყოს ტასკებმაც ვადაგადაცილებულებმაც")
+    // Only deadlines falling within the selected month can be overdue for that month
+    const overdue = filteredTasks.filter((t) => {
+      if (t.status === TaskStatus.DONE || t.status === TaskStatus.CANCELLED) return false;
+      if (!t.deadline) return false;
+      const d = new Date(t.deadline);
+      if (monthBounds) {
+        if (d < monthBounds.start || d > monthBounds.end) return false;
+        return d < now;
+      }
+      return d < now;
+    }).length;
 
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -158,7 +186,7 @@ export function ReportsDashboard({
       completionRate,
       onTimeRate,
     };
-  }, [filteredTasks]);
+  }, [filteredTasks, monthBounds]);
 
   // Project Breakdown
   const projectStats = useMemo(() => {
@@ -292,11 +320,12 @@ export function ReportsDashboard({
             className="px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-bold text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs"
             title="თვიური ფილტრაცია (ინტერვალის გადაკვეთა)"
           >
-            <option value="ALL">ყველა თვე (დროითი ინტერვალი)</option>
-            <option value="2026-11">ნოემბერი 2026 (მიმდინარე)</option>
+            <option value="2026-11">ნოემბერი 2026 (მიმდინარე თვე)</option>
             <option value="2026-10">ოქტომბერი 2026</option>
             <option value="2026-09">სექტემბერი 2026</option>
-            <option value="2026-08">აგვისტო 2026</option>
+            <option value="2026-12">დეკემბერი 2026</option>
+            <option value="2027-01">იანვარი 2027</option>
+            <option value="ALL">ყველა თვე (სრული ისტორია)</option>
           </select>
 
           {/* Project Dropdown */}

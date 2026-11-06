@@ -199,5 +199,33 @@ test("Task Redesign Workflow: Optional Deadlines, Sequential Assignees & Deadlin
     assert.equal(intersectsNov, true, "Task intersects November");
     assert.equal(intersectsDec, false, "Task does NOT intersect December");
   });
+
+  await t.test("Rule 5: Monthly Overdue Fresh Start - overdue tasks restart every month", () => {
+    // Oct task with past deadline
+    const octTask = {
+      title: "ოქტომბრის დავალება",
+      status: TaskStatus.IN_PROGRESS,
+      deadline: new Date("2026-10-25T18:00:00.000Z"),
+    };
+
+    // Nov task with passed deadline
+    const novTask = {
+      title: "ნოემბრის დავალება",
+      status: TaskStatus.IN_PROGRESS,
+      deadline: new Date("2026-11-04T18:00:00.000Z"),
+    };
+
+    const novStart = new Date("2026-11-01T00:00:00.000Z");
+    const novEnd = new Date("2026-11-30T23:59:59.999Z");
+    const now = new Date("2026-11-06T12:00:00.000Z");
+
+    const isOctTaskOverdueForNov =
+      octTask.deadline >= novStart && octTask.deadline <= novEnd && octTask.deadline < now;
+    const isNovTaskOverdueForNov =
+      novTask.deadline >= novStart && novTask.deadline <= novEnd && novTask.deadline < now;
+
+    assert.equal(isOctTaskOverdueForNov, false, "October deadline does NOT count as overdue in November (clean monthly start)");
+    assert.equal(isNovTaskOverdueForNov, true, "November deadline counts as overdue in November");
+  });
 });
 

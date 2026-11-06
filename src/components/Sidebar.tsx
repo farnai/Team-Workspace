@@ -36,6 +36,8 @@ interface SidebarProps {
     activeCount: number;
     overdueCount: number;
     completedLast7Days: number;
+    completedThisMonth?: number;
+    monthName?: string;
   };
   isMobileOpen?: boolean;
   onMobileClose?: () => void;
@@ -186,11 +188,14 @@ export function Sidebar({
           </nav>
         </div>
 
-        {/* Bottom Summary Card */}
+        {/* Bottom Monthly Summary Card */}
         {!isCollapsed ? (
           <div className="bg-white/90 backdrop-blur-xs border border-stone-200/90 rounded-2xl p-4 shadow-2xs mt-4">
-            <div className="text-[11px] font-bold text-stone-800 tracking-tight mb-3">
-              ძირითადი შეჯამება
+            <div className="flex items-center justify-between text-[11px] font-bold text-stone-800 tracking-tight mb-3">
+              <span>თვის შეჯამება</span>
+              <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200/60">
+                {metrics.monthName || "ნოემბერი"}
+              </span>
             </div>
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between">
@@ -215,11 +220,11 @@ export function Sidebar({
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-stone-600">
-                  <span className="w-2 h-2 rounded-full bg-stone-400" />
-                  <span>დასრულებული (7 დღე)</span>
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  <span>დასრულებული (ამ თვეში)</span>
                 </div>
                 <span className="font-bold text-stone-900">
-                  {metrics.completedLast7Days}
+                  {metrics.completedThisMonth ?? metrics.completedLast7Days}
                 </span>
               </div>
             </div>
@@ -228,7 +233,7 @@ export function Sidebar({
           <div className="flex flex-col items-center gap-1.5 py-2 border-t border-stone-200/80 mt-2">
             <div
               className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-center text-[10px] font-bold cursor-pointer"
-              title={`აქტიური ტასკები: ${metrics.activeCount}`}
+              title={`თვის აქტიური ტასკები: ${metrics.activeCount}`}
             >
               {metrics.activeCount}
             </div>

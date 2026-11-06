@@ -20,11 +20,31 @@ export async function GET() {
     const startOfTodayUtc = new Date(Date.UTC(y, m, d, 0, 0, 0) - tbilisiOffsetMs);
     const endOfTodayUtc = new Date(Date.UTC(y, m, d, 23, 59, 59, 999) - tbilisiOffsetMs);
 
+    // Calculate start & end of Current Month in Asia/Tbilisi (UTC+4)
+    const startOfMonthUtc = new Date(Date.UTC(y, m, 1, 0, 0, 0) - tbilisiOffsetMs);
+    const endOfMonthUtc = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999) - tbilisiOffsetMs);
+
+    const GEORGIAN_MONTHS = [
+      "იანვარი",
+      "თებერვალი",
+      "მარტი",
+      "აპრილი",
+      "მაისი",
+      "ივნისი",
+      "ივლისი",
+      "აგვისტო",
+      "სექტემბერი",
+      "ოქტომბერი",
+      "ნოემბერი",
+      "დეკემბერი",
+    ];
+    const monthName = GEORGIAN_MONTHS[m];
+
     const [
-      activeCount,
+      allMonthCandidateTasks,
       completedTodayCount,
-      overdueCount,
       completedLast7Days,
+      completedThisMonth,
       pausedCount,
       blockedCount,
       dueSoonCount,
@@ -33,9 +53,30 @@ export async function GET() {
       users,
       inProgressTasks,
     ] = await Promise.all([
-      // Active tasks
-      prisma.task.count({
-        where: { status: { in: ["IN_PROGRESS", "PLANNED"] } },
+      // Fetch tasks that can intersect the current month
+      prisma.task.findMany({
+        where: {
+          status: { not: "CANCELLED" },
+          OR: [
+            { startDate: { lte: endOfMonthUtc } },
+            { createdAt: { lte: endOfMonthUtc } },
+          ],
+        },
+        select: {
+          id: true,
+          status: true,
+          startDate: true,
+          createdAt: true,
+          deadline: true,
+          completedAt: true,
+          stages: {
+            select: {
+              id: true,
+              isActive: true,
+              deadline: true,
+            },
+          },
+        },
       }),
       // Completed Today (Tbilisi timezone)
       prisma.task.count({
@@ -44,18 +85,18 @@ export async function GET() {
           completedAt: { gte: startOfTodayUtc, lte: endOfTodayUtc },
         },
       }),
-      // Overdue tasks
-      prisma.task.count({
-        where: {
-          deadline: { lt: now },
-          status: { notIn: ["DONE", "CANCELLED"] },
-        },
-      }),
       // Completed last 7 days
       prisma.task.count({
         where: {
           status: "DONE",
           completedAt: { gte: sevenDaysAgo },
+        },
+      }),
+      // Completed in Current Month
+      prisma.task.count({
+        where: {
+          status: "DONE",
+          completedAt: { gte: startOfMonthUtc, lte: endOfMonthUtc },
         },
       }),
       // Paused
@@ -234,16 +275,65 @@ export async function GET() {
       };
     });
 
+    // Monthly Interval Intersection Logic:
+    // If task interval intersects [startOfMonthUtc, endOfMonthUtc], it is included!
+    // (e.g. Oct 27 - Nov 4 intersects BOTH October and November)
+    const monthTasks = allMonthCandidateTasks.filter((task) => {
+      const taskStart = task.startDate ? new Date(task.startDate) : new Date(task.createdAt);
+      const taskEnd = task.completedAt
+        ? new Date(task.completedAt)
+        : task.deadline
+        ? new Date(task.deadline)
+        : null;
+
+      if (taskStart && taskEnd) {
+        return taskStart <= endOfMonthUtc && taskEnd >= startOfMonthUtc;
+      }
+      if (taskStart && !taskEnd) {
+        return task.status !== "DONE"
+          ? taskStart <= endOfMonthUtc
+          : taskStart >= startOfMonthUtc && taskStart <= endOfMonthUtc;
+      }
+      if (!taskStart && taskEnd) {
+        return taskEnd >= startOfMonthUtc;
+      }
+      return true;
+    });
+
+    // Active in this month
+    const activeCount = monthTasks.filter(
+      (t) =>
+        t.status === "IN_PROGRESS" ||
+        t.status === "PLANNED" ||
+        t.status === "PAUSED" ||
+        t.status === "BLOCKED"
+    ).length;
+
+    // Overdue in this month:
+    // Every month starts fresh ("ყველა თვიდან ახლიდან დაიწყოს ტასკებმაც ვადაგადაცილებულებმაც")
+    // Only tasks whose deadline falls in this current month and missed the deadline
+    const overdueCount = monthTasks.filter((t) => {
+      if (t.status === "DONE" || t.status === "CANCELLED") return false;
+      const activeStage = t.stages.find((s) => s.isActive);
+      const deadlineToCheck =
+        activeStage && activeStage.deadline ? activeStage.deadline : t.deadline;
+      if (!deadlineToCheck) return false;
+      const d = new Date(deadlineToCheck);
+      return d >= startOfMonthUtc && d <= endOfMonthUtc && d < now;
+    }).length;
+
     return NextResponse.json({
       metrics: {
         activeCount,
         completedTodayCount,
         overdueCount,
         completedLast7Days,
+        completedThisMonth,
         pausedCount,
         blockedCount,
         dueSoonCount,
         activeMembersCount,
+        monthName,
       },
       teamActivity,
       projects: projectSummaries,
