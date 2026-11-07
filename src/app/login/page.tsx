@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
+import { Logo } from "@/components/ui/Logo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -56,15 +57,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white border border-stone-200/90 rounded-3xl p-8 shadow-sm">
         {/* Workspace Brand Badge */}
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-orange-600 flex items-center justify-center text-white shadow-xs mb-3">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"
-                opacity="0.3"
-              />
-              <path d="M7 14c0-3.87 3.13-7 7-7 1.66 0 3.18.58 4.39 1.55l-9.84 9.84C7.58 17.18 7 15.66 7 14zm10-4c0 3.87-3.13 7-7 7-1.66 0-3.18-.58-4.39-1.55l9.84-9.84C16.42 6.82 17 8.34 17 10z" />
-            </svg>
-          </div>
+          <Logo size={56} variant="app" priority className="mb-3" />
           <h1 className="text-xl font-bold tracking-tight text-stone-900">
             Team Workspace
           </h1>
