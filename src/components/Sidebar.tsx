@@ -12,12 +12,14 @@ import {
   History,
   Users,
   Settings,
+  FolderKanban,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 
 export type NavView =
   | "overview"
+  | "projects"
   | "timeline"
   | "backlog"
   | "archive"
@@ -81,6 +83,7 @@ export function Sidebar({
     adminOnly?: boolean;
   }[] = [
     { id: "overview", label: "საწყისი", icon: <Home size={18} /> },
+    { id: "projects", label: "პროექტები", icon: <FolderKanban size={18} /> },
     { id: "timeline", label: "თაიმლაინი", icon: <Calendar size={18} /> },
     { id: "backlog", label: "ბექლოგი", icon: <Layers size={18} /> },
     { id: "archive", label: "არქივი", icon: <Archive size={18} /> },

@@ -18,10 +18,53 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
       include: {
         _count: { select: { tasks: true } },
+        tasks: {
+          select: {
+            id: true,
+            status: true,
+            deadline: true,
+            progress: true,
+          },
+        },
       },
     });
 
-    return NextResponse.json({ projects });
+    const now = new Date();
+
+    const enriched = projects.map((p) => {
+      const total = p.tasks.length;
+      const done = p.tasks.filter((t) => t.status === "DONE").length;
+      const inProgress = p.tasks.filter((t) => t.status === "IN_PROGRESS").length;
+      const overdue = p.tasks.filter(
+        (t) =>
+          t.deadline &&
+          new Date(t.deadline) < now &&
+          t.status !== "DONE" &&
+          t.status !== "CANCELLED"
+      ).length;
+      const progress =
+        total > 0
+          ? Math.round(
+              p.tasks.reduce((acc, t) => acc + (t.progress || 0), 0) / total
+            )
+          : 0;
+
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        color: p.color || "#EA580C",
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        taskCount: total,
+        completedCount: done,
+        inProgressCount: inProgress,
+        overdueCount: overdue,
+        progress,
+      };
+    });
+
+    return NextResponse.json({ projects: enriched });
   } catch (error: unknown) {
     const err = error as Error;
     if (err.message === "UNAUTHORIZED") {

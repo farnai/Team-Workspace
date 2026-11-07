@@ -178,6 +178,7 @@ interface TaskDetailsDrawerProps {
     role: "ADMIN" | "USER";
   };
   users: UserOption[];
+  projects?: ProjectOption[];
 }
 
 export function TaskDetailsDrawer({
@@ -187,6 +188,7 @@ export function TaskDetailsDrawer({
   onTaskUpdated,
   currentUser,
   users,
+  projects,
 }: TaskDetailsDrawerProps) {
   const [task, setTask] = useState<FullTaskDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -567,6 +569,31 @@ export function TaskDetailsDrawer({
       if (!res.ok) throw new Error("აღწერის განახლება ვერ მოხერხდა");
       setIsEditingDesc(false);
       await refreshTaskDetails();
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
+  };
+
+  // Reassign Task to Another Project
+  const handleUpdateProject = async (newProjectId: string) => {
+    if (!task) return;
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: newProjectId }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "პროექტის შეცვლა ვერ მოხერხდა");
+      }
+      const found = projects?.find((p) => p.id === newProjectId);
+      if (found) {
+        setTask((prev) =>
+          prev ? { ...prev, projectId: newProjectId, project: found } : null
+        );
+      }
       onTaskUpdated();
     } catch (err: unknown) {
       setError((err as Error).message);
@@ -2067,9 +2094,23 @@ export function TaskDetailsDrawer({
                   <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">
                     პროექტი
                   </span>
-                  <span className="font-extrabold text-stone-900 block">
-                    {task?.project.name}
-                  </span>
+                  {isAdmin && projects && projects.length > 0 ? (
+                    <select
+                      value={task?.projectId}
+                      onChange={(e) => handleUpdateProject(e.target.value)}
+                      className="w-full text-xs font-bold text-stone-900 bg-white border border-stone-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                    >
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="font-extrabold text-stone-900 block">
+                      {task?.project.name}
+                    </span>
+                  )}
                 </div>
 
                 <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">

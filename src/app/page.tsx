@@ -17,6 +17,7 @@ import { ArchiveView } from "@/components/archive/ArchiveView";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { ReportsDashboard } from "@/components/reports/ReportsDashboard";
 import { ActivityLogDashboard } from "@/components/audit/ActivityLogDashboard";
+import { ProjectsView } from "@/components/projects/ProjectsView";
 import { TaskStatus } from "@prisma/client";
 import { format } from "date-fns";
 import { getTbilisiTodayDate } from "@/lib/dateUtils";
@@ -95,6 +96,7 @@ export default function WorkspacePage({
   // Backlog & Modals State
   const [tasks, setTasks] = useState<BacklogTask[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createTaskDefaultProjectId, setCreateTaskDefaultProjectId] = useState<string | undefined>(undefined);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<BacklogTask | null>(null);
@@ -232,14 +234,28 @@ export default function WorkspacePage({
     }
   };
 
+  // Refresh Projects
+  const refreshProjects = async () => {
+    try {
+      const res = await fetch("/api/projects");
+      if (res.ok) {
+        const data = await res.json();
+        setProjects(data.projects || []);
+      }
+    } catch (e) {
+      console.error("Failed to refresh projects:", e);
+    }
+  };
+
   // Synchronization Callback when task is created or updated
   const handleTaskSaved = async () => {
     try {
       const dateParam = currentDate.toISOString().split("T")[0];
-      const [tasksRes, timelineRes, metricsRes] = await Promise.all([
+      const [tasksRes, timelineRes, metricsRes, projRes] = await Promise.all([
         fetch("/api/tasks"),
         fetch(`/api/timeline?date=${dateParam}&mode=${timelineMode}&days=14`),
         fetch("/api/overview"),
+        fetch("/api/projects"),
       ]);
 
       if (tasksRes.ok) {
@@ -253,6 +269,10 @@ export default function WorkspacePage({
       if (metricsRes.ok) {
         const data = await metricsRes.json();
         if (data.metrics) setMetrics(data.metrics);
+      }
+      if (projRes.ok) {
+        const data = await projRes.json();
+        setProjects(data.projects || []);
       }
       setWorkloadRefreshKey((k) => k + 1);
       refreshNotifications();
@@ -311,7 +331,8 @@ export default function WorkspacePage({
     }
   };
 
-  const handleOpenNewTask = () => {
+  const handleOpenNewTask = (defaultProjectId?: string) => {
+    setCreateTaskDefaultProjectId(defaultProjectId);
     setIsCreateModalOpen(true);
   };
 
@@ -387,6 +408,27 @@ export default function WorkspacePage({
                 projects={projects}
                 users={users}
                 onOpenNewTask={handleOpenNewTask}
+              />
+            </div>
+          ) : currentView === "projects" ? (
+            <div className="flex-1 flex overflow-hidden min-h-0 w-full h-full bg-[#F8F7F4]">
+              <ProjectsView
+                projects={projects}
+                tasks={tasks}
+                users={users}
+                currentUser={currentUser}
+                onSelectTask={handleSelectTask}
+                onOpenNewTask={handleOpenNewTask}
+                onProjectsUpdated={refreshProjects}
+                onNavigateToBacklog={(projectId) => {
+                  setCurrentView("backlog");
+                  if (typeof window !== "undefined") {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("view", "backlog");
+                    if (projectId) url.searchParams.set("project", projectId);
+                    window.history.pushState({}, "", url.toString());
+                  }
+                }}
               />
             </div>
           ) : currentView === "archive" ? (
@@ -521,12 +563,17 @@ export default function WorkspacePage({
       {isCreateModalOpen && (
         <TaskModal
           isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
+          onClose={() => {
+            setIsCreateModalOpen(false);
+            setCreateTaskDefaultProjectId(undefined);
+          }}
           onSuccess={handleTaskSaved}
           mode="create"
           currentUser={currentUser}
           projects={projects}
           users={users}
+          defaultProjectId={createTaskDefaultProjectId}
+          onProjectsUpdated={refreshProjects}
         />
       )}
 
@@ -542,6 +589,7 @@ export default function WorkspacePage({
           onTaskUpdated={handleTaskSaved}
           currentUser={currentUser}
           users={users}
+          projects={projects}
         />
       )}
 
@@ -559,6 +607,7 @@ export default function WorkspacePage({
           currentUser={currentUser}
           projects={projects}
           users={users}
+          onProjectsUpdated={refreshProjects}
         />
       )}
     </div>

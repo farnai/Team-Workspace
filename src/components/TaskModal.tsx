@@ -82,6 +82,8 @@ interface TaskModalProps {
   };
   projects: ProjectOption[];
   users: UserOption[];
+  defaultProjectId?: string;
+  onProjectsUpdated?: () => Promise<void> | void;
 }
 
 interface AssigneeEntry {
@@ -102,6 +104,8 @@ function TaskModalForm({
   currentUser,
   projects,
   users,
+  defaultProjectId,
+  onProjectsUpdated,
 }: Omit<TaskModalProps, "isOpen">) {
   // 1. Title & Project
   const [title, setTitle] = useState(() =>
@@ -111,8 +115,52 @@ function TaskModalForm({
     () =>
       (mode === "edit" && initialTask
         ? initialTask.projectId
-        : projects[0]?.id) || ""
+        : defaultProjectId || projects[0]?.id) || ""
   );
+
+  // Quick Project Creation
+  const [isQuickProjectOpen, setIsQuickProjectOpen] = useState(false);
+  const [quickProjectName, setQuickProjectName] = useState("");
+  const [quickProjectColor, setQuickProjectColor] = useState("#EA580C");
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [quickProjectError, setQuickProjectError] = useState<string | null>(null);
+
+  const handleCreateQuickProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickProjectName.trim()) {
+      setQuickProjectError("მიუთითეთ პროექტის სახელი");
+      return;
+    }
+    setIsCreatingProject(true);
+    setQuickProjectError(null);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: quickProjectName.trim(),
+          color: quickProjectColor,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setQuickProjectError(data.error || "პროექტის შექმნა ვერ მოხერხდა");
+        return;
+      }
+      if (data.project) {
+        setProjectId(data.project.id);
+        if (onProjectsUpdated) {
+          await onProjectsUpdated();
+        }
+        setQuickProjectName("");
+        setIsQuickProjectOpen(false);
+      }
+    } catch {
+      setQuickProjectError("სისტემური შეცდომა");
+    } finally {
+      setIsCreatingProject(false);
+    }
+  };
 
   // 2. Assignees & Sequential Order
   const [assigneeList, setAssigneeList] = useState<AssigneeEntry[]>(() => {
@@ -519,10 +567,82 @@ function TaskModalForm({
           </div>
 
           <div>
-            <label className="block font-bold text-stone-700 mb-1 flex items-center gap-1.5 text-xs">
-              <Folder size={13} className="text-stone-400" />
-              <span>პროექტი</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-bold text-stone-700 flex items-center gap-1.5 text-xs">
+                <Folder size={13} className="text-stone-400" />
+                <span>პროექტი</span>
+              </label>
+              {currentUser.role === "ADMIN" && (
+                <button
+                  type="button"
+                  onClick={() => setIsQuickProjectOpen(!isQuickProjectOpen)}
+                  className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 hover:underline cursor-pointer"
+                >
+                  <Plus size={12} />
+                  <span>ახალი პროექტი</span>
+                </button>
+              )}
+            </div>
+
+            {isQuickProjectOpen && (
+              <div className="mb-2 p-2.5 bg-blue-50/70 border border-blue-200/80 rounded-xl space-y-2">
+                <span className="text-[11px] font-bold text-blue-900 block">
+                  ახალი პროექტის სწრაფი დამატება
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={quickProjectName}
+                    onChange={(e) => setQuickProjectName(e.target.value)}
+                    placeholder="პროექტის სახელი..."
+                    className="flex-1 px-2.5 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleCreateQuickProject(e);
+                      }
+                    }}
+                  />
+                  <div className="flex items-center gap-1">
+                    {["#EA580C", "#2563EB", "#059669", "#7C3AED", "#E11D48"].map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setQuickProjectColor(c)}
+                        className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
+                          quickProjectColor === c ? "ring-2 ring-stone-900 scale-110" : ""
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCreateQuickProject}
+                    disabled={isCreatingProject}
+                    className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors disabled:opacity-50"
+                  >
+                    {isCreatingProject ? "..." : "შენახვა"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsQuickProjectOpen(false);
+                      setQuickProjectError(null);
+                    }}
+                    className="p-1 text-stone-400 hover:text-stone-600 cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                {quickProjectError && (
+                  <span className="text-[11px] text-rose-600 font-semibold block">
+                    {quickProjectError}
+                  </span>
+                )}
+              </div>
+            )}
+
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}

@@ -117,7 +117,7 @@ test("Task Redesign Workflow: Optional Deadlines, Sequential Assignees & Deadlin
           ],
         },
       },
-      include: { stages: { include: { assignments: true } } },
+      include: { stages: { orderBy: { position: "asc" }, include: { assignments: true } } },
     });
 
     assert.equal(task.stages.length, 2, "Created 2 stages");
