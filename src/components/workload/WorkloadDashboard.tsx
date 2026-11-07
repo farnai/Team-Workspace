@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import {
   Users,
@@ -80,13 +80,22 @@ export interface WorkloadConflict {
   type: string;
   severity: "warning" | "critical";
   message: string;
+  title?: string;
   taskId?: string;
   taskTitle?: string;
+  taskNumber?: number;
   stageId?: string;
   stageTitle?: string;
   userId?: string;
   userName?: string;
+  responsibleName?: string;
+  responsibleInfo?: string;
   dateStr?: string;
+  deadlineStr?: string;
+  daysOverdue?: number;
+  taskStatus?: string;
+  taskPriority?: string;
+  reason?: string;
 }
 
 interface WorkloadDashboardProps {
@@ -124,6 +133,44 @@ export function WorkloadDashboard({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [localRefreshCounter, setLocalRefreshCounter] = useState(0);
+
+  const [conflictTab, setConflictTab] = useState<
+    "ALL" | "OVERDUE" | "OVERLOAD" | "PAUSED" | "HOLIDAY"
+  >("ALL");
+  const [showAllConflicts, setShowAllConflicts] = useState<boolean>(false);
+
+  const conflictCounts = useMemo(() => {
+    return {
+      all: conflicts.length,
+      overdue: conflicts.filter(
+        (c) => c.type === "TASK_OVERDUE" || c.type === "STAGE_OVERDUE"
+      ).length,
+      overload: conflicts.filter((c) => c.type === "USER_OVERLOAD").length,
+      paused: conflicts.filter((c) => c.type === "PAUSED_WHILE_SCHEDULED").length,
+      holiday: conflicts.filter((c) => c.type === "HOLIDAY_DEADLINE").length,
+    };
+  }, [conflicts]);
+
+  const filteredConflicts = useMemo(() => {
+    switch (conflictTab) {
+      case "OVERDUE":
+        return conflicts.filter(
+          (c) => c.type === "TASK_OVERDUE" || c.type === "STAGE_OVERDUE"
+        );
+      case "OVERLOAD":
+        return conflicts.filter((c) => c.type === "USER_OVERLOAD");
+      case "PAUSED":
+        return conflicts.filter((c) => c.type === "PAUSED_WHILE_SCHEDULED");
+      case "HOLIDAY":
+        return conflicts.filter((c) => c.type === "HOLIDAY_DEADLINE");
+      default:
+        return conflicts;
+    }
+  }, [conflicts, conflictTab]);
+
+  const displayedConflicts = showAllConflicts
+    ? filteredConflicts
+    : filteredConflicts.slice(0, 6);
 
   // Fetch Workload Data inside Effect with cancellation support
   useEffect(() => {
@@ -443,45 +490,230 @@ export function WorkloadDashboard({
 
       {/* 3. Global Conflicts Panel */}
       {conflicts.length > 0 && (
-        <div className="p-4 bg-amber-50/90 border border-amber-200/90 rounded-2xl space-y-2 text-amber-950">
-          <div className="flex items-center justify-between">
+        <div className="p-4 bg-amber-50/80 border border-amber-200/90 rounded-2xl space-y-3 text-amber-950 shadow-2xs">
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 font-black text-xs text-amber-900 uppercase tracking-wider">
-              <AlertTriangle size={15} className="text-amber-600" />
+              <AlertTriangle size={16} className="text-amber-600 shrink-0" />
               <span>განრიგის ფაქტობრივი გაფრთხილებები ({conflicts.length})</span>
             </div>
-            <span className="text-[10px] text-amber-700 font-semibold">
-              ავტომატური ცვლილებების გარეშე
+            <span className="text-[10px] text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-full font-bold">
+              ფაქტობრივი ანალიზი • ავტომატური ცვლილებების გარეშე
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-            {conflicts.slice(0, 6).map((c, i) => (
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-xs font-bold select-none">
+            <button
+              onClick={() => setConflictTab("ALL")}
+              className={`px-2.5 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                conflictTab === "ALL"
+                  ? "bg-amber-900 text-white shadow-2xs"
+                  : "bg-white text-stone-700 hover:bg-stone-100 border border-amber-200/70"
+              }`}
+            >
+              <span>ყველა</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                  conflictTab === "ALL"
+                    ? "bg-white/20 text-white"
+                    : "bg-stone-100 text-stone-700"
+                }`}
+              >
+                {conflictCounts.all}
+              </span>
+            </button>
+
+            {conflictCounts.overdue > 0 && (
+              <button
+                onClick={() => setConflictTab("OVERDUE")}
+                className={`px-2.5 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                  conflictTab === "OVERDUE"
+                    ? "bg-rose-600 text-white shadow-2xs"
+                    : "bg-white text-stone-700 hover:bg-stone-100 border border-amber-200/70"
+                }`}
+              >
+                <span>ვადაგადაცილებული</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    conflictTab === "OVERDUE"
+                      ? "bg-white/20 text-white"
+                      : "bg-rose-100 text-rose-700"
+                  }`}
+                >
+                  {conflictCounts.overdue}
+                </span>
+              </button>
+            )}
+
+            {conflictCounts.overload > 0 && (
+              <button
+                onClick={() => setConflictTab("OVERLOAD")}
+                className={`px-2.5 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                  conflictTab === "OVERLOAD"
+                    ? "bg-amber-700 text-white shadow-2xs"
+                    : "bg-white text-stone-700 hover:bg-stone-100 border border-amber-200/70"
+                }`}
+              >
+                <span>გადატვირთვა</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    conflictTab === "OVERLOAD"
+                      ? "bg-white/20 text-white"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {conflictCounts.overload}
+                </span>
+              </button>
+            )}
+
+            {conflictCounts.paused > 0 && (
+              <button
+                onClick={() => setConflictTab("PAUSED")}
+                className={`px-2.5 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                  conflictTab === "PAUSED"
+                    ? "bg-stone-800 text-white shadow-2xs"
+                    : "bg-white text-stone-700 hover:bg-stone-100 border border-amber-200/70"
+                }`}
+              >
+                <span>შეჩერებული</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    conflictTab === "PAUSED"
+                      ? "bg-white/20 text-white"
+                      : "bg-stone-100 text-stone-700"
+                  }`}
+                >
+                  {conflictCounts.paused}
+                </span>
+              </button>
+            )}
+
+            {conflictCounts.holiday > 0 && (
+              <button
+                onClick={() => setConflictTab("HOLIDAY")}
+                className={`px-2.5 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                  conflictTab === "HOLIDAY"
+                    ? "bg-amber-800 text-white shadow-2xs"
+                    : "bg-white text-stone-700 hover:bg-stone-100 border border-amber-200/70"
+                }`}
+              >
+                <span>უქმე დღე</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    conflictTab === "HOLIDAY"
+                      ? "bg-white/20 text-white"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {conflictCounts.holiday}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-0.5">
+            {displayedConflicts.map((c, i) => (
               <div
                 key={i}
-                className="p-2.5 bg-white rounded-xl border border-amber-200/70 text-xs flex items-start justify-between gap-2 shadow-2xs"
+                className="p-3 bg-white rounded-xl border border-amber-200/80 text-xs flex flex-col justify-between gap-2 shadow-2xs hover:shadow-xs transition-shadow"
               >
-                <div className="space-y-0.5">
-                  <div className="font-bold text-stone-900 leading-snug">
-                    {c.message}
+                {/* 1. Header: Badge, Task Title & Open Button */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase border ${
+                        c.severity === "critical"
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
+                          : "bg-amber-50 text-amber-700 border-amber-200"
+                      }`}
+                    >
+                      {c.type === "TASK_OVERDUE" || c.type === "STAGE_OVERDUE"
+                        ? "ვადაგადაცილება"
+                        : c.type === "USER_OVERLOAD"
+                        ? "გადატვირთვა"
+                        : c.type === "PAUSED_WHILE_SCHEDULED"
+                        ? "შეჩერებული"
+                        : c.type === "HOLIDAY_DEADLINE"
+                        ? "უქმე დღე"
+                        : "კონფლიქტი"}
+                    </span>
+
+                    <h4 className="font-extrabold text-stone-900 leading-snug">
+                      {c.title ||
+                        (c.taskNumber
+                          ? `[SSP-${c.taskNumber}] ${c.taskTitle}`
+                          : c.taskTitle || "გაფრთხილება")}
+                    </h4>
                   </div>
+
+                  {c.taskId && (
+                    <button
+                      onClick={() => onSelectTask(c.taskId!)}
+                      className="p-1 hover:bg-orange-50 text-orange-600 rounded-lg shrink-0 cursor-pointer transition-colors"
+                      title="დავალების გახსნა დეტალებში"
+                    >
+                      <ExternalLink size={14} />
+                    </button>
+                  )}
+                </div>
+
+                {/* 2. Contextual Badges: ვინ გადააცილა & დედლაინი */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-stone-600 pt-0.5">
+                  {c.responsibleName && (
+                    <div className="flex items-center gap-1">
+                      <Users size={12} className="text-stone-400 shrink-0" />
+                      <span className="text-stone-400">პასუხისმგებელი:</span>
+                      <span className="font-bold text-stone-900 bg-stone-100 px-1.5 py-0.2 rounded">
+                        {c.responsibleName}
+                      </span>
+                    </div>
+                  )}
+
+                  {c.daysOverdue !== undefined && (
+                    <div className="flex items-center gap-1 text-rose-700 font-bold">
+                      <Clock size={12} className="text-rose-500 shrink-0" />
+                      <span>{c.deadlineStr}</span>
+                      <span className="bg-rose-100 text-rose-800 text-[9px] px-1 py-0.2 rounded font-black">
+                        +{c.daysOverdue} დღე
+                      </span>
+                    </div>
+                  )}
+
                   {c.dateStr && (
-                    <div className="text-[10px] text-stone-400 font-medium">
-                      თარიღი: {c.dateStr}
+                    <div className="flex items-center gap-1">
+                      <CalendarIcon size={12} className="text-stone-400 shrink-0" />
+                      <span className="text-stone-400">თარიღი:</span>
+                      <span className="font-semibold text-stone-800">{c.dateStr}</span>
                     </div>
                   )}
                 </div>
-                {c.taskId && (
-                  <button
-                    onClick={() => onSelectTask(c.taskId!)}
-                    className="p-1 hover:bg-orange-50 text-orange-600 rounded-lg shrink-0 cursor-pointer"
-                    title="დავალების გახსნა"
-                  >
-                    <ExternalLink size={13} />
-                  </button>
-                )}
+
+                {/* 3. Detailed Explanatory Message */}
+                <div className="text-[11.5px] text-stone-700 bg-stone-50/70 p-2 rounded-lg border border-stone-100 leading-snug">
+                  {c.message}
+                </div>
               </div>
             ))}
           </div>
+
+          {/* Show More / Show Less Toggle Button */}
+          {filteredConflicts.length > 6 && (
+            <div className="pt-1 flex justify-center">
+              <button
+                onClick={() => setShowAllConflicts((prev) => !prev)}
+                className="px-4 py-1.5 bg-white hover:bg-stone-50 border border-amber-200/90 rounded-xl text-xs font-bold text-amber-900 transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+              >
+                <span>
+                  {showAllConflicts
+                    ? "ჩაკეცვა (ტოპ 6)"
+                    : `ყველა გაფრთხილების ნახვა (${filteredConflicts.length})`}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
