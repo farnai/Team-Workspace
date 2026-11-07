@@ -19,6 +19,7 @@ import {
   formatGeorgianDateShort,
   getTbilisiTodayString,
 } from "@/lib/dateUtils";
+import { DatePicker } from "@/components/ui/DatePicker";
 
 export interface TimelineTask {
   id: string;
@@ -317,8 +318,7 @@ export function VerticalTimeline({
   };
 
   // Date picker selection
-  const handleDatePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDateStr = e.target.value;
+  const handleDatePickerChange = (newDateStr: string) => {
     if (!newDateStr) return;
 
     const targetEl = dayElementsRef.current.get(newDateStr);
@@ -377,15 +377,14 @@ export function VerticalTimeline({
               </button>
             )}
 
-            {/* Date Picker Input (Always synchronized with activeDateKey) */}
-            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white rounded-lg border border-stone-200/80 shadow-2xs">
-              <CalendarIcon size={12} className="text-stone-400" />
-              <input
-                type="date"
+            {/* Modern Georgian Date Picker */}
+            <div className="w-38 sm:w-44">
+              <DatePicker
                 value={effectiveActiveDateKey}
                 onChange={handleDatePickerChange}
-                className="text-[11px] font-bold text-stone-800 bg-transparent focus:outline-none cursor-pointer"
-                title="აირჩიეთ ნებისმიერი თარიღი"
+                size="sm"
+                clearable={false}
+                placeholder="თარიღი"
               />
             </div>
 

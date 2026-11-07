@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { TaskType, Priority } from "@prisma/client";
+import { DatePicker } from "@/components/ui/DatePicker";
 
 interface ArchivedTask {
   id: string;
@@ -294,22 +295,22 @@ export function ArchiveView({
         {/* Date Range Row */}
         <div className="mt-3 flex items-center gap-3 text-xs text-stone-600 flex-wrap">
           <span className="font-semibold text-stone-500">დასრულების პერიოდი:</span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 w-44">
             <span className="text-[11px] text-stone-400">დან:</span>
-            <input
-              type="date"
+            <DatePicker
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="px-2.5 py-1 bg-stone-50 border border-stone-200 rounded-lg text-xs"
+              onChange={(val) => setDateFrom(val)}
+              size="sm"
+              placeholder="დან"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 w-44">
             <span className="text-[11px] text-stone-400">მდე:</span>
-            <input
-              type="date"
+            <DatePicker
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="px-2.5 py-1 bg-stone-50 border border-stone-200 rounded-lg text-xs"
+              onChange={(val) => setDateTo(val)}
+              size="sm"
+              placeholder="მდე"
             />
           </div>
         </div>

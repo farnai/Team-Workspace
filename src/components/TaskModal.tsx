@@ -20,6 +20,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus } from "@prisma/client";
+import { DatePicker } from "@/components/ui/DatePicker";
 
 export interface ProjectOption {
   id: string;
@@ -652,29 +653,29 @@ function TaskModalForm({
                     {/* Right: Individual Deadline Input + Remove Button */}
                     <div className="flex items-center gap-2 shrink-0">
                       {assigneeList.length > 1 && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           <label className="text-[10px] font-bold text-stone-500 whitespace-nowrap">
                             {isFirst ? (
                               <span className="text-stone-700">
                                 ეტაპის ვადა{status === TaskStatus.IN_PROGRESS && <span className="text-rose-500">*</span>}:
                               </span>
                             ) : (
-                              <span>ვადა (optional):</span>
+                              <span>ვადა:</span>
                             )}
                           </label>
-                          <input
-                            type="date"
-                            value={item.deadline}
-                            onChange={(e) =>
-                              updateAssigneeDeadline(index, e.target.value)
-                            }
-                            required={isFirst && status === TaskStatus.IN_PROGRESS}
-                            className={`px-2 py-1 rounded-lg border text-xs font-semibold focus:outline-none ${
-                              isFirst && status === TaskStatus.IN_PROGRESS && !item.deadline
-                                ? "border-rose-300 bg-rose-50/50"
-                                : "border-stone-200 bg-stone-50"
-                            }`}
-                          />
+                          <div className="w-38 sm:w-44">
+                            <DatePicker
+                              value={item.deadline}
+                              onChange={(val) => updateAssigneeDeadline(index, val)}
+                              size="sm"
+                              placeholder="აირჩიეთ ვადა"
+                              className={
+                                isFirst && status === TaskStatus.IN_PROGRESS && !item.deadline
+                                  ? "!border-rose-300 !bg-rose-50/50"
+                                  : ""
+                              }
+                            />
+                          </div>
                         </div>
                       )}
 
@@ -719,16 +720,12 @@ function TaskModalForm({
               : "თუ მითითებულია, შემსრულებლების ინდივიდუალური ვადები არ უნდა აღემატებოდეს მას."}
           </p>
 
-          <input
-            type="date"
+          <DatePicker
             value={deadline}
             disabled={isDeadlineReadOnly}
-            onChange={(e) => setDeadline(e.target.value)}
-            className={`w-full px-3 py-2 border rounded-xl font-semibold text-xs focus:outline-none ${
-              isDeadlineReadOnly
-                ? "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
-                : "bg-white border-stone-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-stone-900"
-            }`}
+            onChange={(val) => setDeadline(val)}
+            placeholder="დავალების საერთო დედლაინი (არასავალდებულო)"
+            size="md"
           />
 
           {isDeadlineReadOnly ? (
@@ -973,11 +970,11 @@ function TaskModalForm({
                   <label className="block font-bold text-stone-700 mb-1">
                     დაწყების თარიღი
                   </label>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-800 focus:outline-none"
+                    onChange={(val) => setStartDate(val)}
+                    placeholder="დაწყების თარიღი"
+                    size="md"
                   />
                 </div>
               </div>

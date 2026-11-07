@@ -40,6 +40,7 @@ import { PauseTaskModal } from "./task-details/PauseTaskModal";
 import { BlockTaskModal } from "./task-details/BlockTaskModal";
 import { RescheduleTaskModal } from "./task-details/RescheduleTaskModal";
 import { detectTaskConflicts } from "@/lib/conflicts";
+import { DatePicker } from "@/components/ui/DatePicker";
 
 export interface UserOption {
   id: string;
@@ -1431,11 +1432,11 @@ export function TaskDetailsDrawer({
                         <label className="text-[10px] font-bold text-stone-500 block mb-1">
                           დედლაინი
                         </label>
-                        <input
-                          type="date"
+                        <DatePicker
                           value={newStageDeadline}
-                          onChange={(e) => setNewStageDeadline(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium"
+                          onChange={(val) => setNewStageDeadline(val)}
+                          placeholder="დედლაინი"
+                          size="sm"
                         />
                       </div>
                       <div>
@@ -1956,11 +1957,11 @@ export function TaskDetailsDrawer({
                       <label className="text-[10px] font-bold text-stone-500 block mb-1">
                         დედლაინი (სავალდებულოა თუ მინიჭებულია)
                       </label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={newSubtaskDeadline}
-                        onChange={(e) => setNewSubtaskDeadline(e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium"
+                        onChange={(val) => setNewSubtaskDeadline(val)}
+                        placeholder="დედლაინი"
+                        size="sm"
                       />
                     </div>
 
@@ -2270,11 +2271,11 @@ export function TaskDetailsDrawer({
                   <label className="block font-bold text-stone-700 mb-1">
                     სასურველი ახალი ვადა <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="date"
+                  <DatePicker
                     value={reqNewDeadline}
-                    onChange={(e) => setReqNewDeadline(e.target.value)}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-xl font-semibold focus:outline-none"
+                    onChange={(val) => setReqNewDeadline(val)}
+                    placeholder="სასურველი ვადა"
+                    size="md"
                     required
                   />
                 </div>

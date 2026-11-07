@@ -10,6 +10,7 @@ import {
   Loader2,
   X,
 } from "lucide-react";
+import { DatePicker } from "@/components/ui/DatePicker";
 
 interface WorkingDay {
   id: string;
@@ -406,12 +407,12 @@ export function CalendarSettings() {
                 <label className="block text-xs font-bold text-stone-700 mb-1">
                   თარიღი *
                 </label>
-                <input
-                  type="date"
-                  required
+                <DatePicker
                   value={newHolidayDate}
-                  onChange={(e) => setNewHolidayDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  onChange={(val) => setNewHolidayDate(val)}
+                  placeholder="აირჩიეთ თარიღი"
+                  size="md"
+                  required
                 />
               </div>
 

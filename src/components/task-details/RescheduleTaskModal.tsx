@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react";
 import { AlertCircle, Calendar, X, Loader2, ArrowRight, AlertTriangle } from "lucide-react";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
 import { getGeorgianHolidaysForYear, isDateWorkingDay } from "@/lib/calendar";
+import { DatePicker } from "@/components/ui/DatePicker";
 
 interface StageInfo {
   id: string;
@@ -241,11 +242,11 @@ export function RescheduleTaskModal({
               <label className="font-bold text-stone-800 block mb-1">
                 ახალი დაწყების თარიღი
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={newStartDate}
-                onChange={(e) => setNewStartDate(e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-xs"
+                onChange={(val) => setNewStartDate(val)}
+                placeholder="დაწყების თარიღი"
+                size="sm"
               />
             </div>
 
@@ -253,12 +254,12 @@ export function RescheduleTaskModal({
               <label className="font-bold text-stone-800 block mb-1">
                 ახალი დედლაინი <span className="text-rose-500">*</span>
               </label>
-              <input
-                type="date"
-                required
+              <DatePicker
                 value={newDeadline}
-                onChange={(e) => setNewDeadline(e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-xs"
+                onChange={(val) => setNewDeadline(val)}
+                placeholder="ახალი დედლაინი"
+                size="sm"
+                required
               />
             </div>
           </div>
