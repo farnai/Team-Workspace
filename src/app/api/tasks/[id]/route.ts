@@ -153,7 +153,10 @@ export async function PATCH(
     const data = result.data;
     const existing = await prisma.task.findUnique({
       where: { id },
-      include: { assignments: true },
+      include: {
+        assignments: true,
+        stages: { orderBy: { position: "asc" } },
+      },
     });
 
     if (!existing) {
@@ -187,14 +190,17 @@ export async function PATCH(
     const effectiveDeadline =
       incomingDeadline !== undefined ? incomingDeadline : existing.deadline;
 
+    const targetStatus = data.status || existing.status;
+
     // Validate sequential assignees if provided
     if (data.assignees && data.assignees.length > 1) {
       const sorted = [...data.assignees].sort(
         (a, b) => (a.position ?? 0) - (b.position ?? 0)
       );
-      if (!sorted[0].deadline) {
+      // 1st assignee deadline is mandatory only when starting/in progress work
+      if (targetStatus === TaskStatus.IN_PROGRESS && !sorted[0].deadline) {
         return NextResponse.json(
-          { error: "თანმიმდევრული სამუშაოსთვის 1-ლი შემსრულებლის დედლაინი სავალდებულოა" },
+          { error: "სამუშაოს დასაწყებად (In Progress) 1-ლი შემსრულებლის დედლაინი სავალდებულოა" },
           { status: 400 }
         );
       }
@@ -218,6 +224,22 @@ export async function PATCH(
               { status: 400 }
             );
           }
+        }
+      }
+    } else if (
+      data.status === TaskStatus.IN_PROGRESS &&
+      existing.status !== TaskStatus.IN_PROGRESS &&
+      !data.assignees
+    ) {
+      // Transitioning to IN_PROGRESS: if existing task has multiple sequential stages,
+      // the first active stage must have a deadline
+      if (existing.stages && existing.stages.length > 1) {
+        const firstStage = existing.stages[0];
+        if (!firstStage.deadline && !effectiveDeadline) {
+          return NextResponse.json(
+            { error: "სამუშაოს დასაწყებად (In Progress) 1-ლი შემსრულებლის დედლაინი სავალდებულოა" },
+            { status: 400 }
+          );
         }
       }
     }

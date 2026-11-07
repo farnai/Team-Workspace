@@ -127,6 +127,49 @@ test("Task Redesign Workflow: Optional Deadlines, Sequential Assignees & Deadlin
     assert.equal(task.stages[1].deadline, null, "Stage 2 deadline is optional (null)");
   });
 
+  await t.test("Rule 2.1: Task creation with multiple assignees does NOT require deadline in BACKLOG, only when starting IN_PROGRESS", async () => {
+    // 1. Create task in BACKLOG with 2 assignees and NO deadline
+    const backlogTask = await prisma.task.create({
+      data: {
+        projectId: project.id,
+        title: "ბექლოგის თანმიმდევრული დავალება უდედლაინოდ",
+        type: TaskType.FEATURE,
+        priority: Priority.MEDIUM,
+        status: TaskStatus.BACKLOG,
+        deadline: null,
+        createdById: adminUser.id,
+        assignments: {
+          create: [{ userId: devUser1.id }, { userId: devUser2.id }],
+        },
+        stages: {
+          create: [
+            {
+              position: 0,
+              title: "ეტაპი 1: დეველოპერი 1",
+              isActive: false,
+              deadline: null, // optional at creation!
+              deadlineLocked: false,
+              assignments: { create: [{ userId: devUser1.id }] },
+            },
+            {
+              position: 1,
+              title: "ეტაპი 2: დეველოპერი 2",
+              isActive: false,
+              deadline: null,
+              deadlineLocked: false,
+              assignments: { create: [{ userId: devUser2.id }] },
+            },
+          ],
+        },
+      },
+      include: { stages: true, assignments: true },
+    });
+
+    assert.equal(backlogTask.status, TaskStatus.BACKLOG);
+    assert.equal(backlogTask.stages.length, 2);
+    assert.equal(backlogTask.stages[0].deadline, null, "1st assignee deadline is optional at creation in BACKLOG");
+  });
+
   await t.test("Rule 3: Overdue Predecessor does not falsely penalize successor", async () => {
     // Stage 1 deadline was yesterday
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);

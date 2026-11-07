@@ -193,14 +193,15 @@ export async function POST(req: NextRequest) {
     // - Task overall deadline is optional.
     // - Adding an assignee does not require a mandatory task deadline.
     // - Single assignee: uses task overall deadline if set, otherwise optional.
-    // - Multiple sequential assignees: 1st assignee deadline is mandatory, subsequent optional.
+    // - Multiple sequential assignees: at creation, 1st assignee deadline is optional in BACKLOG/PLANNED,
+    //   and only mandatory when status is IN_PROGRESS (starting work).
     // - No individual deadline can exceed task overall deadline.
     // - Sequential consistency: d_i <= d_j for i < j.
     if (resolvedAssignees.length > 1) {
       const firstAssignee = resolvedAssignees[0];
-      if (!firstAssignee.deadline) {
+      if (data.status === TaskStatus.IN_PROGRESS && !firstAssignee.deadline) {
         return NextResponse.json(
-          { error: "თანმიმდევრული სამუშაოსთვის 1-ლი შემსრულებლის დედლაინი სავალდებულოა" },
+          { error: "სამუშაოს დასაწყებად (In Progress) 1-ლი შემსრულებლის დედლაინი სავალდებულოა" },
           { status: 400 }
         );
       }

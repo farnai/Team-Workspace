@@ -937,11 +937,11 @@ function KanbanTaskBox({
   onDragStart,
   onDragEnd,
 }: KanbanTaskBoxProps) {
-  // Format task code: e.g. SSP-7 or #7
+  // Format task code: matching exact reference design e.g. SSP-7
   const taskCode = useMemo(() => {
     if (task.project?.name) {
       const letters = task.project.name.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-      if (letters.length >= 2) {
+      if (letters.length >= 2 && letters !== "PROJECT") {
         return `${letters.slice(0, 3)}-${task.taskNumber}`;
       }
     }
@@ -956,26 +956,35 @@ function KanbanTaskBox({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onSelect}
-      className={`group relative p-3.5 sm:p-4 bg-white rounded-2xl border transition-all cursor-pointer shadow-2xs hover:shadow-xs select-none flex flex-col justify-between ${
+      className={`group relative p-3.5 sm:p-4 bg-white rounded-xl border transition-all cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-xs select-none flex flex-col justify-between ${
         isSelected
           ? "border-blue-500 ring-2 ring-blue-200 shadow-xs"
           : "border-stone-200/90 hover:border-stone-300"
       }`}
     >
       {/* 1. Task Title (Textual, Clean, Minimalist, Legible) */}
-      <h4 className="text-sm sm:text-[14px] font-normal text-stone-900 leading-snug line-clamp-3 mb-3">
+      <h4 className="text-[14px] sm:text-[15px] font-normal text-stone-900 leading-snug line-clamp-3 mb-2.5">
         {task.title}
       </h4>
 
-      {/* 2. Bottom Row: [✓] Task Number (Left) & Assignee Avatar (Right) */}
+      {/* 2. Bottom Row: [☑] Task Number (Left) & Assignee Avatar (Right) */}
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-1.5">
-          {/* Blue Checkmark Square matching Image */}
-          <div className="w-4 h-4 rounded bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-            <Check size={11} strokeWidth={2.8} />
-          </div>
+          {/* Blue Outline Checkbox Square Matching Exact Screenshot */}
+          <svg
+            className="w-4 h-4 text-blue-600 shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
           {/* Task Code (e.g. SSP-7) */}
-          <span className="text-xs sm:text-[12.5px] font-semibold text-stone-700 font-mono tracking-tight">
+          <span className="text-[13px] font-medium text-stone-700 tracking-tight">
             {taskCode}
           </span>
         </div>

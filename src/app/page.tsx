@@ -271,6 +271,11 @@ export default function WorkspacePage({
       });
       if (res.ok) {
         await handleTaskSaved();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        if (d?.error) {
+          alert(d.error);
+        }
       }
     } catch (e) {
       console.error("Failed to update task status:", e);

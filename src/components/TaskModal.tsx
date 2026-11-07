@@ -241,11 +241,11 @@ function TaskModalForm({
   const sequenceConflict = (() => {
     if (assigneeList.length <= 1) return null;
 
-    // Check if 1st assignee deadline is missing
-    if (!assigneeList[0].deadline) {
+    // Check if 1st assignee deadline is missing only when starting work (IN_PROGRESS)
+    if (status === TaskStatus.IN_PROGRESS && !assigneeList[0].deadline && !deadline) {
       return {
         severity: "error",
-        message: "თანმიმდევრული სამუშაოსთვის 1-ლი შემსრულებლის დედლაინი სავალდებულოა.",
+        message: "სამუშაოს დასაწყებად (In Progress) 1-ლი შემსრულებლის დედლაინი სავალდებულოა.",
       };
     }
 
@@ -291,9 +291,14 @@ function TaskModalForm({
       return;
     }
 
-    // Sequential workflow validation
-    if (assigneeList.length > 1 && !assigneeList[0].deadline) {
-      setError("თანმიმდევრული სამუშაოსთვის 1-ლი შემსრულებლის დედლაინი სავალდებულოა");
+    // Sequential workflow validation: 1st assignee deadline required only when starting work (IN_PROGRESS)
+    if (
+      status === TaskStatus.IN_PROGRESS &&
+      assigneeList.length > 1 &&
+      !assigneeList[0].deadline &&
+      !deadline
+    ) {
+      setError("სამუშაოს დასაწყებად (In Progress) 1-ლი შემსრულებლის დედლაინი სავალდებულოა");
       return;
     }
 
@@ -651,7 +656,7 @@ function TaskModalForm({
                           <label className="text-[10px] font-bold text-stone-500 whitespace-nowrap">
                             {isFirst ? (
                               <span className="text-stone-700">
-                                ეტაპის ვადა <span className="text-rose-500">*</span>:
+                                ეტაპის ვადა{status === TaskStatus.IN_PROGRESS && <span className="text-rose-500">*</span>}:
                               </span>
                             ) : (
                               <span>ვადა (optional):</span>
@@ -663,9 +668,9 @@ function TaskModalForm({
                             onChange={(e) =>
                               updateAssigneeDeadline(index, e.target.value)
                             }
-                            required={isFirst}
+                            required={isFirst && status === TaskStatus.IN_PROGRESS}
                             className={`px-2 py-1 rounded-lg border text-xs font-semibold focus:outline-none ${
-                              isFirst && !item.deadline
+                              isFirst && status === TaskStatus.IN_PROGRESS && !item.deadline
                                 ? "border-rose-300 bg-rose-50/50"
                                 : "border-stone-200 bg-stone-50"
                             }`}
