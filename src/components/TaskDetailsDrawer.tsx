@@ -223,6 +223,10 @@ export function TaskDetailsDrawer({
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
 
+  // Task Delete State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeletingTask, setIsDeletingTask] = useState(false);
+
   // Deadline Change Request State (Successor / Admin)
   const [pendingDeadlineRequest, setPendingDeadlineRequest] = useState<{
     id: string;
@@ -281,6 +285,7 @@ export function TaskDetailsDrawer({
         isPauseModalOpen ||
         isBlockModalOpen ||
         isRescheduleModalOpen ||
+        showDeleteConfirm ||
         pastedFile !== null ||
         previewImageUrl !== null
       ) {
@@ -661,6 +666,27 @@ export function TaskDetailsDrawer({
     }
   };
 
+  // Delete Task Handler
+  const handleDeleteTask = async () => {
+    if (!taskId) return;
+    try {
+      setIsDeletingTask(true);
+      setError(null);
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "DELETE",
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "ტასკის წაშლა ვერ მოხერხდა");
+      setShowDeleteConfirm(false);
+      onClose();
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    } finally {
+      setIsDeletingTask(false);
+    }
+  };
+
   // Priority Change Handler
   const handlePriorityChange = async (newPriority: Priority) => {
     if (!task) return;
@@ -958,13 +984,23 @@ export function TaskDetailsDrawer({
               </select>
             </div>
 
-            <button
-              onClick={onClose}
-              className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-full transition-colors cursor-pointer"
-              title="დახურვა (Esc)"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                title="ტასკის წაშლა"
+              >
+                <Trash2 size={16} />
+              </button>
+
+              <button
+                onClick={onClose}
+                className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-full transition-colors cursor-pointer"
+                title="დახურვა (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           {/* Title */}
@@ -1023,16 +1059,27 @@ export function TaskDetailsDrawer({
               </button>
             ) : null}
 
-            {isAdmin && (
+            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+              {isAdmin && (
+                <button
+                  onClick={() => setIsRescheduleModalOpen(true)}
+                  className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="განრიგის შეცვლა (Admin)"
+                >
+                  <Calendar size={12} />
+                  <span>განრიგის შეცვლა</span>
+                </button>
+              )}
+
               <button
-                onClick={() => setIsRescheduleModalOpen(true)}
-                className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer ml-auto"
-                title="განრიგის შეცვლა (Admin)"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="px-2.5 py-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="ტასკის წაშლა"
               >
-                <Calendar size={12} />
-                <span>განრიგის შეცვლა</span>
+                <Trash2 size={12} />
+                <span>წაშლა</span>
               </button>
-            )}
+            </div>
           </div>
 
           {/* Pending Deadline Change Request Banner */}
@@ -2263,6 +2310,70 @@ export function TaskDetailsDrawer({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Task Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-2xs animate-in fade-in duration-150">
+            <div
+              className="bg-white rounded-2xl border border-stone-200/90 shadow-2xl max-w-md w-full p-5 space-y-4 animate-in zoom-in-95 duration-150"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-stone-900">
+                    დავალების წაშლა
+                  </h3>
+                  <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                    დარწმუნებული ხართ, რომ გსურთ დავალების წაშლა?{" "}
+                    <strong className="text-stone-900 font-bold">
+                      #{task?.taskNumber}: {task?.title}
+                    </strong>
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-rose-50 border border-rose-200/80 rounded-xl text-xs text-rose-800 space-y-1">
+                <div className="font-bold">ყურადღება: ეს ქმედება შეუქცევადია!</div>
+                <div className="text-[11px] text-rose-700/90">
+                  დავალებასთან ერთად წაიშლება ყველა დაკავშირებული ეტაპი, საბტასკი, კომენტარი და ფაილი.
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={isDeletingTask}
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 border border-stone-200 text-stone-700 rounded-xl text-xs font-bold hover:bg-stone-50 cursor-pointer transition-colors"
+                >
+                  გაუქმება
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingTask}
+                  onClick={handleDeleteTask}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isDeletingTask ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>იშლება...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={13} />
+                      <span>წაშლა</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -277,6 +277,24 @@ export default function WorkspacePage({
     }
   };
 
+  // Delete Task Handler
+  const handleTaskDelete = async (taskId: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        if (selectedTaskId === taskId) {
+          setIsDrawerOpen(false);
+          setSelectedTaskId(null);
+        }
+        await handleTaskSaved();
+      }
+    } catch (e) {
+      console.error("Failed to delete task:", e);
+    }
+  };
+
   // Logout Handler
   const handleLogout = async () => {
     try {
@@ -422,6 +440,7 @@ export default function WorkspacePage({
                 onOpenNewTask={handleOpenNewTask}
                 onEditTask={handleEditTask}
                 onStatusChange={handleStatusChange}
+                onDeleteTask={handleTaskDelete}
                 projects={projects}
                 users={users}
                 isAdmin={currentUser.role === "ADMIN"}

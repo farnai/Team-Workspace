@@ -20,6 +20,7 @@ import {
   Check,
   Layers,
   CheckSquare,
+  Trash2,
 } from "lucide-react";
 import { Priority, TaskStatus } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
@@ -44,6 +45,7 @@ interface KanbanBoardProps {
   onOpenNewTask: () => void;
   onEditTask?: (task: BacklogTask) => void;
   onStatusChange: (taskId: string, newStatus: TaskStatus) => Promise<void>;
+  onDeleteTask?: (taskId: string) => Promise<void>;
   projects: ProjectOption[];
   users: UserOption[];
   isAdmin: boolean;
@@ -70,6 +72,7 @@ export function KanbanBoard({
   selectedTaskId,
   onOpenNewTask,
   onStatusChange,
+  onDeleteTask,
   projects,
   users,
   onNavigateToTimeline,
@@ -637,6 +640,7 @@ export function KanbanBoard({
                     {renderSortableHeader("შემსრულებლები", "assignees")}
                     {renderSortableHeader("პროგრესი", "progress")}
                     {renderSortableHeader("დედლაინი", "deadline")}
+                    <th className="py-3 px-4 text-right w-12"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
@@ -704,11 +708,31 @@ export function KanbanBoard({
                           <span className="text-stone-400 italic">უდედლაინო</span>
                         )}
                       </td>
+                      <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        {onDeleteTask && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (
+                                confirm(
+                                  `დარწმუნებული ხართ, რომ გსურთ დავალების წაშლა (#${task.taskNumber}: ${task.title})?`
+                                )
+                              ) {
+                                await onDeleteTask(task.id);
+                              }
+                            }}
+                            className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="ტასკის წაშლა"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {sortedTasks.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-xs text-stone-400">
+                      <td colSpan={8} className="py-12 text-center text-xs text-stone-400">
                         დავალებები ვერ მოიძებნა
                       </td>
                     </tr>

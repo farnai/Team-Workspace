@@ -558,3 +558,68 @@ export async function PATCH(
     return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await requireAuth();
+    const { id } = await params;
+
+    const existing = await prisma.task.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        taskNumber: true,
+        projectId: true,
+        createdById: true,
+        status: true,
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "დავალება ვერ მოიძებნა" }, { status: 404 });
+    }
+
+    // Role check: Only ADMIN or the user who created the task can delete it
+    if (user.role !== Role.ADMIN && existing.createdById !== user.id) {
+      return NextResponse.json(
+        { error: "ტასკის წაშლის უფლება აქვს მხოლოდ ადმინისტრატორს ან შემქმნელს" },
+        { status: 403 }
+      );
+    }
+
+    // Log audit event without linking taskId to avoid cascade deletion
+    await logAuditEvent({
+      actorId: user.id,
+      action: "TASK_UPDATED",
+      entityType: "TASK",
+      entityId: id,
+      oldValues: {
+        title: existing.title,
+        taskNumber: existing.taskNumber,
+        status: existing.status,
+      },
+      reason: `დავალება #${existing.taskNumber} ("${existing.title}") წაიშალა`,
+    });
+
+    // Delete task (all cascades will automatically remove stages, subtasks, assignments, etc.)
+    await prisma.task.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `დავალება #${existing.taskNumber} წარმატებით წაიშალა`,
+    });
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
+    }
+    console.error("DELETE /api/tasks/[id] error:", error);
+    return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
+  }
+}
