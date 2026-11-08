@@ -4,13 +4,14 @@ import { requireAdmin } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { Role } from "@prisma/client";
+import { Role, Department } from "@prisma/client";
 
 const createUserSchema = z.object({
   name: z.string().min(2, "სახელი უნდა შედგებოდეს მინიმუმ 2 სიმბოლოსგან"),
   email: z.string().email("არასწორი ელ.ფოსტა"),
   password: z.string().min(6, "პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო"),
   role: z.nativeEnum(Role).default(Role.USER),
+  department: z.nativeEnum(Department).default(Department.DEVELOPMENT),
   avatarUrl: z.string().optional(),
 });
 
@@ -24,6 +25,7 @@ export async function GET() {
         email: true,
         name: true,
         role: true,
+        department: true,
         avatarUrl: true,
         isActive: true,
         createdAt: true,
@@ -54,7 +56,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { name, email, password, role, avatarUrl } = result.data;
+    const { name, email, password, role, department, avatarUrl } = result.data;
 
     const existing = await prisma.user.findUnique({
       where: { email },
@@ -75,6 +77,7 @@ export async function POST(req: NextRequest) {
         email,
         passwordHash,
         role,
+        department,
         avatarUrl,
         isActive: true,
       },
@@ -85,7 +88,7 @@ export async function POST(req: NextRequest) {
       action: "USER_CREATED",
       entityType: "USER",
       entityId: newUser.id,
-      newValues: { name: newUser.name, email: newUser.email, role: newUser.role },
+      newValues: { name: newUser.name, email: newUser.email, role: newUser.role, department: newUser.department },
       reason: "ადმინისტრატორის მიერ ახალი მომხმარებლის შექმნა",
     });
 
@@ -96,6 +99,7 @@ export async function POST(req: NextRequest) {
         name: newUser.name,
         email: newUser.email,
         role: newUser.role,
+        department: newUser.department,
         isActive: newUser.isActive,
       },
     });

@@ -22,9 +22,10 @@ import {
   CheckSquare,
   Trash2,
 } from "lucide-react";
-import { Priority, TaskStatus } from "@prisma/client";
+import { Priority, TaskStatus, Department } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
 import { BacklogTask } from "@/components/SharedBacklog";
+import { DepartmentBadge } from "@/lib/departments";
 
 interface ProjectOption {
   id: string;
@@ -58,6 +59,7 @@ type StatusTabFilter = "ALL" | "TODO" | "IN_PROGRESS" | "DONE";
 type SortField =
   | "title"
   | "project"
+  | "department"
   | "priority"
   | "status"
   | "assignees"
@@ -86,6 +88,7 @@ export function KanbanBoard({
   // Search and Filters State
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProject, setSelectedProject] = useState<string>("ALL");
+  const [selectedDepartment, setSelectedDepartment] = useState<"ALL" | "DEVELOPMENT" | "CONTENT">("ALL");
   const [selectedPriority, setSelectedPriority] = useState<string>("ALL");
   const [selectedUser, setSelectedUser] = useState<string>("ALL");
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -109,7 +112,7 @@ export function KanbanBoard({
     }
   };
 
-  // Base filtered tasks (excluding CANCELLED, matching search, project, user, priority)
+  // Base filtered tasks (excluding CANCELLED, matching search, project, user, priority, department)
   const baseFilteredTasks = useMemo(() => {
     return tasks.filter((task) => {
       // Exclude cancelled tasks from active backlog
@@ -129,6 +132,11 @@ export function KanbanBoard({
         return false;
       }
 
+      // Department filter
+      if (selectedDepartment !== "ALL" && (task.department || "DEVELOPMENT") !== selectedDepartment) {
+        return false;
+      }
+
       // Priority filter
       if (selectedPriority !== "ALL" && task.priority !== selectedPriority) {
         return false;
@@ -142,7 +150,7 @@ export function KanbanBoard({
 
       return true;
     });
-  }, [tasks, searchQuery, selectedProject, selectedPriority, selectedUser]);
+  }, [tasks, searchQuery, selectedProject, selectedDepartment, selectedPriority, selectedUser]);
 
   // Status Counts for Tabs
   const counts = useMemo(() => {
@@ -220,6 +228,13 @@ export function KanbanBoard({
           const nameA = a.project?.name || "";
           const nameB = b.project?.name || "";
           comparison = nameA.localeCompare(nameB, "ka");
+          break;
+        }
+
+        case "department": {
+          const depA = a.department || "DEVELOPMENT";
+          const depB = b.department || "DEVELOPMENT";
+          comparison = depA.localeCompare(depB);
           break;
         }
 
@@ -585,6 +600,23 @@ export function KanbanBoard({
           />
         </div>
 
+        {/* Department / Team Filter */}
+        <div className="relative">
+          <select
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value as "ALL" | "DEVELOPMENT" | "CONTENT")}
+            className="appearance-none bg-stone-50 border border-stone-200 hover:border-stone-300 rounded-xl pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+          >
+            <option value="ALL">ყველა გუნდი</option>
+            <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
+            <option value="CONTENT">✍️ კონტენტი</option>
+          </select>
+          <ChevronDown
+            size={12}
+            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+          />
+        </div>
+
         {/* Priority Filter */}
         <div className="relative">
           <select
@@ -605,11 +637,12 @@ export function KanbanBoard({
         </div>
 
         {/* Reset Filters Button */}
-        {(searchQuery || selectedProject !== "ALL" || selectedPriority !== "ALL" || selectedUser !== "ALL" || activeStatusTab !== "ALL") && (
+        {(searchQuery || selectedProject !== "ALL" || selectedDepartment !== "ALL" || selectedPriority !== "ALL" || selectedUser !== "ALL" || activeStatusTab !== "ALL") && (
           <button
             onClick={() => {
               setSearchQuery("");
               setSelectedProject("ALL");
+              setSelectedDepartment("ALL");
               setSelectedPriority("ALL");
               setSelectedUser("ALL");
               setActiveStatusTab("ALL");
@@ -635,6 +668,7 @@ export function KanbanBoard({
                   <tr className="border-b border-stone-200 bg-stone-50/80 text-stone-600 font-extrabold uppercase text-[10px] tracking-wider">
                     {renderSortableHeader("დავალება", "title")}
                     {renderSortableHeader("პროექტი", "project")}
+                    {renderSortableHeader("გუნდი", "department")}
                     {renderSortableHeader("პრიორიტეტი", "priority")}
                     {renderSortableHeader("სტატუსი", "status")}
                     {renderSortableHeader("შემსრულებლები", "assignees")}
@@ -667,6 +701,9 @@ export function KanbanBoard({
                         ) : (
                           <span className="text-stone-400">—</span>
                         )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <DepartmentBadge department={task.department} size="xs" />
                       </td>
                       <td className="py-3 px-4">
                         <span className="text-[11px] font-semibold text-stone-700">
@@ -732,7 +769,7 @@ export function KanbanBoard({
                   ))}
                   {sortedTasks.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-xs text-stone-400">
+                      <td colSpan={9} className="py-12 text-center text-xs text-stone-400">
                         დავალებები ვერ მოიძებნა
                       </td>
                     </tr>
@@ -987,6 +1024,7 @@ function KanbanTaskBox({
           <span className="text-[13px] font-medium text-stone-700 tracking-tight">
             {taskCode}
           </span>
+          <DepartmentBadge department={task.department} size="xs" />
         </div>
 
         {/* Assignee Avatar (ONLY if someone is assigned) */}

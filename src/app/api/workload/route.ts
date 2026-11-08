@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     const daysParam = parseInt(searchParams.get("days") || "7", 10);
     const projectId = searchParams.get("projectId") || undefined;
     const filterUserId = searchParams.get("userId") || undefined;
+    const departmentParam = searchParams.get("department") || undefined;
 
     let startDate: Date;
     let endDate: Date;
@@ -96,9 +97,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Load active users
-    const userWhere = filterUserId
+    const userWhere: { id?: string; isActive: boolean; department?: "DEVELOPMENT" | "CONTENT" } = filterUserId
       ? { id: filterUserId, isActive: true }
       : { isActive: true };
+
+    if (departmentParam === "DEVELOPMENT" || departmentParam === "CONTENT") {
+      userWhere.department = departmentParam;
+    }
 
     const users = await prisma.user.findMany({
       where: userWhere,
@@ -109,11 +114,15 @@ export async function GET(req: NextRequest) {
         email: true,
         avatarUrl: true,
         role: true,
+        department: true,
       },
     });
 
     // Load all tasks with assignments, stages, and subtasks
-    const taskWhere = projectId ? { projectId } : {};
+    const taskWhere: { projectId?: string; department?: "DEVELOPMENT" | "CONTENT" } = projectId ? { projectId } : {};
+    if (departmentParam === "DEVELOPMENT" || departmentParam === "CONTENT") {
+      taskWhere.department = departmentParam;
+    }
     const allTasks = await prisma.task.findMany({
       where: taskWhere,
       include: {

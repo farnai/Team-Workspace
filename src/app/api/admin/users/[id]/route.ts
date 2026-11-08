@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
-import { Prisma, Role } from "@prisma/client";
+import { Prisma, Role, Department } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -11,6 +11,7 @@ const updateUserSchema = z.object({
   password: z.string().min(6, "პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო").optional(),
   name: z.string().min(2, "სახელი უნდა შედგებოდეს მინიმუმ 2 სიმბოლოსგან").optional(),
   role: z.nativeEnum(Role).optional(),
+  department: z.nativeEnum(Department).optional(),
 });
 
 export async function PATCH(
@@ -46,6 +47,7 @@ export async function PATCH(
     if (result.data.isActive !== undefined) dataToUpdate.isActive = result.data.isActive;
     if (result.data.name !== undefined) dataToUpdate.name = result.data.name;
     if (result.data.role !== undefined) dataToUpdate.role = result.data.role;
+    if (result.data.department !== undefined) dataToUpdate.department = result.data.department;
     if (result.data.password) {
       dataToUpdate.passwordHash = await bcrypt.hash(result.data.password, 10);
     }
@@ -60,6 +62,8 @@ export async function PATCH(
       reason = result.data.isActive ? "მომხმარებლის გააქტიურება" : "მომხმარებლის დეაქტივაცია";
     } else if (result.data.password) {
       reason = "მომხმარებლის პაროლის განახლება ადმინისტრატორის მიერ";
+    } else if (result.data.department !== undefined) {
+      reason = `მომხმარებლის გუნდის ცვლილება: ${result.data.department}`;
     }
 
     await logAuditEvent({
@@ -71,11 +75,13 @@ export async function PATCH(
         isActive: targetUser.isActive,
         name: targetUser.name,
         role: targetUser.role,
+        department: targetUser.department,
       },
       newValues: {
         isActive: updatedUser.isActive,
         name: updatedUser.name,
         role: updatedUser.role,
+        department: updatedUser.department,
       },
       reason,
     });
@@ -87,6 +93,7 @@ export async function PATCH(
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role,
+        department: updatedUser.department,
         isActive: updatedUser.isActive,
       },
     });

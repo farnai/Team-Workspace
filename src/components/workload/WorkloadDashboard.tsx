@@ -19,6 +19,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
+import { Department } from "@prisma/client";
+import { DepartmentBadge } from "@/lib/departments";
 
 export interface WorkloadAssignment {
   id: string;
@@ -51,6 +53,7 @@ export interface UserWorkloadItem {
     email: string;
     avatarUrl: string | null;
     role: "ADMIN" | "USER";
+    department?: Department | string;
   };
   stats: {
     activeCount: number;
@@ -116,6 +119,7 @@ export function WorkloadDashboard({
   const [daysPeriod, setDaysPeriod] = useState<7 | 14>(7);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("ALL");
   const [selectedUserId, setSelectedUserId] = useState<string>("ALL");
+  const [selectedDepartment, setSelectedDepartment] = useState<"ALL" | "DEVELOPMENT" | "CONTENT">("ALL");
   const [startDateOffset, setStartDateOffset] = useState<number>(0);
 
   const [workloads, setWorkloads] = useState<UserWorkloadItem[]>([]);
@@ -187,6 +191,7 @@ export function WorkloadDashboard({
     let url = `/api/workload?startDate=${startStr}&endDate=${endStr}&days=${daysPeriod}`;
     if (selectedProjectId !== "ALL") url += `&projectId=${selectedProjectId}`;
     if (selectedUserId !== "ALL") url += `&userId=${selectedUserId}`;
+    if (selectedDepartment !== "ALL") url += `&department=${selectedDepartment}`;
 
     fetch(url)
       .then((res) => {
@@ -211,7 +216,7 @@ export function WorkloadDashboard({
     return () => {
       active = false;
     };
-  }, [daysPeriod, selectedProjectId, selectedUserId, startDateOffset, refreshKey, localRefreshCounter]);
+  }, [daysPeriod, selectedProjectId, selectedUserId, selectedDepartment, startDateOffset, refreshKey, localRefreshCounter]);
 
   const handleManualRefresh = () => {
     setIsLoading(true);
@@ -392,6 +397,19 @@ export function WorkloadDashboard({
                   {u.name}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Department Filter */}
+          <div className="flex items-center gap-1 bg-white border border-stone-200 rounded-xl px-2.5 py-1 text-xs">
+            <select
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value as "ALL" | "DEVELOPMENT" | "CONTENT")}
+              className="bg-transparent font-medium text-stone-700 focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">ყველა გუნდი</option>
+              <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
+              <option value="CONTENT">✍️ კონტენტი</option>
             </select>
           </div>
 
@@ -834,8 +852,11 @@ export function WorkloadDashboard({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <div className="font-extrabold text-stone-900 text-xs truncate">
-                            {item.user.name}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-extrabold text-stone-900 text-xs truncate">
+                              {item.user.name}
+                            </span>
+                            <DepartmentBadge department={item.user.department} size="xs" />
                           </div>
                           <div className="flex items-center gap-1 text-[10px] text-stone-400 mt-0.5 font-medium">
                             <span>აქტიური: {item.stats.activeCount}</span>
@@ -930,8 +951,11 @@ export function WorkloadDashboard({
                   {item.user.name.charAt(0)}
                 </div>
                 <div>
-                  <div className="font-extrabold text-stone-900 text-xs">
-                    {item.user.name}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-extrabold text-stone-900 text-xs">
+                      {item.user.name}
+                    </span>
+                    <DepartmentBadge department={item.user.department} size="xs" />
                   </div>
                   <div className="text-[10px] text-stone-400 font-medium">
                     {item.user.email}

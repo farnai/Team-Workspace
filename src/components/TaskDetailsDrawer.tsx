@@ -28,8 +28,9 @@ import {
   RotateCcw,
   Clock,
 } from "lucide-react";
-import { TaskType, Priority, TaskStatus, SubtaskStatus } from "@prisma/client";
+import { TaskType, Priority, TaskStatus, SubtaskStatus, Department } from "@prisma/client";
 import { formatGeorgianDate, formatGeorgianDateShort } from "@/lib/dateUtils";
+import { DepartmentBadge } from "@/lib/departments";
 import { TaskCommentsSection } from "./task-details/TaskCommentsSection";
 import { TaskAttachmentsSection } from "./task-details/TaskAttachmentsSection";
 import { TaskDailyUpdatesSection } from "./task-details/TaskDailyUpdatesSection";
@@ -146,6 +147,7 @@ export interface FullTaskDetails {
   type: TaskType;
   priority: Priority;
   status: TaskStatus;
+  department?: Department;
   startDate?: string | null;
   deadline?: string | null;
   deadlineLocked: boolean;
@@ -600,6 +602,26 @@ export function TaskDetailsDrawer({
     }
   };
 
+  // Update Department
+  const handleUpdateDepartment = async (newDepartment: Department) => {
+    if (!task) return;
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ department: newDepartment }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "გუნდის შეცვლა ვერ მოხერხდა");
+      }
+      setTask((prev) => (prev ? { ...prev, department: newDepartment } : null));
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
+  };
+
   // Status Change
   const handleStatusChange = async (newStatus: TaskStatus) => {
     if (!task) return;
@@ -966,6 +988,9 @@ export function TaskDetailsDrawer({
                   Hotfix
                 </span>
               )}
+
+              {/* Department Badge */}
+              <DepartmentBadge department={task?.department} size="xs" />
 
               {/* Priority Selector */}
               <select
@@ -2110,6 +2135,26 @@ export function TaskDetailsDrawer({
                     <span className="font-extrabold text-stone-900 block">
                       {task?.project.name}
                     </span>
+                  )}
+                </div>
+
+                <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">
+                  <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">
+                    გუნდი / მიმართულება
+                  </span>
+                  {isAdmin ? (
+                    <select
+                      value={task?.department || "DEVELOPMENT"}
+                      onChange={(e) => handleUpdateDepartment(e.target.value as Department)}
+                      className="w-full text-xs font-bold text-stone-900 bg-white border border-stone-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                    >
+                      <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
+                      <option value="CONTENT">✍️ კონტენტი</option>
+                    </select>
+                  ) : (
+                    <div className="pt-0.5">
+                      <DepartmentBadge department={task?.department} size="sm" />
+                    </div>
                   )}
                 </div>
 

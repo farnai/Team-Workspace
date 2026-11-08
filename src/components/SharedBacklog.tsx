@@ -17,7 +17,7 @@ import {
   Play,
   Layers,
 } from "lucide-react";
-import { TaskType, Priority, TaskStatus } from "@prisma/client";
+import { TaskType, Priority, TaskStatus, Department } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
 
 export interface BacklogTask {
@@ -28,6 +28,7 @@ export interface BacklogTask {
   type: TaskType;
   priority: Priority;
   status: TaskStatus;
+  department?: Department;
   startDate?: string | null;
   deadline?: string | null;
   deadlineLocked: boolean;

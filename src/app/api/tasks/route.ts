@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 import { z } from "zod";
 import crypto from "crypto";
-import { TaskType, Priority, TaskStatus, Prisma } from "@prisma/client";
+import { TaskType, Priority, TaskStatus, Department, Prisma } from "@prisma/client";
 
 const createTaskSchema = z.object({
   projectId: z.string().optional(),
@@ -12,6 +12,7 @@ const createTaskSchema = z.object({
   description: z.string().optional(),
   type: z.nativeEnum(TaskType).default(TaskType.FEATURE),
   priority: z.nativeEnum(Priority).default(Priority.MEDIUM),
+  department: z.nativeEnum(Department).default(Department.DEVELOPMENT),
   startDate: z.string().nullable().optional(),
   deadline: z.string().nullable().optional(),
   assigneeIds: z.array(z.string()).optional(),
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get("type") as TaskType | null;
     const priority = searchParams.get("priority") as Priority | null;
     const status = searchParams.get("status") as TaskStatus | null;
+    const department = searchParams.get("department") as Department | null;
     const assigneeId = searchParams.get("assigneeId");
     const unassigned = searchParams.get("unassigned") === "true";
     const overdue = searchParams.get("overdue") === "true";
@@ -70,6 +72,7 @@ export async function GET(req: NextRequest) {
     if (type) where.type = type;
     if (priority) where.priority = priority;
     if (status) where.status = status;
+    if (department) where.department = department;
 
     if (unassigned) {
       where.assignments = { none: {} };
@@ -260,6 +263,7 @@ export async function POST(req: NextRequest) {
           description: data.description,
           type: data.type,
           priority: data.priority,
+          department: data.department,
           status: data.status,
           startDate: parsedStart,
           deadline: parsedDeadline,

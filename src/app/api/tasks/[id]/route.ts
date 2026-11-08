@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
 import { validateDeadlineModification, calculateAndSyncTaskProgress } from "@/lib/workflow";
-import { TaskType, Priority, TaskStatus, Role, Prisma } from "@prisma/client";
+import { TaskType, Priority, TaskStatus, Department, Role, Prisma } from "@prisma/client";
 import { z } from "zod";
 import crypto from "crypto";
 
@@ -14,6 +14,7 @@ const updateTaskSchema = z.object({
   type: z.nativeEnum(TaskType).optional(),
   priority: z.nativeEnum(Priority).optional(),
   status: z.nativeEnum(TaskStatus).optional(),
+  department: z.nativeEnum(Department).optional(),
   startDate: z.string().nullable().optional(),
   deadline: z.string().nullable().optional(),
   pauseReason: z.string().nullable().optional(),
@@ -322,6 +323,7 @@ export async function PATCH(
     if (data.description !== undefined) dataToUpdate.description = data.description;
     if (data.type !== undefined) dataToUpdate.type = data.type;
     if (data.priority !== undefined) dataToUpdate.priority = data.priority;
+    if (data.department !== undefined) dataToUpdate.department = data.department;
     if (incomingStart !== undefined) dataToUpdate.startDate = incomingStart;
     if (incomingDeadline !== undefined) dataToUpdate.deadline = incomingDeadline;
 
@@ -487,6 +489,20 @@ export async function PATCH(
           oldValues: { deadline: existing.deadline },
           newValues: { deadline: incomingDeadline },
           reason: data.rescheduleReason || "ადმინისტრატორის მიერ დედლაინის შეცვლა",
+          tx,
+        });
+      }
+
+      if (data.department !== undefined && data.department !== existing.department) {
+        await logAuditEvent({
+          taskId: id,
+          actorId: user.id,
+          action: "DEPARTMENT_CHANGED",
+          entityType: "TASK",
+          entityId: id,
+          oldValues: { department: existing.department },
+          newValues: { department: data.department },
+          reason: "გუნდის / მიმართულების შეცვლა",
           tx,
         });
       }

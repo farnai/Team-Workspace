@@ -12,13 +12,18 @@ import {
   AlertCircle,
   Loader2,
   X,
+  Code2,
+  PenTool,
 } from "lucide-react";
+import { Department } from "@prisma/client";
+import { DepartmentBadge } from "@/lib/departments";
 
 export interface ManagedUser {
   id: string;
   name: string;
   email: string;
   role: "ADMIN" | "USER";
+  department?: Department;
   avatarUrl?: string | null;
   isActive: boolean;
   createdAt: string;
@@ -44,6 +49,7 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState<"USER" | "ADMIN">("USER");
+  const [newUserDepartment, setNewUserDepartment] = useState<Department>(Department.DEVELOPMENT);
   const [isSubmittingNewUser, setIsSubmittingNewUser] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -132,6 +138,27 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
     }
   };
 
+  const handleChangeDepartment = async (user: ManagedUser, newDepartment: Department) => {
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ department: newDepartment }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "გუნდის შეცვლა ვერ მოხერხდა");
+      }
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, department: newDepartment } : u))
+      );
+      setSuccessMessage(`მომხმარებლის (${user.name}) გუნდი წარმატებით განახლდა`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "შეცდომა გუნდის შეცვლისას");
+    }
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -151,6 +178,7 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
           email: newUserEmail.trim(),
           password: newUserPassword,
           role: newUserRole,
+          department: newUserDepartment,
         }),
       });
 
@@ -164,6 +192,7 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
       setNewUserEmail("");
       setNewUserPassword("");
       setNewUserRole("USER");
+      setNewUserDepartment(Department.DEVELOPMENT);
       setSuccessMessage(`მომხმარებელი (${data.user.name}) წარმატებით შეიქმნა`);
       setTimeout(() => setSuccessMessage(null), 4000);
       refreshUsers();
@@ -300,6 +329,7 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                 <tr>
                   <th className="py-3 px-5">მომხმარებელი</th>
                   <th className="py-3 px-5">ელ.ფოსტა</th>
+                  <th className="py-3 px-5">გუნდი</th>
                   <th className="py-3 px-5">როლი</th>
                   <th className="py-3 px-5">სტატუსი</th>
                   <th className="py-3 px-5">რეგისტრაციის თარიღი</th>
@@ -347,6 +377,20 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                     {/* Email */}
                     <td className="py-3.5 px-5 text-stone-600 font-medium">
                       {user.email}
+                    </td>
+
+                    {/* Department */}
+                    <td className="py-3.5 px-5">
+                      <select
+                        value={user.department || "DEVELOPMENT"}
+                        onChange={(e) =>
+                          handleChangeDepartment(user, e.target.value as Department)
+                        }
+                        className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-2 py-1 font-semibold text-stone-700 cursor-pointer shadow-2xs"
+                      >
+                        <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
+                        <option value="CONTENT">✍️ კონტენტი</option>
+                      </select>
                     </td>
 
                     {/* Role */}
@@ -495,6 +539,38 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                   placeholder="••••••••"
                   className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  გუნდი / მიმართულება *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewUserDepartment(Department.DEVELOPMENT)}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      newUserDepartment === Department.DEVELOPMENT
+                        ? "bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-500/20"
+                        : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                    }`}
+                  >
+                    <Code2 size={13} className={newUserDepartment === Department.DEVELOPMENT ? "text-white" : "text-blue-600"} />
+                    <span>დეველოპმენტი</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewUserDepartment(Department.CONTENT)}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      newUserDepartment === Department.CONTENT
+                        ? "bg-purple-600 text-white border-purple-600 shadow-xs ring-2 ring-purple-500/20"
+                        : "bg-white text-stone-700 border-stone-200 hover:bg-purple-50/50"
+                    }`}
+                  >
+                    <PenTool size={13} className={newUserDepartment === Department.CONTENT ? "text-white" : "text-purple-600"} />
+                    <span>კონტენტი</span>
+                  </button>
+                </div>
               </div>
 
               <div>

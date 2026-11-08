@@ -18,8 +18,10 @@ import {
   Plus,
   ChevronDown,
   ChevronUp,
+  Code2,
+  PenTool,
 } from "lucide-react";
-import { TaskType, Priority, TaskStatus } from "@prisma/client";
+import { TaskType, Priority, TaskStatus, Department } from "@prisma/client";
 import { DatePicker } from "@/components/ui/DatePicker";
 
 export interface ProjectOption {
@@ -44,6 +46,7 @@ export interface TaskData {
   type: TaskType;
   priority: Priority;
   status: TaskStatus;
+  department?: Department;
   startDate?: string | null;
   deadline?: string | null;
   deadlineLocked: boolean;
@@ -116,6 +119,11 @@ function TaskModalForm({
       (mode === "edit" && initialTask
         ? initialTask.projectId
         : defaultProjectId || projects[0]?.id) || ""
+  );
+  const [department, setDepartment] = useState<Department>(() =>
+    mode === "edit" && initialTask?.department
+      ? initialTask.department
+      : Department.DEVELOPMENT
   );
 
   // Quick Project Creation
@@ -391,6 +399,7 @@ function TaskModalForm({
           type,
           priority,
           status,
+          department,
           assignees: formattedAssignees,
           assigneeIds: assigneeList.map((a) => a.userId),
           startDate: startDate ? new Date(startDate).toISOString() : null,
@@ -439,6 +448,7 @@ function TaskModalForm({
           type: TaskType;
           priority: Priority;
           status: TaskStatus;
+          department?: Department;
           assignees: typeof formattedAssignees;
           assigneeIds: string[];
           startDate?: string | null;
@@ -454,6 +464,7 @@ function TaskModalForm({
           type,
           priority,
           status,
+          department,
           assignees: formattedAssignees,
           assigneeIds: assigneeList.map((a) => a.userId),
           startDate: startDate ? new Date(startDate).toISOString() : null,
@@ -654,6 +665,38 @@ function TaskModalForm({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block font-bold text-stone-700 mb-1.5 text-xs">
+              გუნდი / მიმართულება <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setDepartment(Department.DEVELOPMENT)}
+                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  department === Department.DEVELOPMENT
+                    ? "bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-500/20"
+                    : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                }`}
+              >
+                <Code2 size={14} className={department === Department.DEVELOPMENT ? "text-white" : "text-blue-600"} />
+                <span>დეველოპმენტი</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDepartment(Department.CONTENT)}
+                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  department === Department.CONTENT
+                    ? "bg-purple-600 text-white border-purple-600 shadow-xs ring-2 ring-purple-500/20"
+                    : "bg-white text-stone-700 border-stone-200 hover:bg-purple-50/50"
+                }`}
+              >
+                <PenTool size={14} className={department === Department.CONTENT ? "text-white" : "text-purple-600"} />
+                <span>კონტენტი</span>
+              </button>
+            </div>
           </div>
         </div>
 

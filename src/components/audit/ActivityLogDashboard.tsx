@@ -27,6 +27,7 @@ import {
   Table as TableIcon,
   AlertCircle,
   Sparkles,
+  Code2,
 } from "lucide-react";
 import { AuditAction, Role } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
@@ -95,6 +96,13 @@ const ACTION_MAP: Record<AuditAction, ActionMeta> = {
     colorClass: "text-stone-700 border-stone-200",
     bgClass: "bg-stone-100 text-stone-700",
     icon: Layers,
+  },
+  DEPARTMENT_CHANGED: {
+    label: "გუნდის ცვლილება",
+    category: "task",
+    colorClass: "text-purple-700 border-purple-200",
+    bgClass: "bg-purple-50 text-purple-700",
+    icon: Code2,
   },
   TASK_ASSIGNED: {
     label: "შემსრულებლის მინიჭება",

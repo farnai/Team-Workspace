@@ -13,6 +13,7 @@ export async function GET() {
         name: true,
         email: true,
         role: true,
+        department: true,
         avatarUrl: true,
       },
       orderBy: { name: "asc" },

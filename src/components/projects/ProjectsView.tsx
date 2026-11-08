@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
+import { Department } from "@prisma/client";
+import { DepartmentBadge } from "@/lib/departments";
 
 export interface ProjectData {
   id: string;
@@ -42,6 +44,7 @@ export interface TaskItem {
   type: string;
   priority: string;
   status: string;
+  department?: Department | string;
   progress: number;
   deadline?: string | null;
   startDate?: string | null;
@@ -85,6 +88,7 @@ export function ProjectsView({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [taskStatusTab, setTaskStatusTab] = useState<"ALL" | "TODO" | "IN_PROGRESS" | "DONE">("ALL");
+  const [taskDepartmentFilter, setTaskDepartmentFilter] = useState<"ALL" | "DEVELOPMENT" | "CONTENT">("ALL");
 
   // Project Modal State (Create & Edit)
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -127,6 +131,10 @@ export function ProjectsView({
       list = list.filter((t) => t.status === "DONE");
     }
 
+    if (taskDepartmentFilter !== "ALL") {
+      list = list.filter((t) => (t.department || "DEVELOPMENT") === taskDepartmentFilter);
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
@@ -138,7 +146,7 @@ export function ProjectsView({
     }
 
     return list;
-  }, [activeProjectTasks, taskStatusTab, searchQuery]);
+  }, [activeProjectTasks, taskStatusTab, taskDepartmentFilter, searchQuery]);
 
   // Filtered Projects List
   const filteredProjects = useMemo(() => {
@@ -397,16 +405,29 @@ export function ProjectsView({
               </button>
             </div>
 
-            {/* Search */}
-            <div className="relative w-full sm:w-64">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-              <input
-                type="text"
-                placeholder="ძებნა ამ პროექტში..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-              />
+            {/* Department Filter & Search */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={taskDepartmentFilter}
+                onChange={(e) => setTaskDepartmentFilter(e.target.value as "ALL" | "DEVELOPMENT" | "CONTENT")}
+                className="bg-white border border-stone-200 rounded-xl px-2.5 py-1.5 text-xs font-medium text-stone-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+              >
+                <option value="ALL">ყველა გუნდი</option>
+                <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
+                <option value="CONTENT">✍️ კონტენტი</option>
+              </select>
+
+              {/* Search */}
+              <div className="relative flex-1 sm:w-56">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="text"
+                  placeholder="ძებნა ამ პროექტში..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                />
+              </div>
             </div>
           </div>
 
@@ -438,11 +459,14 @@ export function ProjectsView({
                     className="p-4 bg-white rounded-xl border border-stone-200/90 hover:border-stone-300 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between space-y-3 select-none"
                   >
                     <div>
-                      {/* Priority & Status Pill */}
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 uppercase">
-                          {task.status}
-                        </span>
+                      {/* Priority, Status Pill & Department Badge */}
+                      <div className="flex items-center justify-between mb-2 gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 uppercase">
+                            {task.status}
+                          </span>
+                          <DepartmentBadge department={task.department} size="xs" />
+                        </div>
                         <span className="text-[10px] font-bold text-stone-500">
                           {task.priority}
                         </span>
