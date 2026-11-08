@@ -951,7 +951,7 @@ function TaskModalForm({
             <div className="flex items-center gap-2">
               <label className="px-3 py-2 bg-white border border-stone-300 hover:border-stone-400 rounded-xl text-xs font-bold text-stone-700 cursor-pointer flex items-center gap-1.5 shadow-2xs transition-colors">
                 <Paperclip size={13} />
-                <span>+ ფაილის არჩევა</span>
+                <span>ფაილის არჩევა</span>
                 <input
                   type="file"
                   multiple

@@ -295,7 +295,7 @@ export function ProjectsView({
                 className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer"
               >
                 <Plus size={14} strokeWidth={2.5} />
-                <span>+ ახალი ტასკი</span>
+                <span>ახალი ტასკი</span>
               </button>
 
               <button
@@ -324,7 +324,7 @@ export function ProjectsView({
                 className="px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer"
               >
                 <Plus size={14} strokeWidth={2.5} />
-                <span>+ ახალი პროექტი</span>
+                <span>ახალი პროექტი</span>
               </button>
             )
           )}
