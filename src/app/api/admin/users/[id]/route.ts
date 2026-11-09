@@ -43,6 +43,27 @@ export async function PATCH(
       );
     }
 
+    // Safety guard against Administrator lockout: Prevent demoting or deactivating the last active Admin
+    const wouldRemoveAdmin =
+      targetUser.role === Role.ADMIN &&
+      (result.data.isActive === false || result.data.role === Role.USER);
+
+    if (wouldRemoveAdmin) {
+      const activeAdminCount = await prisma.user.count({
+        where: { role: Role.ADMIN, isActive: true },
+      });
+
+      if (activeAdminCount <= 1) {
+        return NextResponse.json(
+          {
+            error:
+              "სისტემაში უნდა დარჩეს მინიმუმ ერთი აქტიური ადმინისტრატორი. ბოლო ადმინისტრატორის დეაქტივაცია ან როლის ჩამორთმევა დაუშვებელია.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const dataToUpdate: Prisma.UserUpdateInput = {};
     if (result.data.isActive !== undefined) dataToUpdate.isActive = result.data.isActive;
     if (result.data.name !== undefined) dataToUpdate.name = result.data.name;
@@ -52,9 +73,25 @@ export async function PATCH(
       dataToUpdate.passwordHash = await bcrypt.hash(result.data.password, 10);
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: dataToUpdate,
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      // Re-verify under transaction row-level lock to prevent concurrent lockout race conditions
+      if (wouldRemoveAdmin) {
+        await tx.$queryRawUnsafe(
+          'SELECT id FROM "users" WHERE role = \'ADMIN\' AND "isActive" = true FOR UPDATE'
+        );
+
+        const activeAdminCountTx = await tx.user.count({
+          where: { role: Role.ADMIN, isActive: true },
+        });
+        if (activeAdminCountTx <= 1) {
+          throw new Error("LAST_ADMIN_LOCKOUT_PREVENTED");
+        }
+      }
+
+      return tx.user.update({
+        where: { id },
+        data: dataToUpdate,
+      });
     });
 
     let reason = "ადმინისტრატორის მიერ მომხმარებლის პროფილის განახლება";
@@ -99,6 +136,15 @@ export async function PATCH(
     });
   } catch (error: unknown) {
     const err = error as Error;
+    if (err.message === "LAST_ADMIN_LOCKOUT_PREVENTED") {
+      return NextResponse.json(
+        {
+          error:
+            "სისტემაში უნდა დარჩეს მინიმუმ ერთი აქტიური ადმინისტრატორი. ბოლო ადმინისტრატორის დეაქტივაცია ან როლის ჩამორთმევა დაუშვებელია.",
+        },
+        { status: 400 }
+      );
+    }
     if (err.message === "UNAUTHORIZED" || err.message === "FORBIDDEN") {
       return NextResponse.json({ error: "წვდომა შეზღუდულია (მხოლოდ ადმინისტრატორს)" }, { status: 403 });
     }

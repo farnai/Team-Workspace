@@ -461,7 +461,10 @@ export function TaskDetailsDrawer({
     if (!confirm("დარწმუნებული ხართ, რომ გსურთ ეტაპის წაშლა?")) return;
     try {
       const res = await fetch(`/api/stages/${stageId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("ეტაპის წაშლა ვერ მოხერხდა");
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || "ეტაპის წაშლა ვერ მოხერხდა");
+      }
       await refreshTaskDetails();
       onTaskUpdated();
     } catch (err: unknown) {
@@ -522,11 +525,6 @@ export function TaskDetailsDrawer({
   const handleCreateSubtask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!task || !newSubtaskTitle.trim()) return;
-
-    if (newSubtaskAssigneeIds.length > 0 && !newSubtaskDeadline) {
-      setError("შემსრულებლის მინიჭებისას დედლაინის მითითება სავალდებულოა");
-      return;
-    }
 
     setIsSubmittingSubtask(true);
     setError(null);

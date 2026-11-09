@@ -23,6 +23,7 @@ export interface OverviewMetrics {
   activeCount: number;
   completedTodayCount: number;
   overdueCount: number;
+  overdueThisMonthCount?: number;
   completedLast7Days: number;
   completedThisMonth?: number;
   pausedCount: number;
@@ -120,10 +121,16 @@ function formatAuditActionGeorgian(action: string): string {
       return "სამუშაო ეტაპი დასრულდა";
     case "STAGE_CREATED":
       return "ახალი ეტაპი შეიქმნა";
+    case "STAGE_DELETED":
+      return "სამუშაო ეტაპი წაიშალა";
     case "SUBTASK_COMPLETED":
       return "საბტასკი შესრულდა";
+    case "SUBTASK_DELETED":
+      return "საბტასკი წაიშალა";
     case "COMMENT_ADDED":
       return "კომენტარი დაემატა";
+    case "COMMENT_DELETED":
+      return "კომენტარი წაიშალა";
     case "ATTACHMENT_ADDED":
       return "ფაილი აიტვირთა";
     case "DAILY_UPDATE_ADDED":
@@ -326,7 +333,11 @@ export function OverviewDashboard({
             >
               {metrics.overdueCount}
             </span>
-            <span className="text-[9px] text-rose-500 font-semibold truncate">თვეში</span>
+            <span className="text-[9px] text-rose-500 font-semibold truncate">
+              {metrics.overdueThisMonthCount !== undefined && metrics.overdueThisMonthCount !== metrics.overdueCount
+                ? `თვეში: ${metrics.overdueThisMonthCount}`
+                : "სულ"}
+            </span>
           </div>
         </div>
 

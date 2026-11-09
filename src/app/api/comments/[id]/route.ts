@@ -102,7 +102,7 @@ export async function DELETE(
       await logAuditEvent({
         taskId: comment.taskId,
         actorId: user.id,
-        action: "TASK_UPDATED",
+        action: "COMMENT_DELETED",
         entityType: "COMMENT",
         entityId: id,
         oldValues: { content: comment.content },

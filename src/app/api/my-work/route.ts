@@ -120,8 +120,15 @@ export async function GET() {
         } else if (isDirectTaskAssignee || hasPendingDirectSubtask) {
           if (t.status === "IN_PROGRESS") inProgress.push(t);
           else planned.push(t);
+        } else if (!t.stages.some((s) => s.isActive && !s.isCompleted)) {
+          // Defensive fallback: If task is active but no stage is marked active, keep visible in inProgress
+          if (t.status === "IN_PROGRESS") {
+            inProgress.push(t);
+          } else {
+            planned.push(t);
+          }
         } else {
-          // Completed their stage
+          // User completed their specific stage and another stage is active
           completed.push(t);
         }
       } else {

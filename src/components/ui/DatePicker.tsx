@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   Calendar as CalendarIcon,
@@ -93,7 +93,11 @@ export function DatePicker({
   name,
 }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const [viewMode, setViewMode] = useState<"days" | "months" | "years">("days");
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -114,17 +118,15 @@ export function DatePicker({
     left: number;
   }>({ top: 0, left: 0 });
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
   // Sync viewed month/year when value changes externally
-  useEffect(() => {
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     if (selectedDate) {
       setViewYear(selectedDate.getFullYear());
       setViewMonth(selectedDate.getMonth());
     }
-  }, [value, selectedDate]);
+  }
 
   // Compute Popover Position relative to viewport
   const updatePosition = useCallback(() => {

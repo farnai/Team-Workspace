@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   History,
   Search,
@@ -28,6 +28,7 @@ import {
   AlertCircle,
   Sparkles,
   Code2,
+  Trash2,
 } from "lucide-react";
 import { AuditAction, Role } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
@@ -59,7 +60,9 @@ export interface AuditEventItem {
   action: AuditAction;
   entityType: string;
   entityId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   oldValues?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   newValues?: any;
   reason?: string | null;
   createdAt: string;
@@ -125,6 +128,13 @@ const ACTION_MAP: Record<AuditAction, ActionMeta> = {
     bgClass: "bg-blue-50 text-blue-700",
     icon: Layers,
   },
+  STAGE_DELETED: {
+    label: "სამუშაო ეტაპის წაშლა",
+    category: "workflow",
+    colorClass: "text-rose-700 border-rose-200",
+    bgClass: "bg-rose-50 text-rose-700",
+    icon: Trash2,
+  },
   STAGE_REORDERED: {
     label: "ეტაპების გადალაგება",
     category: "workflow",
@@ -159,6 +169,13 @@ const ACTION_MAP: Record<AuditAction, ActionMeta> = {
     colorClass: "text-amber-700 border-amber-200",
     bgClass: "bg-amber-50 text-amber-700",
     icon: RotateCcw,
+  },
+  SUBTASK_DELETED: {
+    label: "ქვედავალების წაშლა",
+    category: "workflow",
+    colorClass: "text-rose-700 border-rose-200",
+    bgClass: "bg-rose-50 text-rose-700",
+    icon: Trash2,
   },
   STATUS_CHANGED: {
     label: "სტატუსის ცვლილება",
@@ -223,6 +240,13 @@ const ACTION_MAP: Record<AuditAction, ActionMeta> = {
     bgClass: "bg-indigo-50 text-indigo-700",
     icon: MessageSquare,
   },
+  COMMENT_DELETED: {
+    label: "კომენტარის წაშლა",
+    category: "comment",
+    colorClass: "text-rose-700 border-rose-200",
+    bgClass: "bg-rose-50 text-rose-700",
+    icon: Trash2,
+  },
   DAILY_UPDATE_ADDED: {
     label: "დღიური ანგარიში",
     category: "comment",
@@ -253,6 +277,23 @@ const ACTION_MAP: Record<AuditAction, ActionMeta> = {
   },
 };
 
+// Format Relative Time helper
+function formatRelativeTime(isoString: string): string {
+  try {
+    const diffMs = Date.now() - new Date(isoString).getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "ახლახანს";
+    if (diffMins < 60) return `${diffMins} წთ წინ`;
+    if (diffHours < 24) return `${diffHours} სთ წინ`;
+    return `${diffDays} დღის წინ`;
+  } catch {
+    return "";
+  }
+}
+
 export function ActivityLogDashboard({
   onSelectTask,
   users,
@@ -276,58 +317,67 @@ export function ActivityLogDashboard({
   const [selectedPeriod, setSelectedPeriod] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"timeline" | "table">("timeline");
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
-  // Fetch audit events
-  const fetchAuditEvents = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      params.set("limit", "200");
-
-      if (selectedActor !== "ALL") {
-        params.set("actorId", selectedActor);
-      }
-
-      if (searchQuery.trim()) {
-        params.set("search", searchQuery.trim());
-      }
-
-      // Date range calculation
-      const now = new Date();
-      if (selectedPeriod === "TODAY") {
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        params.set("startDate", today.toISOString());
-      } else if (selectedPeriod === "7DAYS") {
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(now.getDate() - 7);
-        params.set("startDate", sevenDaysAgo.toISOString());
-      } else if (selectedPeriod === "MONTH") {
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        params.set("startDate", startOfMonth.toISOString());
-      }
-
-      const res = await fetch(`/api/audit?${params.toString()}`);
-      if (!res.ok) {
-        throw new Error("მონაცემების ჩატვირთვა ვერ მოხერხდა");
-      }
-      const data = await res.json();
-      setEvents(data.auditEvents || []);
-      setTotalCount(data.totalCount || 0);
-      if (data.stats) {
-        setStats(data.stats);
-      }
-    } catch (err: any) {
-      console.error("Audit log fetch error:", err);
-      setError(err.message || "შეცდომა ლოგების ჩატვირთვისას");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedActor, searchQuery, selectedPeriod]);
-
+  // Fetch audit events on filter/refresh change
   useEffect(() => {
-    fetchAuditEvents();
-  }, [fetchAuditEvents]);
+    let ignore = false;
+    const load = async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set("limit", "200");
+
+        if (selectedActor !== "ALL") {
+          params.set("actorId", selectedActor);
+        }
+
+        if (searchQuery.trim()) {
+          params.set("search", searchQuery.trim());
+        }
+
+        // Date range calculation
+        const now = new Date();
+        if (selectedPeriod === "TODAY") {
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          params.set("startDate", today.toISOString());
+        } else if (selectedPeriod === "7DAYS") {
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(now.getDate() - 7);
+          params.set("startDate", sevenDaysAgo.toISOString());
+        } else if (selectedPeriod === "MONTH") {
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          params.set("startDate", startOfMonth.toISOString());
+        }
+
+        const res = await fetch(`/api/audit?${params.toString()}`);
+        if (!res.ok) {
+          throw new Error("მონაცემების ჩატვირთვა ვერ მოხერხდა");
+        }
+        const data = await res.json();
+        if (!ignore) {
+          setEvents(data.auditEvents || []);
+          setTotalCount(data.totalCount || 0);
+          if (data.stats) {
+            setStats(data.stats);
+          }
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          console.error("Audit log fetch error:", err);
+          setError((err as Error).message || "შეცდომა ლოგების ჩატვირთვისას");
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [selectedActor, searchQuery, selectedPeriod, refreshTrigger]);
 
   // Client-side category filtering
   const filteredEvents = useMemo(() => {
@@ -383,23 +433,6 @@ export function ActivityLogDashboard({
     }
   };
 
-  // Format Relative Time (მაგ. 5 წუთის წინ)
-  const formatRelativeTime = (isoString: string) => {
-    try {
-      const diffMs = Date.now() - new Date(isoString).getTime();
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      const diffHours = Math.floor(diffMins / 60);
-      const diffDays = Math.floor(diffHours / 24);
-
-      if (diffMins < 1) return "ახლახანს";
-      if (diffMins < 60) return `${diffMins} წთ წინ`;
-      if (diffHours < 24) return `${diffHours} სთ წინ`;
-      return `${diffDays} დღის წინ`;
-    } catch {
-      return "";
-    }
-  };
-
   // Export to CSV
   const handleExportCSV = () => {
     if (filteredEvents.length === 0) return;
@@ -431,6 +464,7 @@ export function ActivityLogDashboard({
   };
 
   // Helper to render value diffs cleanly
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderValueDiff = (oldVals: any, newVals: any, action: AuditAction) => {
     if (!oldVals && !newVals) return null;
 
@@ -504,7 +538,10 @@ export function ActivityLogDashboard({
         <div className="flex items-center gap-2">
           {/* Refresh button */}
           <button
-            onClick={() => fetchAuditEvents()}
+            onClick={() => {
+              setIsLoading(true);
+              setRefreshTrigger((prev) => prev + 1);
+            }}
             disabled={isLoading}
             className="p-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer disabled:opacity-50"
             title="განახლება"
@@ -861,7 +898,7 @@ export function ActivityLogDashboard({
                             {event.oldValues && (
                               <div>
                                 <span className="text-rose-400 font-bold block mb-0.5">
-                                  // ძველი მნიშვნელობა (oldValues):
+                                  {"// ძველი მნიშვნელობა (oldValues):"}
                                 </span>
                                 <pre>{JSON.stringify(event.oldValues, null, 2)}</pre>
                               </div>
@@ -869,7 +906,7 @@ export function ActivityLogDashboard({
                             {event.newValues && (
                               <div>
                                 <span className="text-emerald-400 font-bold block mb-0.5">
-                                  // ახალი მნიშვნელობა (newValues):
+                                  {"// ახალი მნიშვნელობა (newValues):"}
                                 </span>
                                 <pre>{JSON.stringify(event.newValues, null, 2)}</pre>
                               </div>

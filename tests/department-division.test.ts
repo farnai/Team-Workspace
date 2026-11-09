@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { prisma } from "../src/lib/prisma";
+import { testPrisma as prisma } from "./test-db";
 import { Department, Role, TaskStatus, TaskType, Priority } from "@prisma/client";
 
 test("Department Division: Development & Content Integration", async (t) => {

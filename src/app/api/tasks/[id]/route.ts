@@ -37,6 +37,7 @@ const updateTaskSchema = z.object({
       })
     )
     .optional(),
+  stageId: z.string().optional(),
   rescheduleReason: z.string().optional(),
 });
 
@@ -466,6 +467,45 @@ export async function PATCH(
                 isExternal: true,
               },
             });
+          }
+        }
+      }
+
+      // Handle workflow stage reactivation when reopening a completed task from Archive
+      if (
+        existing.status === TaskStatus.DONE &&
+        data.status !== undefined &&
+        data.status !== TaskStatus.DONE &&
+        data.assignees === undefined
+      ) {
+        const stages = await tx.workflowStage.findMany({
+          where: { taskId: id },
+          orderBy: { position: "asc" },
+        });
+
+        if (stages.length > 0) {
+          const allCompleted = stages.every((s) => s.isCompleted);
+          const hasActive = stages.some((s) => s.isActive);
+
+          // If no stage is currently active or all were completed, reactivate a stage
+          if (!hasActive || allCompleted) {
+            const targetStage = data.stageId
+              ? stages.find((s) => s.id === data.stageId) || stages[stages.length - 1]
+              : stages[stages.length - 1];
+
+            for (const s of stages) {
+              if (s.id === targetStage.id) {
+                await tx.workflowStage.update({
+                  where: { id: s.id },
+                  data: { isCompleted: false, isActive: true },
+                });
+              } else {
+                await tx.workflowStage.update({
+                  where: { id: s.id },
+                  data: { isActive: false },
+                });
+              }
+            }
           }
         }
       }

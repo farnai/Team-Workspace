@@ -309,10 +309,20 @@ export async function GET() {
         t.status === "BLOCKED"
     ).length;
 
-    // Overdue in this month:
-    // Every month starts fresh ("ყველა თვიდან ახლიდან დაიწყოს ტასკებმაც ვადაგადაცილებულებმაც")
-    // Only tasks whose deadline falls in this current month and missed the deadline
-    const overdueCount = monthTasks.filter((t) => {
+    // Overdue tasks:
+    // 1. All unfinished overdue tasks up to now (consistent with /api/tasks?overdue=true & Workload)
+    const overdueCount = allMonthCandidateTasks.filter((t) => {
+      if (t.status === "DONE" || t.status === "CANCELLED") return false;
+      const activeStage = t.stages.find((s) => s.isActive);
+      const deadlineToCheck =
+        activeStage && activeStage.deadline ? activeStage.deadline : t.deadline;
+      if (!deadlineToCheck) return false;
+      const d = new Date(deadlineToCheck);
+      return d < now;
+    }).length;
+
+    // 2. Overdue strictly within the current month
+    const overdueThisMonthCount = monthTasks.filter((t) => {
       if (t.status === "DONE" || t.status === "CANCELLED") return false;
       const activeStage = t.stages.find((s) => s.isActive);
       const deadlineToCheck =
@@ -327,6 +337,7 @@ export async function GET() {
         activeCount,
         completedTodayCount,
         overdueCount,
+        overdueThisMonthCount,
         completedLast7Days,
         completedThisMonth,
         pausedCount,

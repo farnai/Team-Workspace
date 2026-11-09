@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit";
-import { validateDeadlineModification } from "@/lib/workflow";
+import { validateDeadlineModification, calculateAndSyncTaskProgress } from "@/lib/workflow";
 import { Role, Prisma } from "@prisma/client";
 import { z } from "zod";
 
@@ -166,37 +166,136 @@ export async function DELETE(
 
     const existing = await prisma.workflowStage.findUnique({
       where: { id: stageId },
+      include: {
+        task: {
+          select: {
+            id: true,
+            status: true,
+            stages: {
+              orderBy: { position: "asc" },
+              include: {
+                assignments: {
+                  select: { userId: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!existing) {
       return NextResponse.json({ error: "სამუშაო ეტაპი ვერ მოიძებნა" }, { status: 404 });
     }
 
+    const allStages = existing.task.stages;
+
+    // Founder Decision 1: Do not allow deletion of the only remaining workflow stage
+    if (allStages.length <= 1) {
+      return NextResponse.json(
+        {
+          error:
+            "დავალების ერთადერთი სამუშაო ეტაპის წაშლა დაუშვებელია. ეტაპებზე დაფუძნებული დავალება არ შეიძლება დარჩეს ეტაპის გარეშე.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Founder Decision 1 & 2: If deleting an active stage, verify valid active successor and assignee
+    if (existing.isActive) {
+      const remainingStages = allStages.filter((s) => s.id !== stageId);
+      const nextActiveStage = remainingStages.find((s) => !s.isCompleted);
+
+      // Stage deletion must NEVER imply completion - if no valid incomplete stage exists, reject deletion
+      if (!nextActiveStage) {
+        return NextResponse.json(
+          {
+            error:
+              "აქტიური ეტაპის წაშლა შეუძლებელია, რადგან დავალებას არ გააჩნია მომდევნო სამუშაო ეტაპი. დავალების დასასრულებლად გამოიყენეთ დასრულების ფუნქცია.",
+          },
+          { status: 400 }
+        );
+      }
+
+      // If next stage has no responsible assignee, reject deletion to prevent orphaned tasks
+      if (!nextActiveStage.assignments || nextActiveStage.assignments.length === 0) {
+        return NextResponse.json(
+          {
+            error: `აქტიური ეტაპის წაშლა შეუძლებელია, რადგან მომდევნო ეტაპს ("${nextActiveStage.title}") არ ჰყავს პასუხისმგებელი შემსრულებელი. გთხოვთ ჯერ მიანიჭოთ შემსრულებელი მომდევნო ეტაპს.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     await prisma.$transaction(async (tx) => {
+      // 1. Delete the targeted stage
       await tx.workflowStage.delete({ where: { id: stageId } });
 
-      // Re-index remaining stages for consistency
+      // 2. Fetch remaining stages ordered by position
       const remainingStages = await tx.workflowStage.findMany({
         where: { taskId: existing.taskId },
         orderBy: { position: "asc" },
+        include: {
+          assignments: {
+            select: { userId: true },
+          },
+        },
       });
 
+      // 3. Re-index positions
       for (let i = 0; i < remainingStages.length; i++) {
         if (remainingStages[i].position !== i) {
           await tx.workflowStage.update({
             where: { id: remainingStages[i].id },
             data: { position: i },
           });
+          remainingStages[i].position = i;
         }
       }
 
+      // 4. Handle active stage succession if the deleted stage was active
+      if (existing.isActive) {
+        // Find the first subsequent incomplete stage
+        const nextActiveStage = remainingStages.find((s) => !s.isCompleted);
+
+        if (nextActiveStage) {
+          // Activate the next incomplete stage
+          await tx.workflowStage.update({
+            where: { id: nextActiveStage.id },
+            data: { isActive: true },
+          });
+
+          // Notify assignees of the newly activated stage
+          for (const a of nextActiveStage.assignments) {
+            await tx.notification.create({
+              data: {
+                userId: a.userId,
+                taskId: existing.taskId,
+                title: "სამუშაო ეტაპი გააქტიურდა",
+                message: `წინა ეტაპის წაშლის შემდეგ თქვენი ეტაპი "${nextActiveStage.title}" გახდა აქტიური.`,
+              },
+            });
+          }
+        }
+      }
+
+      // 5. Recalculate and sync overall task progress
+      await calculateAndSyncTaskProgress(existing.taskId, tx);
+
+      // 6. Log accurate STAGE_DELETED audit event
       await logAuditEvent({
         taskId: existing.taskId,
         actorId: user.id,
-        action: "STAGE_REORDERED",
+        action: "STAGE_DELETED",
         entityType: "STAGE",
         entityId: stageId,
-        oldValues: { title: existing.title, position: existing.position },
+        oldValues: {
+          title: existing.title,
+          position: existing.position,
+          isActive: existing.isActive,
+          isCompleted: existing.isCompleted,
+        },
         reason: "სამუშაო ეტაპის წაშლა",
         tx,
       });

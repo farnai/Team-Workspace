@@ -213,7 +213,7 @@ export async function DELETE(
       await logAuditEvent({
         taskId: existing.taskId,
         actorId: user.id,
-        action: "SUBTASK_COMPLETED",
+        action: "SUBTASK_DELETED",
         entityType: "SUBTASK",
         entityId: subtaskId,
         oldValues: { title: existing.title, status: existing.status },

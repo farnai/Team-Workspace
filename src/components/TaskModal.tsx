@@ -231,6 +231,7 @@ function TaskModalForm({
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedTaskId, setSavedTaskId] = useState<string | null>(null);
 
   const isAdmin = currentUser.role === "ADMIN";
   const isDeadlineLocked = Boolean(initialTask?.deadlineLocked);
@@ -382,6 +383,44 @@ function TaskModalForm({
       return;
     }
 
+    if (savedTaskId) {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const failedFiles: File[] = [];
+        for (const file of selectedFiles) {
+          try {
+            const formData = new FormData();
+            formData.append("file", file);
+            const uploadRes = await fetch(`/api/tasks/${savedTaskId}/attachments`, {
+              method: "POST",
+              body: formData,
+            });
+            if (!uploadRes.ok) {
+              failedFiles.push(file);
+            }
+          } catch {
+            failedFiles.push(file);
+          }
+        }
+        if (failedFiles.length > 0) {
+          setSelectedFiles(failedFiles);
+          setError(
+            `შემდეგი ფაილების ატვირთვა კვლავ ვერ მოხერხდა: ${failedFiles.map((f) => f.name).join(", ")}. შეგიძლიათ სცადოთ ხელახლა.`
+          );
+          return;
+        }
+        onSuccess();
+        onClose();
+        return;
+      } catch (err: unknown) {
+        setError((err as Error).message || "სისტემური შეცდომა ფაილის ატვირთვისას");
+        return;
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
     setIsLoading(true);
 
     try {
@@ -419,16 +458,35 @@ function TaskModalForm({
         }
 
         const createdTaskId = data.task?.id;
+        const taskNumber = data.task?.taskNumber;
 
         // Upload attached files if any
         if (createdTaskId && selectedFiles.length > 0) {
+          const failedFiles: File[] = [];
           for (const file of selectedFiles) {
-            const formData = new FormData();
-            formData.append("file", file);
-            await fetch(`/api/tasks/${createdTaskId}/attachments`, {
-              method: "POST",
-              body: formData,
-            });
+            try {
+              const formData = new FormData();
+              formData.append("file", file);
+              const uploadRes = await fetch(`/api/tasks/${createdTaskId}/attachments`, {
+                method: "POST",
+                body: formData,
+              });
+              if (!uploadRes.ok) {
+                failedFiles.push(file);
+              }
+            } catch {
+              failedFiles.push(file);
+            }
+          }
+
+          if (failedFiles.length > 0) {
+            onSuccess(); // Ensure newly created task appears in parent view
+            setSavedTaskId(createdTaskId);
+            setSelectedFiles(failedFiles);
+            setError(
+              `ტასკი #${taskNumber || ""} შეიქმნა, თუმცა შემდეგი ფაილების ატვირთვა ვერ მოხერხდა: ${failedFiles.map((f) => f.name).join(", ")}. შეგიძლიათ სცადოთ ხელახლა.`
+            );
+            return;
           }
         }
 
@@ -493,13 +551,30 @@ function TaskModalForm({
 
         // Upload any newly attached files
         if (selectedFiles.length > 0) {
+          const failedFiles: File[] = [];
           for (const file of selectedFiles) {
-            const formData = new FormData();
-            formData.append("file", file);
-            await fetch(`/api/tasks/${initialTask.id}/attachments`, {
-              method: "POST",
-              body: formData,
-            });
+            try {
+              const formData = new FormData();
+              formData.append("file", file);
+              const uploadRes = await fetch(`/api/tasks/${initialTask.id}/attachments`, {
+                method: "POST",
+                body: formData,
+              });
+              if (!uploadRes.ok) {
+                failedFiles.push(file);
+              }
+            } catch {
+              failedFiles.push(file);
+            }
+          }
+
+          if (failedFiles.length > 0) {
+            onSuccess();
+            setSelectedFiles(failedFiles);
+            setError(
+              `ტასკი განახლდა, თუმცა შემდეგი ფაილების ატვირთვა ვერ მოხერხდა: ${failedFiles.map((f) => f.name).join(", ")}. შეგიძლიათ სცადოთ ხელახლა.`
+            );
+            return;
           }
         }
 
@@ -1198,6 +1273,8 @@ function TaskModalForm({
                 <Loader2 size={15} className="animate-spin" />
                 <span>ინახება...</span>
               </>
+            ) : savedTaskId ? (
+              <span>დარჩენილი ფაილების ატვირთვა</span>
             ) : mode === "create" ? (
               <span>დავალების შექმნა</span>
             ) : (

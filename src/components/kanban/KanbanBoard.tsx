@@ -983,7 +983,7 @@ function KanbanTaskBox({
       }
     }
     return `SSP-${task.taskNumber}`;
-  }, [task.project?.name, task.taskNumber]);
+  }, [task.project, task.taskNumber]);
 
   const primaryAssignee = task.assignments?.[0]?.user;
 

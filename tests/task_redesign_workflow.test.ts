@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { prisma } from "../src/lib/prisma";
+import { testPrisma as prisma } from "./test-db";
 import { Role, TaskType, Priority, TaskStatus } from "@prisma/client";
 
 test("Task Redesign Workflow: Optional Deadlines, Sequential Assignees & Deadline Requests", async (t) => {

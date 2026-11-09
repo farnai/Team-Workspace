@@ -144,6 +144,8 @@ function formatTimelineActivity(act: TimelineActivity): {
       };
     case "STAGE_CREATED":
       return { label: "ახალი სამუშაო ეტაპი შეიქმნა" };
+    case "STAGE_DELETED":
+      return { label: "სამუშაო ეტაპი წაიშალა", details: act.reason || null };
     case "STAGE_REORDERED":
       return { label: "ეტაპების რიგითობა შეიცვალა" };
     case "SUBTASK_COMPLETED":
@@ -152,8 +154,12 @@ function formatTimelineActivity(act: TimelineActivity): {
       return { label: "საბტასკი ხელახლა გაიხსნა" };
     case "SUBTASK_CREATED":
       return { label: "ახალი საბტასკი დაემატა" };
+    case "SUBTASK_DELETED":
+      return { label: "საბტასკი წაიშალა", details: act.reason || null };
     case "COMMENT_ADDED":
       return { label: "ახალი კომენტარი დაემატა" };
+    case "COMMENT_DELETED":
+      return { label: "კომენტარი წაიშალა", details: act.reason || null };
     case "ATTACHMENT_ADDED":
       return { label: "ფაილი / გარე ბმული დაემატა" };
     case "ATTACHMENT_REMOVED":

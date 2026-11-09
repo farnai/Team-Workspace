@@ -63,6 +63,7 @@ export default function WorkspacePage({
         view &&
         [
           "overview",
+          "projects",
           "timeline",
           "backlog",
           "archive",

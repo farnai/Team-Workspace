@@ -32,6 +32,8 @@ export function TaskActivitySection({ auditEvents }: TaskActivitySectionProps) {
         return "დღიური სამუშაო ჩანაწერი დაემატა";
       case "STAGE_CREATED":
         return "სამუშაო ეტაპი შეიქმნა";
+      case "STAGE_DELETED":
+        return "სამუშაო ეტაპი წაიშალა";
       case "STAGE_COMPLETED":
         return "ეტაპი დასრულდა და გადაეცა შემდეგ შემსრულებელს";
       case "STAGE_REORDERED":
@@ -42,6 +44,10 @@ export function TaskActivitySection({ auditEvents }: TaskActivitySectionProps) {
         return "საბტასკი შესრულდა";
       case "SUBTASK_REOPENED":
         return "საბტასკი ხელახლა გაიხსნა";
+      case "SUBTASK_DELETED":
+        return "საბტასკი წაიშალა";
+      case "COMMENT_DELETED":
+        return "კომენტარი წაიშალა";
       case "DEADLINE_CHANGED":
         return "დედლაინი შეიცვალა ადმინისტრატორის მიერ";
       case "STATUS_CHANGED":
