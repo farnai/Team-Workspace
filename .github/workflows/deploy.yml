@@ -25,3 +25,4 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           echo "109.205.46.21 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJOB1h7WFTU3k1770EppPidd1+XGqe4N3MMAuW9LIxSq" > ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$USER@$HOST"
+

@@ -21,3 +21,4 @@ ALTER TYPE "AuditAction" ADD VALUE IF NOT EXISTS 'TASK_DELETED';
 -- AlterTable audit_events: change taskId fk to ON DELETE SET NULL
 ALTER TABLE "audit_events" DROP CONSTRAINT IF EXISTS "audit_events_taskId_fkey";
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "tasks"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
