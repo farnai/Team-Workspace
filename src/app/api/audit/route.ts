@@ -5,7 +5,7 @@ import { Prisma, AuditAction } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth();
+    const authUser = await requireAuth();
 
     const { searchParams } = new URL(req.url);
     const taskId = searchParams.get("taskId");
@@ -14,11 +14,20 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
-    const limit = Math.min(parseInt(searchParams.get("limit") || "100", 10), 500);
-    const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
+    const rawLimit = searchParams.get("limit");
+    const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 100;
+    const limit = Math.min(Math.max(isNaN(parsedLimit) ? 100 : parsedLimit, 1), 500);
+    const rawPage = searchParams.get("page");
+    const parsedPage = rawPage ? parseInt(rawPage, 10) : 1;
+    const page = Math.max(isNaN(parsedPage) ? 1 : parsedPage, 1);
     const skip = (page - 1) * limit;
 
     const where: Prisma.AuditEventWhereInput = {};
+
+    // Non-admin users cannot see administrative user events (e.g. password resets, user status changes)
+    if (authUser.role !== "ADMIN") {
+      where.entityType = { not: "USER" };
+    }
 
     if (taskId) {
       where.taskId = taskId;
@@ -36,14 +45,22 @@ export async function GET(req: NextRequest) {
 
     // Date range filter
     if (startDate || endDate) {
-      where.createdAt = {};
+      const dateFilter: Prisma.DateTimeFilter = {};
       if (startDate) {
-        where.createdAt.gte = new Date(startDate);
+        const d = new Date(startDate);
+        if (!isNaN(d.getTime())) {
+          dateFilter.gte = d;
+        }
       }
       if (endDate) {
         const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
+        if (!isNaN(end.getTime())) {
+          end.setHours(23, 59, 59, 999);
+          dateFilter.lte = end;
+        }
+      }
+      if (dateFilter.gte || dateFilter.lte) {
+        where.createdAt = dateFilter;
       }
     }
 

@@ -29,7 +29,7 @@ import {
   Clock,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus, SubtaskStatus, Department } from "@prisma/client";
-import { formatGeorgianDate, formatGeorgianDateShort } from "@/lib/dateUtils";
+import { formatGeorgianDate, formatGeorgianDateShort, isTaskOverdue } from "@/lib/dateUtils";
 import { DepartmentBadge } from "@/lib/departments";
 import { TaskCommentsSection } from "./task-details/TaskCommentsSection";
 import { TaskAttachmentsSection } from "./task-details/TaskAttachmentsSection";
@@ -364,12 +364,32 @@ export function TaskDetailsDrawer({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
+        // If a child modal/preview is open, do not close the entire drawer
+        if (
+          isPauseModalOpen ||
+          isBlockModalOpen ||
+          isRescheduleModalOpen ||
+          showDeleteConfirm ||
+          Boolean(pastedFile) ||
+          Boolean(previewImageUrl)
+        ) {
+          return;
+        }
         onClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [
+    isOpen,
+    onClose,
+    isPauseModalOpen,
+    isBlockModalOpen,
+    isRescheduleModalOpen,
+    showDeleteConfirm,
+    pastedFile,
+    previewImageUrl,
+  ]);
 
   // --- Handlers ---
 
@@ -380,7 +400,7 @@ export function TaskDetailsDrawer({
       const res = await fetch(`/api/stages/${stageId}/complete`, {
         method: "POST",
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.error || "ეტაპის დასრულება ვერ მოხერხდა");
       }
@@ -403,7 +423,7 @@ export function TaskDetailsDrawer({
 
     try {
       // Swap positions
-      await Promise.all([
+      const [res1, res2] = await Promise.all([
         fetch(`/api/stages/${currentStage.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -415,6 +435,9 @@ export function TaskDetailsDrawer({
           body: JSON.stringify({ position: currentStage.position }),
         }),
       ]);
+      if (!res1.ok || !res2.ok) {
+        throw new Error("ეტაპების თანამიმდევრობის განახლება ვერ მოხერხდა");
+      }
       await refreshTaskDetails();
       onTaskUpdated();
     } catch (err: unknown) {
@@ -1553,7 +1576,7 @@ export function TaskDetailsDrawer({
                       const isStageOverdue =
                         stage.isActive &&
                         Boolean(stage.deadline) &&
-                        new Date(stage.deadline!) < new Date();
+                        isTaskOverdue(stage.deadline);
 
                       return (
                         <div

@@ -88,6 +88,13 @@ export async function PATCH(
         }
       }
 
+      // If password changed or account deactivated, immediately invalidate active sessions
+      if (result.data.password || result.data.isActive === false) {
+        await tx.session.deleteMany({
+          where: { userId: id },
+        });
+      }
+
       return tx.user.update({
         where: { id },
         data: dataToUpdate,

@@ -13,7 +13,7 @@ import {
   ChevronRight,
   Check,
 } from "lucide-react";
-import { formatGeorgianDateShort } from "@/lib/dateUtils";
+import { formatGeorgianDateShort, isTaskOverdue } from "@/lib/dateUtils";
 
 interface TaskSummary {
   id: string;
@@ -135,9 +135,7 @@ export function MyWorkDashboard({
   };
 
   const renderTaskCard = (task: TaskSummary, categoryNote?: string) => {
-    const isOverdue = Boolean(
-      task.deadline && new Date(task.deadline) < new Date() && task.status !== "DONE"
-    );
+    const isOverdue = isTaskOverdue(task.deadline, task.status);
 
     // Active stage
     const activeStage = task.stages?.find((s) => s.isActive && !s.isCompleted);

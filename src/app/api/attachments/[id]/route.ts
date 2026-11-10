@@ -77,19 +77,6 @@ export async function DELETE(
       return NextResponse.json({ error: "არ გაქვთ ამ ფაილის წაშლის უფლება" }, { status: 403 });
     }
 
-    // If local file, delete from disk safely
-    if (!attachment.isExternal) {
-      const safeStoredName = path.basename(attachment.storedName);
-      const filePath = path.normalize(path.join(UPLOAD_DIR, safeStoredName));
-      if (filePath.startsWith(path.normalize(UPLOAD_DIR))) {
-        try {
-          await fs.unlink(filePath);
-        } catch {
-          // ignore if already deleted
-        }
-      }
-    }
-
     await prisma.$transaction(async (tx) => {
       await tx.attachment.delete({
         where: { id },
@@ -110,6 +97,19 @@ export async function DELETE(
         tx,
       });
     });
+
+    // If local file, delete from disk safely AFTER transaction succeeds
+    if (!attachment.isExternal && attachment.storedName) {
+      const safeStoredName = path.basename(attachment.storedName);
+      const filePath = path.normalize(path.join(UPLOAD_DIR, safeStoredName));
+      if (filePath.startsWith(path.normalize(UPLOAD_DIR))) {
+        try {
+          await fs.unlink(filePath);
+        } catch {
+          // ignore if already deleted
+        }
+      }
+    }
 
     return NextResponse.json({ success: true, message: "ფაილი წარმატებით წაიშალა" });
   } catch (error: unknown) {

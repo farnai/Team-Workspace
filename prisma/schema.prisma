@@ -75,6 +75,7 @@ enum AuditAction {
   USER_STATUS_CHANGED
   CALENDAR_UPDATED
   DEPARTMENT_CHANGED
+  TASK_DELETED
 }
 
 model User {
@@ -323,7 +324,7 @@ model AuditEvent {
   reason     String?
   createdAt  DateTime    @default(now())
 
-  task  Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task  Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
   actor User  @relation("AuditActor", fields: [actorId], references: [id])
 
   @@index([taskId])

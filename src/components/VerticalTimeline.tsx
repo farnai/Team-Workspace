@@ -18,6 +18,7 @@ import {
   getDateRelativeLabel,
   formatGeorgianDateShort,
   getTbilisiTodayString,
+  isTaskOverdue,
 } from "@/lib/dateUtils";
 import { DatePicker } from "@/components/ui/DatePicker";
 
@@ -616,11 +617,7 @@ export function VerticalTimeline({
                           t.isMultiDay && !t.isSpanStart
                         );
 
-                        const isOverdue =
-                          Boolean(t.deadline) &&
-                          new Date(t.deadline!) < new Date() &&
-                          t.status !== "DONE" &&
-                          t.status !== "CANCELLED";
+                        const isOverdue = isTaskOverdue(t.deadline, t.status);
 
                         const isDeadlineTomorrow = (() => {
                           if (!t.deadline || t.status === "DONE" || t.status === "CANCELLED") return false;

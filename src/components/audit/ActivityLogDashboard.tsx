@@ -100,6 +100,13 @@ const ACTION_MAP: Record<AuditAction, ActionMeta> = {
     bgClass: "bg-stone-100 text-stone-700",
     icon: Layers,
   },
+  TASK_DELETED: {
+    label: "დავალების წაშლა",
+    category: "task",
+    colorClass: "text-rose-700 border-rose-200",
+    bgClass: "bg-rose-50 text-rose-700",
+    icon: Trash2,
+  },
   DEPARTMENT_CHANGED: {
     label: "გუნდის ცვლილება",
     category: "task",
@@ -323,6 +330,8 @@ export function ActivityLogDashboard({
   useEffect(() => {
     let ignore = false;
     const load = async () => {
+      setIsLoading(true);
+      setError(null);
       try {
         const params = new URLSearchParams();
         params.set("limit", "200");

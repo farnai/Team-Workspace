@@ -285,6 +285,12 @@ test("Isolated Integration Test: Users, Tasks, Deadline Governance, Workflow & P
   assert.match(notif.message, /დეველოპმენტი/);
 
   // Clean up test data in the test database
+  await testPrisma.auditEvent.deleteMany({
+    where: { actorId: { in: [adminUser.id, normalUser.id, coworker.id] } },
+  });
+  await testPrisma.notification.deleteMany({
+    where: { userId: { in: [adminUser.id, normalUser.id, coworker.id] } },
+  });
   await testPrisma.project.delete({ where: { id: project.id } });
   await testPrisma.user.deleteMany({
     where: { id: { in: [adminUser.id, normalUser.id, coworker.id] } },

@@ -86,6 +86,13 @@ const DANGEROUS_EXTENSIONS = new Set([
   ".reg",
   ".hta",
   ".cpl",
+  ".html",
+  ".htm",
+  ".xhtml",
+  ".svg",
+  ".js",
+  ".mjs",
+  ".cjs",
 ]);
 
 /**

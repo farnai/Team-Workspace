@@ -19,10 +19,9 @@ interface LoginAttemptRecord {
 
 const loginAttempts = new Map<string, LoginAttemptRecord>();
 
-function getClientIdentifier(req: NextRequest, email: string): string {
+function getClientIp(req: NextRequest): string {
   const forwarded = req.headers.get("x-forwarded-for");
-  const ip = forwarded ? forwarded.split(",")[0].trim() : "127.0.0.1";
-  return `${ip}:${email.toLowerCase().trim()}`;
+  return forwarded ? forwarded.split(",")[0].trim() : "127.0.0.1";
 }
 
 function checkRateLimit(key: string): { isBlocked: boolean; retryAfterSeconds: number } {
@@ -48,7 +47,7 @@ function checkRateLimit(key: string): { isBlocked: boolean; retryAfterSeconds: n
   return { isBlocked: false, retryAfterSeconds: 0 };
 }
 
-function recordFailedAttempt(key: string): void {
+function recordFailedAttempt(key: string, maxAttempts = 5): void {
   const now = Date.now();
   const existing = loginAttempts.get(key);
 
@@ -56,7 +55,7 @@ function recordFailedAttempt(key: string): void {
     loginAttempts.set(key, { count: 1, firstAttemptAt: now });
   } else {
     existing.count += 1;
-    if (existing.count >= 5) {
+    if (existing.count >= maxAttempts) {
       existing.blockedUntil = now + 60_000;
     }
   }
@@ -71,8 +70,10 @@ function recordFailedAttempt(key: string): void {
   }
 }
 
-function recordSuccessfulAttempt(key: string): void {
-  loginAttempts.delete(key);
+function recordSuccessfulAttempt(...keys: string[]): void {
+  for (const k of keys) {
+    loginAttempts.delete(k);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -88,11 +89,17 @@ export async function POST(req: NextRequest) {
     }
 
     const { email, password } = result.data;
-    const rateLimitKey = getClientIdentifier(req, email);
+    const normalizedEmail = email.toLowerCase().trim();
+    const ip = getClientIp(req);
+    const emailKey = `email:${normalizedEmail}`;
+    const ipKey = `ip:${ip}`;
 
-    // Rate limit check
-    const { isBlocked, retryAfterSeconds } = checkRateLimit(rateLimitKey);
-    if (isBlocked) {
+    // Rate limit check: both account-level and IP-level to prevent X-Forwarded-For bypass
+    const emailLimit = checkRateLimit(emailKey);
+    const ipLimit = checkRateLimit(ipKey);
+
+    if (emailLimit.isBlocked || ipLimit.isBlocked) {
+      const retryAfterSeconds = Math.max(emailLimit.retryAfterSeconds, ipLimit.retryAfterSeconds);
       return NextResponse.json(
         {
           error: "ძალიან ბევრი წარუმატებელი მცდელობა. გთხოვთ სცადოთ 1 წუთში.",
@@ -106,11 +113,12 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (!user || !user.isActive) {
-      recordFailedAttempt(rateLimitKey);
+      recordFailedAttempt(emailKey, 5);
+      recordFailedAttempt(ipKey, 20);
       return NextResponse.json(
         { error: "ელ.ფოსტა ან პაროლი არასწორია" },
         { status: 401 }
@@ -119,7 +127,8 @@ export async function POST(req: NextRequest) {
 
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
-      recordFailedAttempt(rateLimitKey);
+      recordFailedAttempt(emailKey, 5);
+      recordFailedAttempt(ipKey, 20);
       return NextResponse.json(
         { error: "ელ.ფოსტა ან პაროლი არასწორია" },
         { status: 401 }
@@ -127,7 +136,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Login successful: reset rate limiter
-    recordSuccessfulAttempt(rateLimitKey);
+    recordSuccessfulAttempt(emailKey, ipKey);
     await createSession(user.id);
 
     return NextResponse.json({

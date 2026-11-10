@@ -6,6 +6,8 @@ import { validateDeadlineModification, calculateAndSyncTaskProgress } from "@/li
 import { TaskType, Priority, TaskStatus, Department, Role, Prisma } from "@prisma/client";
 import { z } from "zod";
 import crypto from "crypto";
+import path from "path";
+import fs from "fs/promises";
 
 const updateTaskSchema = z.object({
   projectId: z.string().optional(),
@@ -33,7 +35,11 @@ const updateTaskSchema = z.object({
     .array(
       z.object({
         name: z.string().optional().default(""),
-        url: z.string(),
+        url: z
+          .string()
+          .refine((val) => val.startsWith("http://") || val.startsWith("https://"), {
+            message: "ბმული უნდა იწყებოდეს http:// ან https:// პრეფიქსით",
+          }),
       })
     )
     .optional(),
@@ -157,7 +163,10 @@ export async function PATCH(
       where: { id },
       include: {
         assignments: true,
-        stages: { orderBy: { position: "asc" } },
+        stages: {
+          orderBy: { position: "asc" },
+          include: { assignments: true },
+        },
       },
     });
 
@@ -166,6 +175,17 @@ export async function PATCH(
     }
 
     const isAdmin = user.role === Role.ADMIN;
+    const isCreator = existing.createdById === user.id;
+    const isAssignee = existing.assignments.some((a) => a.userId === user.id);
+    const isStageAssignee = existing.stages.some((s) => s.assignments?.some((a) => a.userId === user.id));
+    const isAuthorized = isAdmin || isCreator || isAssignee || isStageAssignee;
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: "არ გაქვთ ამ დავალების რედაქტირების უფლება" },
+        { status: 403 }
+      );
+    }
 
     // Check deadline authorization
     const incomingDeadline =
@@ -398,6 +418,19 @@ export async function PATCH(
             const existingStage = existingStages[i];
 
             if (existingStage) {
+              const stageDeadlineCheck = validateDeadlineModification({
+                isDeadlineLocked: existingStage.deadlineLocked,
+                existingDeadline: existingStage.deadline,
+                incomingDeadline: parsedStageDeadline,
+                isAdmin,
+              });
+
+              if (!stageDeadlineCheck.allowed) {
+                throw new Error(
+                  `ეტაპის ("${existingStage.title}") ${stageDeadlineCheck.error || "დედლაინის შეცვლა შეუძლია მხოლოდ ადმინისტრატორს"}`
+                );
+              }
+
               await tx.workflowStage.update({
                 where: { id: existingStage.id },
                 data: {
@@ -607,6 +640,11 @@ export async function PATCH(
       }
 
       if (assigneesChanged) {
+        const finalAssigneeIds =
+          data.assignees !== undefined
+            ? Array.from(new Set(data.assignees.map((a) => a.userId)))
+            : (data.assigneeIds || []);
+
         await logAuditEvent({
           taskId: id,
           actorId: user.id,
@@ -616,7 +654,7 @@ export async function PATCH(
           oldValues: {
             assigneeIds: existing.assignments.map((a) => a.userId),
           },
-          newValues: { assigneeIds: data.assigneeIds },
+          newValues: { assigneeIds: finalAssigneeIds },
           reason: "შემსრულებლების განახლება",
           tx,
         });
@@ -671,24 +709,45 @@ export async function DELETE(
       );
     }
 
-    // Log audit event without linking taskId to avoid cascade deletion
-    await logAuditEvent({
-      actorId: user.id,
-      action: "TASK_UPDATED",
-      entityType: "TASK",
-      entityId: id,
-      oldValues: {
-        title: existing.title,
-        taskNumber: existing.taskNumber,
-        status: existing.status,
-      },
-      reason: `დავალება #${existing.taskNumber} ("${existing.title}") წაიშალა`,
+    // Find physical attachments to safely remove from disk after task deletion
+    const attachments = await prisma.attachment.findMany({
+      where: { taskId: id, isExternal: false },
+      select: { storedName: true },
     });
 
-    // Delete task (all cascades will automatically remove stages, subtasks, assignments, etc.)
-    await prisma.task.delete({
-      where: { id },
+    await prisma.$transaction(async (tx) => {
+      // Log audit event within transaction (taskId foreign key is set to NULL automatically on task deletion)
+      await logAuditEvent({
+        taskId: id,
+        actorId: user.id,
+        action: "TASK_DELETED",
+        entityType: "TASK",
+        entityId: id,
+        oldValues: {
+          title: existing.title,
+          taskNumber: existing.taskNumber,
+          status: existing.status,
+        },
+        reason: `დავალება #${existing.taskNumber} ("${existing.title}") წაიშალა`,
+        tx,
+      });
+
+      // Delete task (cascades remove stages, subtasks, assignments, etc.)
+      await tx.task.delete({
+        where: { id },
+      });
     });
+
+    // Remove physical files from disk safely after successful DB transaction
+    const uploadDir = path.join(process.cwd(), "uploads");
+    for (const att of attachments) {
+      try {
+        const filePath = path.join(uploadDir, path.basename(att.storedName));
+        await fs.unlink(filePath).catch(() => {});
+      } catch {
+        // ignore
+      }
+    }
 
     return NextResponse.json({
       success: true,

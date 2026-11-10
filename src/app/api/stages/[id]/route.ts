@@ -38,7 +38,10 @@ export async function PATCH(
 
     const existing = await prisma.workflowStage.findUnique({
       where: { id: stageId },
-      include: { assignments: true },
+      include: {
+        assignments: true,
+        task: { select: { createdById: true } },
+      },
     });
 
     if (!existing) {
@@ -46,6 +49,24 @@ export async function PATCH(
     }
 
     const isAdmin = user.role === Role.ADMIN;
+    const isCreator = existing.task?.createdById === user.id;
+    const isAssignee = existing.assignments.some((a) => a.userId === user.id);
+    const isAuthorized = isAdmin || isCreator || isAssignee;
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: "არ გაქვთ ამ ეტაპის რედაქტირების უფლება" },
+        { status: 403 }
+      );
+    }
+
+    // Only Admin or Creator can change stage active status or reorder positions
+    if ((data.isActive !== undefined || data.position !== undefined) && !isAdmin && !isCreator) {
+      return NextResponse.json(
+        { error: "ეტაპის გააქტიურების ან თანამიმდევრობის შეცვლის უფლება აქვს მხოლოდ ადმინს ან ტასკის შემქმნელს" },
+        { status: 403 }
+      );
+    }
     const incomingDeadline =
       data.deadline !== undefined
         ? data.deadline === null

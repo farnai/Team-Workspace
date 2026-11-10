@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus } from "@prisma/client";
 import { BacklogTask } from "@/components/SharedBacklog";
+import { isTaskOverdue } from "@/lib/dateUtils";
 
 interface ProjectOption {
   id: string;
@@ -224,12 +225,7 @@ export function ReportsDashboard({
     ).length;
 
     // Overdue tasks: non-completed tasks whose deadline has arrived/passed
-    const overdueTasks = filteredTasks.filter((t) => {
-      if (t.status === TaskStatus.DONE || t.status === TaskStatus.CANCELLED) return false;
-      if (!t.deadline) return false;
-      const d = new Date(t.deadline);
-      return d < now;
-    });
+    const overdueTasks = filteredTasks.filter((t) => isTaskOverdue(t.deadline, t.status));
     const overdue = overdueTasks.length;
 
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -748,13 +744,7 @@ export function ReportsDashboard({
           </div>
           <div className="space-y-2">
             {filteredTasks
-              .filter(
-                (t) =>
-                  Boolean(t.deadline) &&
-                  new Date(t.deadline!) < new Date() &&
-                  t.status !== TaskStatus.DONE &&
-                  t.status !== TaskStatus.CANCELLED
-              )
+              .filter((t) => isTaskOverdue(t.deadline, t.status))
               .map((t) => (
                 <div
                   key={t.id}

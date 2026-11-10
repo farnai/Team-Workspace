@@ -156,13 +156,14 @@ export function Header({
         <div className="relative flex items-center">
           <Search size={16} className="absolute left-3.5 text-stone-400" />
           <input
+            id="global-search-input"
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="ძებნა (ტასკი, ადამიანი, ID...)"
             className="w-full pl-9 pr-14 py-2 bg-stone-50/80 border border-stone-200/90 rounded-full text-xs placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
           />
-          <kbd className="absolute right-3 px-1.5 py-0.5 text-[10px] font-semibold text-stone-400 bg-white border border-stone-200 rounded shadow-2xs">
+          <kbd className="absolute right-3 px-1.5 py-0.5 text-[10px] font-semibold text-stone-400 bg-white border border-stone-200 rounded shadow-2xs pointer-events-none">
             Ctrl K
           </kbd>
         </div>

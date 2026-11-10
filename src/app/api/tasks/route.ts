@@ -29,7 +29,11 @@ const createTaskSchema = z.object({
     .array(
       z.object({
         name: z.string().optional().default(""),
-        url: z.string(),
+        url: z
+          .string()
+          .refine((val) => val.startsWith("http://") || val.startsWith("https://"), {
+            message: "ბმული უნდა იწყებოდეს http:// ან https:// პრეფიქსით",
+          }),
       })
     )
     .optional(),

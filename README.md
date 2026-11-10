@@ -35,7 +35,7 @@
 | **Styling** | Tailwind CSS + Lucide Icons |
 | **Database & ORM** | PostgreSQL 16 + Prisma ORM |
 | **Authentication** | Server-Side HTTP-Only Cryptographic Sessions + bcryptjs |
-| **Validation** | Zod + React Hook Form |
+| **Validation** | Zod Schema Validation |
 | **Timezone** | `Asia/Tbilisi` (UTC+4) |
 | **Containerization** | Docker & Docker Compose |
 
@@ -83,7 +83,7 @@ npm run dev
 სისტემის საწყისი ინსტალაცია შეიცავს ერთადერთ სუფთა ადმინისტრატორს:
 
 - **ელ-ფოსტა (Email):** `admin@team.local`
-- **პაროლი (Password):** `admin123`
+- **საწყისი დროებითი პაროლი (Initial Password):** `admin123` *(გთხოვთ შეცვალოთ პირველივე შესვლისთანავე)*
 - **როლი (Role):** `ADMIN`
 
 ავტორიზაციის შემდეგ ადმინისტრატორს შეუძლია მომხმარებლების მართვის პანელიდან (`/admin/users`) დაამატოს გუნდის წევრები.
@@ -115,7 +115,7 @@ npm run dev
 ## 📁 დოკუმენტაცია (Documentation)
 
 სრული დოკუმენტაცია იხილეთ `docs/` დირექტორიაში:
-- [`docs/ARCHITECTURE.md`](file:///c:/Users/fiord/OneDrive/Desktop/Team-Workspace/docs/ARCHITECTURE.md) — სისტემური არქიტექტურა, სერვისები და ბიზნეს წესები.
-- [`docs/DATA_MODEL.md`](file:///c:/Users/fiord/OneDrive/Desktop/Team-Workspace/docs/DATA_MODEL.md) — მონაცემთა მოდელი, ER დიაგრამა და Prisma სქემა.
-- [`docs/PRODUCT_REQUIREMENTS.md`](file:///c:/Users/fiord/OneDrive/Desktop/Team-Workspace/docs/PRODUCT_REQUIREMENTS.md) — პროდუქტის მოთხოვნები და როლების მატრიცა.
-- [`docs/IMPLEMENTATION_PLAN.md`](file:///c:/Users/fiord/OneDrive/Desktop/Team-Workspace/docs/IMPLEMENTATION_PLAN.md) — იმპლემენტაციისა და სტაბილიზაციის გეგმა.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — სისტემური არქიტექტურა, სერვისები და ბიზნეს წესები.
+- [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) — მონაცემთა მოდელი, ER დიაგრამა და Prisma სქემა.
+- [`docs/PRODUCT_REQUIREMENTS.md`](docs/PRODUCT_REQUIREMENTS.md) — პროდუქტის მოთხოვნები და როლების მატრიცა.
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — იმპლემენტაციისა და სტაბილიზაციის გეგმა.

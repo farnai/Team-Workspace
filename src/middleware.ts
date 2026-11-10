@@ -22,10 +22,12 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // If already authenticated and visiting /login, redirect to main workspace
+  // If visiting /login, only redirect to home if not carrying error/logout signal
   if (token && pathname === "/login") {
-    const homeUrl = new URL("/", req.url);
-    return NextResponse.redirect(homeUrl);
+    if (!req.nextUrl.searchParams.has("error") && !req.nextUrl.searchParams.has("logout")) {
+      const homeUrl = new URL("/", req.url);
+      return NextResponse.redirect(homeUrl);
+    }
   }
 
   return NextResponse.next();

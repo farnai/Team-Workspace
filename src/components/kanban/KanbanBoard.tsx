@@ -51,6 +51,7 @@ interface KanbanBoardProps {
   users: UserOption[];
   isAdmin: boolean;
   onNavigateToTimeline?: () => void;
+  externalSearchQuery?: string;
 }
 
 type KanbanColumnId = "TODO" | "IN_PROGRESS" | "DONE";
@@ -78,6 +79,7 @@ export function KanbanBoard({
   projects,
   users,
   onNavigateToTimeline,
+  externalSearchQuery,
 }: KanbanBoardProps) {
   // View mode switcher: Board (დაფა) vs Table (ცხრილი) — default to board
   const [viewMode, setViewMode] = useState<"board" | "table">("board");
@@ -118,12 +120,12 @@ export function KanbanBoard({
       // Exclude cancelled tasks from active backlog
       if (task.status === TaskStatus.CANCELLED) return false;
 
-      // Search query (title, description, task number)
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const matchesTitle = task.title.toLowerCase().includes(query);
-        const matchesNumber = String(task.taskNumber).includes(query);
-        const matchesDesc = task.description?.toLowerCase().includes(query);
+      // Search query (from global header or internal input)
+      const effectiveSearch = (externalSearchQuery || searchQuery).toLowerCase().trim();
+      if (effectiveSearch) {
+        const matchesTitle = task.title.toLowerCase().includes(effectiveSearch);
+        const matchesNumber = String(task.taskNumber).includes(effectiveSearch);
+        const matchesDesc = task.description?.toLowerCase().includes(effectiveSearch);
         if (!matchesTitle && !matchesNumber && !matchesDesc) return false;
       }
 
@@ -150,7 +152,7 @@ export function KanbanBoard({
 
       return true;
     });
-  }, [tasks, searchQuery, selectedProject, selectedDepartment, selectedPriority, selectedUser]);
+  }, [tasks, searchQuery, externalSearchQuery, selectedProject, selectedDepartment, selectedPriority, selectedUser]);
 
   // Status Counts for Tabs
   const counts = useMemo(() => {
@@ -336,6 +338,14 @@ export function KanbanBoard({
     if (targetCol === "TODO") {
       targetStatus = TaskStatus.BACKLOG;
     } else if (targetCol === "IN_PROGRESS") {
+      // If task is already active/paused/blocked in the in-progress column, don't overwrite silently
+      if (
+        task.status === TaskStatus.IN_PROGRESS ||
+        task.status === TaskStatus.PAUSED ||
+        task.status === TaskStatus.BLOCKED
+      ) {
+        return;
+      }
       targetStatus = TaskStatus.IN_PROGRESS;
     } else if (targetCol === "DONE") {
       targetStatus = TaskStatus.DONE;

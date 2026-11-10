@@ -126,3 +126,14 @@ export function getDateRelativeLabel(dateInput: Date | string): string | null {
   if (targetStr === yesterdayStr) return "გუშინ";
   return null;
 }
+
+export function isTaskOverdue(deadline: Date | string | null | undefined, status?: string): boolean {
+  if (!deadline) return false;
+  if (status === "DONE" || status === "CANCELLED") return false;
+  const targetStr =
+    typeof deadline === "string" && deadline.length >= 10
+      ? deadline.slice(0, 10)
+      : format(new Date(deadline), "yyyy-MM-dd");
+  const todayStr = getTbilisiTodayString();
+  return targetStr < todayStr;
+}

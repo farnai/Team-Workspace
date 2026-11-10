@@ -23,7 +23,6 @@ import { format } from "date-fns";
 import { getTbilisiTodayDate } from "@/lib/dateUtils";
 import {
   Loader2,
-  History,
 } from "lucide-react";
 
 interface CurrentUser {
@@ -134,13 +133,15 @@ export default function WorkspacePage({
           ]);
 
         if (!userRes.ok) {
-          router.push("/login");
+          document.cookie = "tw_session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          router.push("/login?error=unauthorized");
           return;
         }
 
-        const userData = await userRes.json();
+        const userData = await userRes.json().catch(() => ({}));
         if (!userData.user) {
-          router.push("/login");
+          document.cookie = "tw_session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          router.push("/login?error=unauthorized");
           return;
         }
 
@@ -221,6 +222,51 @@ export default function WorkspacePage({
     };
   }, [currentUser, currentDate, timelineMode]);
 
+  // Browser History (Back / Forward) Navigation Listener
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      const view = url.searchParams.get("view");
+      const validViews: NavView[] = [
+        "overview",
+        "projects",
+        "timeline",
+        "backlog",
+        "archive",
+        "my-work",
+        "workload",
+        "reports",
+        "activity-log",
+        "users",
+        "settings",
+      ];
+      if (view && validViews.includes(view as NavView)) {
+        setCurrentView(view as NavView);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  // Global Ctrl+K / Cmd+K Search Hotkey
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        const input = document.getElementById("global-search-input") as HTMLInputElement | null;
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Refresh Notifications
   const refreshNotifications = async () => {
     try {
@@ -251,7 +297,7 @@ export default function WorkspacePage({
   // Synchronization Callback when task is created or updated
   const handleTaskSaved = async () => {
     try {
-      const dateParam = currentDate.toISOString().split("T")[0];
+      const dateParam = format(currentDate, "yyyy-MM-dd");
       const [tasksRes, timelineRes, metricsRes, projRes] = await Promise.all([
         fetch("/api/tasks"),
         fetch(`/api/timeline?date=${dateParam}&mode=${timelineMode}&days=14`),
@@ -409,6 +455,7 @@ export default function WorkspacePage({
                 selectedTaskId={selectedTaskId}
                 projects={projects}
                 users={users}
+                refreshKey={workloadRefreshKey}
                 onOpenNewTask={handleOpenNewTask}
               />
             </div>
@@ -493,6 +540,7 @@ export default function WorkspacePage({
                 projects={projects}
                 users={users}
                 isAdmin={currentUser.role === "ADMIN"}
+                externalSearchQuery={searchQuery}
                 onNavigateToTimeline={() => {
                   setCurrentView("timeline");
                   if (typeof window !== "undefined") {
@@ -519,6 +567,7 @@ export default function WorkspacePage({
                 currentUserId={currentUser.id}
                 onSelectTask={handleSelectTask}
                 selectedTaskId={selectedTaskId}
+                refreshKey={workloadRefreshKey}
               />
             </div>
           ) : currentView === "workload" ? (

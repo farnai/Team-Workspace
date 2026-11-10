@@ -20,7 +20,7 @@ import {
   Folder,
 } from "lucide-react";
 import Image from "next/image";
-import { formatGeorgianDateShort } from "@/lib/dateUtils";
+import { formatGeorgianDateShort, isTaskOverdue } from "@/lib/dateUtils";
 import { Department } from "@prisma/client";
 import { DepartmentBadge } from "@/lib/departments";
 
@@ -557,11 +557,7 @@ export function ProjectsView({
                 const completedTasks = projectTasks.filter((t) => t.status === "DONE").length;
                 const inProgressTasks = projectTasks.filter((t) => t.status === "IN_PROGRESS").length;
                 const overdueTasks = projectTasks.filter(
-                  (t) =>
-                    t.deadline &&
-                    new Date(t.deadline) < new Date() &&
-                    t.status !== "DONE" &&
-                    t.status !== "CANCELLED"
+                  (t) => isTaskOverdue(t.deadline, t.status)
                 ).length;
                 const progressPct =
                   totalTasks > 0

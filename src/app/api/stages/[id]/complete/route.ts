@@ -21,6 +21,9 @@ export async function POST(
     if (err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
     }
+    if (err.message.includes("არ გაქვთ") || err.message.includes("უფლება")) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
     return NextResponse.json({ error: err.message || "სერვერის შეცდომა" }, { status: 400 });
   }
 }
