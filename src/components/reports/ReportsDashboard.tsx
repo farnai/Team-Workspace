@@ -33,6 +33,28 @@ interface ReportsDashboardProps {
 
 type Timeframe = "7D" | "30D" | "90D" | "ALL";
 
+const GEORGIAN_MONTHS = [
+  "იანვარი",
+  "თებერვალი",
+  "მარტი",
+  "აპრილი",
+  "მაისი",
+  "ივნისი",
+  "ივლისი",
+  "აგვისტო",
+  "სექტემბერი",
+  "ოქტომბერი",
+  "ნოემბერი",
+  "დეკემბერი",
+];
+
+function formatGeorgianDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  return `${d.getDate()} ${GEORGIAN_MONTHS[d.getMonth()]}`;
+}
+
 export function ReportsDashboard({
   tasks,
   projects,
@@ -48,6 +70,51 @@ export function ReportsDashboard({
     const m = String(now.getMonth() + 1).padStart(2, "0");
     return `${y}-${m}`;
   });
+
+  // Dynamically generate available month options from current date and tasks
+  const availableMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+    const now = new Date();
+    const currentY = now.getFullYear();
+    const currentM = now.getMonth();
+
+    // Include current month, past 6 months, and next 2 months
+    for (let i = -6; i <= 2; i++) {
+      const d = new Date(currentY, currentM + i, 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      monthsSet.add(`${y}-${m}`);
+    }
+
+    // Include any months from actual tasks
+    tasks.forEach((t) => {
+      [t.createdAt, t.startDate, t.deadline, t.completedAt].forEach((dateStr) => {
+        if (dateStr) {
+          const d = new Date(dateStr);
+          if (!isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            monthsSet.add(`${y}-${m}`);
+          }
+        }
+      });
+    });
+
+    const currentKey = `${currentY}-${String(currentM + 1).padStart(2, "0")}`;
+    const sorted = Array.from(monthsSet).sort().reverse();
+
+    return sorted.map((key) => {
+      const [yStr, mStr] = key.split("-");
+      const year = parseInt(yStr, 10);
+      const monthIdx = parseInt(mStr, 10) - 1;
+      const monthName = GEORGIAN_MONTHS[monthIdx] || "";
+      const isCurrent = key === currentKey;
+      return {
+        key,
+        label: `${monthName} ${year}${isCurrent ? " (მიმდინარე თვე)" : ""}`,
+      };
+    });
+  }, [tasks]);
 
   // Calculate month interval bounds for selectedMonth
   const monthBounds = useMemo(() => {
@@ -82,9 +149,7 @@ export function ReportsDashboard({
         return false;
       }
 
-      // Monthly Interval Intersection Logic:
-      // If task interval intersects [monthStart, monthEnd], it is included!
-      // (e.g. Oct 27 - Nov 4 intersects both October and November)
+      // Monthly Interval Intersection Logic
       if (monthBounds) {
         const { start: monthStart, end: monthEnd } = monthBounds;
 
@@ -94,22 +159,29 @@ export function ReportsDashboard({
           ? new Date(task.createdAt)
           : null;
 
-        const taskEnd = task.completedAt
-          ? new Date(task.completedAt)
-          : task.deadline
-          ? new Date(task.deadline)
-          : null;
+        // If completed, task active lifespan ends at completedAt.
+        // If still incomplete, task work is ongoing today (now) or extends into future deadline!
+        const effectiveEnd =
+          task.status === TaskStatus.DONE
+            ? task.completedAt
+              ? new Date(task.completedAt)
+              : task.deadline
+              ? new Date(task.deadline)
+              : now
+            : task.deadline && new Date(task.deadline) > now
+            ? new Date(task.deadline)
+            : now;
 
-        if (taskStart && taskEnd) {
-          if (taskStart > monthEnd || taskEnd < monthStart) return false;
+        if (taskStart && effectiveEnd) {
+          if (taskStart > monthEnd || effectiveEnd < monthStart) return false;
         } else if (taskStart) {
           if (task.status !== TaskStatus.DONE) {
             if (taskStart > monthEnd) return false;
           } else {
             if (taskStart < monthStart || taskStart > monthEnd) return false;
           }
-        } else if (taskEnd) {
-          if (taskEnd < monthStart) return false;
+        } else if (effectiveEnd) {
+          if (effectiveEnd < monthStart) return false;
         }
       } else if (timeframe !== "ALL") {
         // Timeframe filter based on cutoffDate
@@ -151,29 +223,39 @@ export function ReportsDashboard({
       (t) => t.status === TaskStatus.BACKLOG || t.status === TaskStatus.PLANNED
     ).length;
 
-    // Overdue: Every month starts fresh ("ყველა თვიდან ახლიდან დაიწყოს ტასკებმაც ვადაგადაცილებულებმაც")
-    // Only deadlines falling within the selected month can be overdue for that month
-    const overdue = filteredTasks.filter((t) => {
+    // Overdue tasks: non-completed tasks whose deadline has arrived/passed
+    const overdueTasks = filteredTasks.filter((t) => {
       if (t.status === TaskStatus.DONE || t.status === TaskStatus.CANCELLED) return false;
       if (!t.deadline) return false;
       const d = new Date(t.deadline);
-      if (monthBounds) {
-        if (d < monthBounds.start || d > monthBounds.end) return false;
-        return d < now;
-      }
       return d < now;
-    }).length;
+    });
+    const overdue = overdueTasks.length;
 
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-    // On-Time Delivery Rate: Completed tasks that had a deadline and were completed on time
+    // On-Time Delivery calculation:
+    // Evaluate all tasks that had a deadline due by now or were completed
     const completedTasksWithDeadline = filteredTasks.filter(
       (t) => t.status === TaskStatus.DONE && Boolean(t.deadline)
     );
-    const onTimeCount = completedTasksWithDeadline.length; // If completed before/on deadline
+
+    const onTimeCompleted = completedTasksWithDeadline.filter((t) => {
+      if (!t.completedAt || !t.deadline) return true;
+      return new Date(t.completedAt) <= new Date(t.deadline);
+    }).length;
+
+    const lateCompleted = completedTasksWithDeadline.length - onTimeCompleted;
+
+    // Evaluated deadline commitments:
+    // Completed tasks with deadline + active overdue tasks
+    const totalEvaluatedDeadlines = completedTasksWithDeadline.length + overdue;
+
+    // On-time delivery rate: percentage of evaluated deadline commitments met on time
+    // If no commitments were due, defaults to 100%
     const onTimeRate =
-      completedTasksWithDeadline.length > 0
-        ? Math.round((onTimeCount / completedTasksWithDeadline.length) * 100)
+      totalEvaluatedDeadlines > 0
+        ? Math.round((onTimeCompleted / totalEvaluatedDeadlines) * 100)
         : 100;
 
     return {
@@ -183,6 +265,9 @@ export function ReportsDashboard({
       blocked,
       todo,
       overdue,
+      completedWithDeadline: completedTasksWithDeadline.length,
+      onTimeCompleted,
+      lateCompleted,
       completionRate,
       onTimeRate,
     };
@@ -190,6 +275,7 @@ export function ReportsDashboard({
 
   // Project Breakdown
   const projectStats = useMemo(() => {
+    const now = new Date();
     return projects.map((p) => {
       const pTasks = filteredTasks.filter((t) => t.projectId === p.id);
       const total = pTasks.length;
@@ -198,8 +284,9 @@ export function ReportsDashboard({
       const overdue = pTasks.filter(
         (t) =>
           Boolean(t.deadline) &&
-          new Date(t.deadline!) < new Date() &&
-          t.status !== TaskStatus.DONE
+          new Date(t.deadline!) < now &&
+          t.status !== TaskStatus.DONE &&
+          t.status !== TaskStatus.CANCELLED
       ).length;
       const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -218,6 +305,7 @@ export function ReportsDashboard({
 
   // Team Member Productivity
   const userStats = useMemo(() => {
+    const now = new Date();
     return users.map((u) => {
       const uTasks = filteredTasks.filter((t) =>
         t.assignments.some((a) => a.user.id === u.id)
@@ -225,6 +313,13 @@ export function ReportsDashboard({
       const total = uTasks.length;
       const completed = uTasks.filter((t) => t.status === TaskStatus.DONE).length;
       const inProgress = uTasks.filter((t) => t.status === TaskStatus.IN_PROGRESS).length;
+      const overdue = uTasks.filter(
+        (t) =>
+          Boolean(t.deadline) &&
+          new Date(t.deadline!) < now &&
+          t.status !== TaskStatus.DONE &&
+          t.status !== TaskStatus.CANCELLED
+      ).length;
       const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
       return {
@@ -234,6 +329,7 @@ export function ReportsDashboard({
         total,
         completed,
         inProgress,
+        overdue,
         progress,
       };
     });
@@ -320,12 +416,12 @@ export function ReportsDashboard({
             className="px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-bold text-stone-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer shadow-2xs"
             title="თვიური ფილტრაცია (ინტერვალის გადაკვეთა)"
           >
-            <option value="2026-11">ნოემბერი 2026 (მიმდინარე თვე)</option>
-            <option value="2026-10">ოქტომბერი 2026</option>
-            <option value="2026-09">სექტემბერი 2026</option>
-            <option value="2026-12">დეკემბერი 2026</option>
-            <option value="2027-01">იანვარი 2027</option>
             <option value="ALL">ყველა თვე (სრული ისტორია)</option>
+            {availableMonths.map((m) => (
+              <option key={m.key} value={m.key}>
+                {m.label}
+              </option>
+            ))}
           </select>
 
           {/* Project Dropdown */}
@@ -367,15 +463,43 @@ export function ReportsDashboard({
         <div className="p-4 bg-white rounded-2xl border border-stone-200/90 shadow-2xs">
           <div className="flex items-center justify-between text-stone-500 text-xs font-semibold mb-2">
             <span>ვადების დაცვა</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div
+              className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                metrics.onTimeRate >= 80
+                  ? "bg-emerald-50 text-emerald-600"
+                  : metrics.onTimeRate >= 50
+                  ? "bg-amber-50 text-amber-600"
+                  : "bg-rose-50 text-rose-600"
+              }`}
+            >
               <ShieldCheck size={16} />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-stone-900">
+          <div
+            className={`text-2xl sm:text-3xl font-black ${
+              metrics.onTimeRate >= 80
+                ? "text-stone-900"
+                : metrics.onTimeRate >= 50
+                ? "text-amber-600"
+                : "text-rose-600"
+            }`}
+          >
             {metrics.onTimeRate}%
           </div>
-          <div className="text-[11px] text-stone-500 mt-1">
-            დედლაინის გადაცილების გარეშე
+          <div className="text-[11px] mt-1">
+            {metrics.overdue > 0 ? (
+              <span className="text-rose-600 font-semibold">
+                {metrics.overdue} გადაცილებული დავალება
+              </span>
+            ) : metrics.lateCompleted > 0 ? (
+              <span className="text-amber-600 font-semibold">
+                {metrics.lateCompleted} დაგვიანებით შესრულებული
+              </span>
+            ) : (
+              <span className="text-emerald-600 font-semibold">
+                დედლაინის გადაცილების გარეშე
+              </span>
+            )}
           </div>
         </div>
 
@@ -406,8 +530,16 @@ export function ReportsDashboard({
           <div className="text-2xl sm:text-3xl font-black text-rose-600">
             {metrics.overdue}
           </div>
-          <div className="text-[11px] text-stone-500 mt-1">
-            {metrics.blocked > 0 ? `${metrics.blocked} დაბლოკილი ტასკი` : "ყველა ტასკი მიმდინარეობს"}
+          <div className="text-[11px] mt-1">
+            {metrics.blocked > 0 ? (
+              <span className="text-amber-600 font-semibold">
+                {metrics.blocked} დაბლოკილი ტასკი
+              </span>
+            ) : metrics.overdue > 0 ? (
+              <span className="text-rose-600 font-semibold">საჭიროებს ყურადღებას</span>
+            ) : (
+              <span className="text-emerald-600 font-semibold">ყველა დავალება გრაფიკშია</span>
+            )}
           </div>
         </div>
       </div>
@@ -490,8 +622,16 @@ export function ReportsDashboard({
                     <div className="text-xs font-bold text-stone-900 truncate">
                       {u.name}
                     </div>
-                    <div className="text-[10px] text-stone-500">
-                      {u.inProgress} მიმდინარე • {u.completed} დასრულებული
+                    <div className="text-[10px] text-stone-500 flex items-center gap-1.5 flex-wrap">
+                      <span>{u.inProgress} მიმდინარე</span>
+                      <span>•</span>
+                      <span>{u.completed} დასრულებული</span>
+                      {u.overdue > 0 && (
+                        <>
+                          <span>•</span>
+                          <span className="text-rose-600 font-bold">{u.overdue} გადაცილებული</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -612,9 +752,9 @@ export function ReportsDashboard({
                 (t) =>
                   Boolean(t.deadline) &&
                   new Date(t.deadline!) < new Date() &&
-                  t.status !== TaskStatus.DONE
+                  t.status !== TaskStatus.DONE &&
+                  t.status !== TaskStatus.CANCELLED
               )
-              .slice(0, 5)
               .map((t) => (
                 <div
                   key={t.id}
@@ -629,9 +769,14 @@ export function ReportsDashboard({
                       {t.title}
                     </span>
                   </div>
-                  <span className="text-[11px] font-bold text-rose-700 shrink-0">
-                    ვადაგადაცილებული
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] font-semibold text-stone-500">
+                      ვადა: {formatGeorgianDate(t.deadline)}
+                    </span>
+                    <span className="text-[11px] font-bold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-md">
+                      ვადაგადაცილებული
+                    </span>
+                  </div>
                 </div>
               ))}
           </div>

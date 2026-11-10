@@ -51,8 +51,8 @@ export async function POST(
       const body = await req.json();
       const { name, url } = body;
 
-      if (!name || !url) {
-        return NextResponse.json({ error: "სახელი და ლინკი სავალდებულოა" }, { status: 400 });
+      if (!url) {
+        return NextResponse.json({ error: "ბმულის URL სავალდებულოა" }, { status: 400 });
       }
 
       const trimmedUrl = String(url).trim();
@@ -61,11 +61,13 @@ export async function POST(
         return NextResponse.json({ error: "ბმული უნდა იწყებოდეს http:// ან https:// პრეფიქსით" }, { status: 400 });
       }
 
+      const originalName = name && String(name).trim() ? String(name).trim() : trimmedUrl;
+
       const attachment = await prisma.attachment.create({
         data: {
           taskId,
           userId: user.id,
-          originalName: String(name).trim(),
+          originalName,
           storedName: "link-" + crypto.randomUUID(),
           mimeType: "text/html",
           sizeBytes: 0,

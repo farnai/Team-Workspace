@@ -88,8 +88,29 @@ flowchart TD
 - Tasks support ordered workflow stages (e.g., `1. Design (ვასკა)` -> `2. Development (თორნიკე)` -> `3. QA (ფარნა)`).
 - Stages are sequential by default.
 - Completing a stage verifies all required subtasks are done, records completion, activates the subsequent stage, assigns current responsibility to the next assignee, and produces notification events atomically inside a Prisma transaction.
+- **Stage Deletion Governance (Founder Policy Decision)**:
+  1. **Prevent Orphaned Tasks**: Deleting the only remaining stage of a stage-based task is strictly forbidden. The system rejects the operation with a clear Georgian notification.
+  2. **Stage Deletion Never Implies Completion**: Removing a workflow stage is an administrative action, not proof that work was accomplished. It never automatically marks the task `DONE` or marks remaining subtasks complete.
+  3. **Active Stage Deletion Safe Promotion**: When deleting an active stage, the immediate successor stage MUST exist and MUST already have an assigned member. The successor is atomically promoted to `isActive = true`. If no valid assigned successor exists, deletion is rejected.
 
-### 4.5 Vertical Timeline System
+### 4.5 Last-Admin Protection & Concurrency Safety
+- The platform guarantees that at least one active `ADMIN` always exists.
+- Any attempt to demote (`role = USER`) or deactivate (`isActive = false`) the sole remaining active admin is rejected.
+- Concurrency protection: To prevent race conditions from simultaneous demotion/deactivation requests, checks are executed inside transactional queries, ensuring fail-closed safety.
+
+### 4.6 Department Division (DEVELOPMENT vs. CONTENT)
+- Users and Tasks belong to a `Department` (`DEVELOPMENT` or `CONTENT`).
+- Backlog, Kanban, and Timeline provide immediate filtering by department, preventing visual clutter between engineering work and content generation.
+- Tasks default to `DEVELOPMENT` and can be transitioned cleanly.
+
+### 4.7 Reports & Analytics Metric Engine
+- **Accurate On-Time Delivery Rate**:
+  $$\text{On-Time Delivery Rate} = \frac{\text{On-Time Completed}}{\text{On-Time Completed} + \text{Late Completed} + \text{Overdue Active}} \times 100$$
+  Evaluates actual completion dates against deadlines (`completedAt <= deadline`), while factoring in ongoing past-due commitments.
+- **Dynamic Date Intervals & Overdue Persistence**:
+  Incomplete tasks whose deadline passed in a prior month remain visible in the current reporting period until resolved. Month selectors are dynamically generated with Georgian localization.
+
+### 4.8 Vertical Timeline System
 - Displays a continuous chronological vertical axis.
 - Centers on today (`დღეს`) with backward/forward smooth scrolling and direct date navigation.
 - **Multi-day task representation**: Multi-day tasks are projected across their scheduled dates visually without creating duplicate rows in the database.
@@ -98,8 +119,9 @@ flowchart TD
   2. *Activity Mode*: Displays what actually happened on that specific date, queried directly from immutable audit records (avoiding misleading retroactive state).
 - **Weekends & Holidays**: Saturday and Sunday are marked as non-working days (`არასამუშაო დღე`). Configurable Georgian national holidays are respected with visual distinction and schedule conflict warnings.
 
-### 4.6 Append-Only Audit & Activity Logging
-- Every create, update, delete, assignment, status change, deadline shift, pause, resume, attachment upload, and daily note write is appended to `audit_events`.
+### 4.9 Append-Only Audit & Activity Logging
+- Every create, update, delete, assignment, status change, deadline shift, pause, resume, attachment upload, link creation, and deletion event is appended to `audit_events`.
+- Dedicated deletion audit actions (`STAGE_DELETED`, `SUBTASK_DELETED`, `COMMENT_DELETED`, `ATTACHMENT_DELETED`) ensure complete operational traceability.
 - No user (including Admin) can delete or alter audit events through the UI or API.
 - Sensitive credentials (passwords, session hashes) are never written to audit metadata payloads.
 
@@ -108,4 +130,6 @@ flowchart TD
 ## 5. Security & Data Protection
 1. **CSRF & Injection Protection**: Handled via standard Next.js server actions and Prisma parameterized queries.
 2. **File Upload Security**: Uploads are restricted by extension, magic-byte MIME type inspection, file size caps (max 25MB), randomized safe storage filenames, and served via authenticated streaming endpoints.
-3. **Session Rate Limiting**: In-memory / database sliding window rate limiter on `/api/auth/login` to prevent brute-force credential stuffing.
+3. **Independent Links**: External URLs (GitLab, Figma, Docs) are validated, stored with `isExternal = true`, and support optional human titles (defaulting to the URL itself).
+4. **Session Rate Limiting**: In-memory / database sliding window rate limiter on `/api/auth/login` to prevent brute-force credential stuffing.
+5. **Test Database Fail-Closed Protection**: Automated tests are restricted to dedicated test databases ending with `_test_db` or `_test`, completely barring connections to `team_workspace_db`.

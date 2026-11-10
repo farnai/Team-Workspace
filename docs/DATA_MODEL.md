@@ -50,6 +50,11 @@ enum Role {
   USER
 }
 
+enum Department {
+  DEVELOPMENT
+  CONTENT
+}
+
 enum TaskType {
   FEATURE
   BUG
@@ -88,9 +93,11 @@ enum AuditAction {
   STAGE_CREATED
   STAGE_REORDERED
   STAGE_COMPLETED
+  STAGE_DELETED
   SUBTASK_CREATED
   SUBTASK_COMPLETED
   SUBTASK_REOPENED
+  SUBTASK_DELETED
   STATUS_CHANGED
   WORK_PAUSED
   WORK_RESUMED
@@ -99,23 +106,27 @@ enum AuditAction {
   PRIORITY_CHANGED
   ATTACHMENT_ADDED
   ATTACHMENT_REMOVED
+  ATTACHMENT_DELETED
   COMMENT_ADDED
+  COMMENT_DELETED
   DAILY_UPDATE_ADDED
   USER_CREATED
   USER_STATUS_CHANGED
   CALENDAR_UPDATED
+  DEPARTMENT_CHANGED
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String     @id @default(uuid())
+  email        String     @unique
   name         String
-  role         Role     @default(USER)
+  role         Role       @default(USER)
+  department   Department @default(DEVELOPMENT)
   passwordHash String
   avatarUrl    String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   sessions            Session[]
   createdTasks        Task[]                @relation("TaskCreator")
@@ -168,6 +179,7 @@ model Task {
   type            TaskType    @default(FEATURE)
   priority        Priority    @default(MEDIUM)
   status          TaskStatus  @default(BACKLOG)
+  department      Department  @default(DEVELOPMENT)
   
   // Date & Scheduling
   startDate       DateTime?

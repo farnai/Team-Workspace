@@ -679,4 +679,57 @@ test("Phase A: Stabilization & Reliability Verification", async (t) => {
     const isOverdue = task.status !== TaskStatus.DONE && task.deadline && task.deadline < now;
     assert.equal(isOverdue, true, "Task with past deadline must be counted as overdue regardless of month");
   });
+
+  // Independent Links: Link name is optional and defaults to URL
+  await t.test("Independent Links: Link name is optional and defaults to URL", async () => {
+    const task = await prisma.task.create({
+      data: {
+        title: "Task with External Links",
+        type: TaskType.FEATURE,
+        priority: Priority.MEDIUM,
+        status: TaskStatus.BACKLOG,
+        projectId: project.id,
+        createdById: admin1.id,
+      },
+    });
+
+    const linkWithoutNameUrl = "https://gitlab.com/team/repo/-/merge_requests/42";
+    const rawLinkName = "";
+    const originalName = rawLinkName.trim() || linkWithoutNameUrl;
+
+    const linkAtt1 = await prisma.attachment.create({
+      data: {
+        taskId: task.id,
+        userId: admin1.id,
+        originalName,
+        storedName: "link-" + crypto.randomUUID(),
+        mimeType: "text/html",
+        sizeBytes: 0,
+        url: linkWithoutNameUrl,
+        isExternal: true,
+      },
+    });
+
+    assert.equal(linkAtt1.originalName, linkWithoutNameUrl, "Original name should default to URL when name is omitted");
+    assert.equal(linkAtt1.isExternal, true);
+    assert.equal(linkAtt1.url, linkWithoutNameUrl);
+
+    // Link with explicit name
+    const linkWithNameUrl = "https://www.figma.com/design/test";
+    const explicitName = "Figma Design Specs";
+    const linkAtt2 = await prisma.attachment.create({
+      data: {
+        taskId: task.id,
+        userId: admin1.id,
+        originalName: explicitName,
+        storedName: "link-" + crypto.randomUUID(),
+        mimeType: "text/html",
+        sizeBytes: 0,
+        url: linkWithNameUrl,
+        isExternal: true,
+      },
+    });
+
+    assert.equal(linkAtt2.originalName, explicitName, "Original name should preserve explicit title when provided");
+  });
 });

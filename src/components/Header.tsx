@@ -172,7 +172,7 @@ export function Header({
       <div className="flex items-center gap-3">
         {/* + ახალი ტასკი Button */}
         <button
-          onClick={onOpenNewTask}
+          onClick={() => onOpenNewTask()}
           className="flex items-center gap-1.5 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold rounded-full shadow-xs hover:shadow transition-all cursor-pointer"
         >
           <Plus size={15} strokeWidth={2.5} />

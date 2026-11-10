@@ -332,8 +332,9 @@ export default function WorkspacePage({
     }
   };
 
-  const handleOpenNewTask = (defaultProjectId?: string) => {
-    setCreateTaskDefaultProjectId(defaultProjectId);
+  const handleOpenNewTask = (defaultProjectId?: unknown) => {
+    const validProjectId = typeof defaultProjectId === "string" ? defaultProjectId : undefined;
+    setCreateTaskDefaultProjectId(validProjectId);
     setIsCreateModalOpen(true);
   };
 

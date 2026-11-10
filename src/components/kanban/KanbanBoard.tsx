@@ -413,7 +413,7 @@ export function KanbanBoard({
         {/* Action Buttons: + New Task, View Switcher (Board vs Table), Calendar */}
         <div className="flex items-center gap-2">
           <button
-            onClick={onOpenNewTask}
+            onClick={() => onOpenNewTask()}
             className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer"
           >
             <Plus size={14} strokeWidth={2.5} />
@@ -834,7 +834,7 @@ export function KanbanBoard({
 
                   {/* Dashed "+" Button Matching Approved Reference Box Design */}
                   <button
-                    onClick={onOpenNewTask}
+                    onClick={() => onOpenNewTask()}
                     className="w-full py-2 border border-dashed border-stone-300 hover:border-stone-400 rounded-xl flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-white/60 transition-all cursor-pointer mt-1"
                     title="ახალი ტასკის დამატება"
                   >
@@ -887,7 +887,7 @@ export function KanbanBoard({
 
                   {/* Dashed "+" Button Matching Approved Reference Box Design */}
                   <button
-                    onClick={onOpenNewTask}
+                    onClick={() => onOpenNewTask()}
                     className="w-full py-2 border border-dashed border-stone-300 hover:border-stone-400 rounded-xl flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-white/60 transition-all cursor-pointer mt-1"
                     title="ახალი ტასკის დამატება"
                   >
@@ -940,7 +940,7 @@ export function KanbanBoard({
 
                   {/* Dashed "+" Button Matching Approved Reference Box Design */}
                   <button
-                    onClick={onOpenNewTask}
+                    onClick={() => onOpenNewTask()}
                     className="w-full py-2 border border-dashed border-stone-300 hover:border-stone-400 rounded-xl flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-white/60 transition-all cursor-pointer mt-1"
                     title="ახალი ტასკის დამატება"
                   >

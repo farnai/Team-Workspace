@@ -28,7 +28,7 @@ const createTaskSchema = z.object({
   links: z
     .array(
       z.object({
-        name: z.string(),
+        name: z.string().optional().default(""),
         url: z.string(),
       })
     )
@@ -322,16 +322,18 @@ export async function POST(req: NextRequest) {
       // Create external links as attachments if provided
       if (data.links && data.links.length > 0) {
         for (const link of data.links) {
-          if (link.name?.trim() && link.url?.trim()) {
+          if (link.url?.trim()) {
+            const trimmedUrl = link.url.trim();
+            const originalName = link.name?.trim() || trimmedUrl;
             await tx.attachment.create({
               data: {
                 taskId: created.id,
                 userId: user.id,
-                originalName: link.name.trim(),
+                originalName,
                 storedName: "link-" + crypto.randomUUID(),
                 mimeType: "text/html",
                 sizeBytes: 0,
-                url: link.url.trim(),
+                url: trimmedUrl,
                 isExternal: true,
               },
             });

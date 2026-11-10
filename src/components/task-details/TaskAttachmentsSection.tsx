@@ -67,12 +67,11 @@ export function TaskAttachmentsSection({
 
   const handleCreateLink = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!linkName.trim() || !linkUrl.trim()) return;
+    if (!linkUrl.trim()) return;
 
-    const lower = linkUrl.trim().toLowerCase();
-    if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
-      onError("ბმული უნდა იწყებოდეს http:// ან https:// პრეფიქსით");
-      return;
+    let urlToSubmit = linkUrl.trim();
+    if (!urlToSubmit.startsWith("http://") && !urlToSubmit.startsWith("https://")) {
+      urlToSubmit = "https://" + urlToSubmit;
     }
 
     try {
@@ -80,7 +79,7 @@ export function TaskAttachmentsSection({
       const res = await fetch(`/api/tasks/${taskId}/attachments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: linkName.trim(), url: linkUrl.trim() }),
+        body: JSON.stringify({ name: linkName.trim(), url: urlToSubmit }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "ბმულის დამატება ვერ მოხერხდა");
@@ -97,11 +96,10 @@ export function TaskAttachmentsSection({
   };
 
   const handleEditLink = async (linkId: string) => {
-    if (!editLinkName.trim() || !editLinkUrl.trim()) return;
-    const lower = editLinkUrl.trim().toLowerCase();
-    if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
-      onError("ბმული უნდა იწყებოდეს http:// ან https:// პრეფიქსით");
-      return;
+    if (!editLinkUrl.trim()) return;
+    let urlToSubmit = editLinkUrl.trim();
+    if (!urlToSubmit.startsWith("http://") && !urlToSubmit.startsWith("https://")) {
+      urlToSubmit = "https://" + urlToSubmit;
     }
 
     try {
@@ -109,7 +107,7 @@ export function TaskAttachmentsSection({
       const res = await fetch(`/api/attachments/${linkId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editLinkName.trim(), url: editLinkUrl.trim() }),
+        body: JSON.stringify({ name: editLinkName.trim(), url: urlToSubmit }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "ბმულის განახლება ვერ მოხერხდა");
@@ -318,13 +316,13 @@ export function TaskAttachmentsSection({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] font-bold text-stone-500 block mb-1">
-                  სახელი / ლეიბლი
+                  სახელი / ლეიბლი (არასავალდებულო)
                 </label>
                 <input
                   type="text"
                   value={linkName}
                   onChange={(e) => setLinkName(e.target.value)}
-                  placeholder="მაგ. Figma დიზაინი, PR #42"
+                  placeholder="მაგ. Figma დიზაინი, PR #42 (არასავალდებულო)"
                   className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                 />
               </div>
@@ -356,7 +354,7 @@ export function TaskAttachmentsSection({
               </button>
               <button
                 type="submit"
-                disabled={isSubmittingLink || !linkName.trim() || !linkUrl.trim()}
+                disabled={isSubmittingLink || !linkUrl.trim()}
                 className="px-4 py-1 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 disabled:opacity-50 cursor-pointer"
               >
                 {isSubmittingLink ? "ემატება..." : "დამატება"}
@@ -401,7 +399,7 @@ export function TaskAttachmentsSection({
                           გაუქმება
                         </button>
                         <button
-                          disabled={isSavingLinkEdit}
+                          disabled={isSavingLinkEdit || !editLinkUrl.trim()}
                           onClick={() => handleEditLink(att.id)}
                           className="px-3 py-0.5 bg-orange-600 text-white rounded-md font-semibold text-[11px]"
                         >

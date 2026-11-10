@@ -95,7 +95,7 @@ interface AssigneeEntry {
 }
 
 interface LinkEntry {
-  name: string;
+  name?: string;
   url: string;
 }
 
@@ -114,12 +114,15 @@ function TaskModalForm({
   const [title, setTitle] = useState(() =>
     mode === "edit" && initialTask ? initialTask.title : ""
   );
-  const [projectId, setProjectId] = useState(
-    () =>
-      (mode === "edit" && initialTask
-        ? initialTask.projectId
-        : defaultProjectId || projects[0]?.id) || ""
-  );
+  const [projectId, setProjectId] = useState<string>(() => {
+    if (mode === "edit" && initialTask) {
+      return typeof initialTask.projectId === "string" ? initialTask.projectId : "";
+    }
+    if (typeof defaultProjectId === "string" && defaultProjectId.trim()) {
+      return defaultProjectId.trim();
+    }
+    return projects[0]?.id || "";
+  });
   const [department, setDepartment] = useState<Department>(() =>
     mode === "edit" && initialTask?.department
       ? initialTask.department
@@ -270,12 +273,13 @@ function TaskModalForm({
 
   // Links Management
   const handleAddLink = () => {
-    if (!newLinkName.trim() || !newLinkUrl.trim()) return;
+    if (!newLinkUrl.trim()) return;
     let url = newLinkUrl.trim();
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "https://" + url;
     }
-    setLinks((prev) => [...prev, { name: newLinkName.trim(), url }]);
+    const name = newLinkName.trim();
+    setLinks((prev) => [...prev, { name: name || undefined, url }]);
     setNewLinkName("");
     setNewLinkUrl("");
   };
@@ -431,10 +435,12 @@ function TaskModalForm({
           deadline: a.deadline ? new Date(a.deadline).toISOString() : null,
         }));
 
+        const cleanProjectId = typeof projectId === "string" && projectId.trim() ? projectId.trim() : undefined;
+
         const payload = {
           title: title.trim(),
           description: description.trim() || undefined,
-          projectId: projectId || undefined,
+          projectId: cleanProjectId,
           type,
           priority,
           status,
@@ -499,6 +505,8 @@ function TaskModalForm({
           deadline: a.deadline ? new Date(a.deadline).toISOString() : null,
         }));
 
+        const cleanProjectId = typeof projectId === "string" && projectId.trim() ? projectId.trim() : undefined;
+
         const payload: {
           title: string;
           description?: string | null;
@@ -518,7 +526,7 @@ function TaskModalForm({
         } = {
           title: title.trim(),
           description: description.trim() || null,
-          projectId: projectId || undefined,
+          projectId: cleanProjectId,
           type,
           priority,
           status,
@@ -1008,20 +1016,32 @@ function TaskModalForm({
                 type="text"
                 value={newLinkName}
                 onChange={(e) => setNewLinkName(e.target.value)}
-                placeholder="ბმულის სახელი (მაგ. GitLab MR #12)"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddLink();
+                  }
+                }}
+                placeholder="ბმულის სახელი (არასავალდებულო)"
                 className="flex-1 px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium focus:outline-none"
               />
               <input
                 type="text"
                 value={newLinkUrl}
                 onChange={(e) => setNewLinkUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddLink();
+                  }
+                }}
                 placeholder="URL (https://...)"
                 className="flex-1 px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium focus:outline-none"
               />
               <button
                 type="button"
                 onClick={handleAddLink}
-                disabled={!newLinkName.trim() || !newLinkUrl.trim()}
+                disabled={!newLinkUrl.trim()}
                 className="px-3 py-1.5 bg-stone-800 hover:bg-stone-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 disabled:opacity-40 cursor-pointer"
               >
                 <Plus size={13} />
@@ -1039,12 +1059,20 @@ function TaskModalForm({
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
                       <LinkIcon size={12} className="text-blue-600 shrink-0" />
-                      <span className="font-bold text-stone-800 truncate">
-                        {link.name}:
-                      </span>
-                      <span className="text-stone-500 truncate text-[11px]">
-                        {link.url}
-                      </span>
+                      {link.name ? (
+                        <>
+                          <span className="font-bold text-stone-800 truncate">
+                            {link.name}:
+                          </span>
+                          <span className="text-stone-500 truncate text-[11px]">
+                            {link.url}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-medium text-stone-800 truncate">
+                          {link.url}
+                        </span>
+                      )}
                     </div>
                     <button
                       type="button"

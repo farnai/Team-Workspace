@@ -141,3 +141,26 @@ The **Private Team Workspace** is a high-reliability, internal work-tracking sys
 | Blocked Status | დაბლოკილი | Status |
 | Done Status | დასრულებული | Status |
 | Cancelled Status | გაუქმებული | Status |
+| Development Department | დეველოპმენტი | Department |
+| Content Department | კონტენტი | Department |
+
+---
+
+## 5. Extended Governance & Business Policies
+
+### 5.1 Department Division
+- Users and Tasks belong to either `DEVELOPMENT` or `CONTENT`.
+- Tasks can be filtered across Backlog, Kanban, Timeline, and Reports by department to avoid visual collisions between software engineering and media production.
+
+### 5.2 Stage Deletion Governance (Founder Invariants)
+- **Prevent Orphaned Tasks**: Deletion of the ONLY stage of a stage-based task is strictly prohibited.
+- **Stage Deletion Never Implies Completion**: Deleting a stage is an administrative reorganization and must never mark the task `DONE` or complete pending subtasks. If no valid assigned successor stage exists, deletion is rejected.
+- **Atomic Promotion**: Deleting an active stage automatically promotes the immediate assigned successor stage to active.
+
+### 5.3 Independent Links & Attachments
+- External links (GitLab, Figma, Docs) can be added with or without a custom name. When omitted, the name cleanly defaults to the URL itself.
+- Deletions are immutably logged to the audit log.
+
+### 5.4 Reports & Deadline Adherence Formula
+- On-Time Delivery Rate dynamically evaluates both completed tasks (`completedAt <= deadline`) and open overdue tasks (`status !== DONE && deadline < now`).
+- Subtitles dynamically highlight overdue tasks (`X გადაცილებული დავალება`), late completions, or on-schedule status.

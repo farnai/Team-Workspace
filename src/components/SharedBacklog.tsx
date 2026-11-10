@@ -342,7 +342,7 @@ export function SharedBacklog({
 
         <div className="flex items-center gap-1.5">
           <button
-            onClick={onOpenNewTask}
+            onClick={() => onOpenNewTask()}
             className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-xs font-semibold shadow-2xs hover:shadow transition-all cursor-pointer"
           >
             <Plus size={14} strokeWidth={2.5} />

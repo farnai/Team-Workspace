@@ -1,36 +1,121 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Team Workspace — Private Team Management Platform
 
-## Getting Started
+> **შიდა სამუშაო სივრცე (Private Team Workspace)** — მაღალი საიმედოობის, თვითჰოსტირებადი სამუშაო პლატფორმა 5–10-წევრიანი გუნდისთვის (Developers, Content, Designers, QA და Team Leads).  
+> სისტემა უზრუნველყოფს თანამიმდევრულ სამუშაო პროცესს (Sequential Workflow), დედლაინების მკაცრ ადმინისტრაციულ კონტროლს, რეალურ დროში დატვირთვის მონიტორინგს და სრულ ქართულენოვან ინტერფეისს.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🌟 ძირითადი ფუნქციონალი (Key Features)
+
+- **თანამიმდევრული ეტაპები (Sequential Workflow Stages):**  
+  დავალებების გადაცემა ეტაპობრივად (მაგ. *დიზაინი -> Development -> QA*). აქტიური ეტაპის დასრულებისთანავე პასუხისმგებლობა ავტომატურად გადადის მომდევნო შემსრულებელზე.
+- **დედლაინების მმართველობა (Deadline Governance):**  
+  ინიციალურ ვადას განსაზღვრავს შემქმნელი/შემსრულებელი; დაფიქსირების შემდეგ დედლაინის შეცვლა შეუძლია **მხოლოდ ადმინისტრატორს**, მიზეზის სავალდებულო დაფიქსირებით.
+- **დეპარტამენტების დაყოფა (Development & Content):**  
+  დეველოპმენტისა და კონტენტის ნაკადების იზოლაცია ფილტრებითა და როლებით.
+- **ვერტიკალური თაიმლაინი (Vertical Timeline):**  
+  დავალებების ვიზუალური განაწილება კალენდარულ ღერძზე ორ რეჟიმში: *Schedule Mode* (დაგეგმილი) და *Activity Mode* (რეალური ისტორიული მოვლენები). ითვალისწინებს ოფიციალურ ქართულ უქმეებსა და არასამუშაო დღეებს.
+- **დატვირთვის მართვა (Workload & Capacity):**  
+  გუნდის წევრების დატვირთვის მონიტორინგი, კონფლიქტებისა და გადაფარვების დროული იდენტიფიცირება.
+- **დინამიური რეპორტები და ანალიტიკა (Reports & Analytics):**  
+  ვადების დაცვის რეალური დინამიური პროცენტულობა (On-Time Delivery Rate), გადაცილებული ტასკების ზუსტი ასახვა და ქართული კალენდარული თვეების ფილტრი.
+- **შეუქცევადი აუდიტის ლოგი (Append-Only Audit Log):**  
+  ყველა მოქმედების (შექმნა, სტატუსის ცვლილება, ეტაპების გადაცემა, წაშლა, ბმულების დამატება) უცვლელი ისტორიული ჩანაწერი.
+- **დამოუკიდებელი ბმულები და ფაილები (Attachments & Links):**  
+  შიდა დაცული ფაილების ატვირთვა და გარე ბმულების (Figma, GitLab, Docs) მიბმა არასავალდებულო სათაურით.
+
+---
+
+## 🛠 ტექნოლოგიური სტეკი (Tech Stack)
+
+| კომპონენტი | ტექნოლოგია |
+| :--- | :--- |
+| **Framework** | Next.js 16 (App Router, Turbopack, React 19) |
+| **Language** | TypeScript (Strict Mode) |
+| **Styling** | Tailwind CSS + Lucide Icons |
+| **Database & ORM** | PostgreSQL 16 + Prisma ORM |
+| **Authentication** | Server-Side HTTP-Only Cryptographic Sessions + bcryptjs |
+| **Validation** | Zod + React Hook Form |
+| **Timezone** | `Asia/Tbilisi` (UTC+4) |
+| **Containerization** | Docker & Docker Compose |
+
+---
+
+## 🚀 სწრაფი დაწყება (Quick Start)
+
+### 1. წინაპირობები (Prerequisites)
+- [Node.js](https://nodejs.org/) (v20 ან უფრო ახალი)
+- [Docker](https://www.docker.com/) და Docker Compose
+
+### 2. გარემოს კონფიგურაცია (.env)
+შექმენით `.env` ფაილი პროექტის ძირში:
+
+```env
+DATABASE_URL="postgresql://workspace_user:workspace_secret_password@localhost:5434/team_workspace_db?schema=public"
+SESSION_SECRET="team-workspace-secure-session-key-5a693990-2026-tbilisi"
+NEXT_PUBLIC_TIMEZONE="Asia/Tbilisi"
+PORT=3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. ბაზის გაშვება Docker-ში
+```bash
+docker compose up -d
+```
+ბაზა გაეშვება `5434` პორტზე (`team_workspace_postgres` კონტეინერი).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. დამოკიდებულებების ინსტალაცია და მიგრაცია
+```bash
+npm install
+npx prisma generate
+npx prisma migrate deploy
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 5. დეველოპმენტ სერვერის გაშვება
+```bash
+npm run dev
+```
+პლატფორმა ხელმისაწვდომია მისამართზე: [http://localhost:3000](http://localhost:3000)
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🔑 ადმინისტრატორის საწყისი მონაცემები (Admin Credentials)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+სისტემის საწყისი ინსტალაცია შეიცავს ერთადერთ სუფთა ადმინისტრატორს:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **ელ-ფოსტა (Email):** `admin@team.local`
+- **პაროლი (Password):** `admin123`
+- **როლი (Role):** `ADMIN`
 
-## Deploy on Vercel
+ავტორიზაციის შემდეგ ადმინისტრატორს შეუძლია მომხმარებლების მართვის პანელიდან (`/admin/users`) დაამატოს გუნდის წევრები.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🧪 ტესტირება და უსაფრთხოება (Testing & Safety)
+
+პროექტში დანერგილია მკაცრი მონაცემთა იზოლაცია:
+
+- **ტესტების გაშვება:**
+  ```bash
+  npm test
+  ```
+- **უსაფრთხოების გარანტია (Fail-Closed Isolation):**  
+  ავტომატური ტესტები მკაცრად უერთდება მხოლოდ გამოყოფილ სატესტო ბაზას (`team_workspace_test_db`). სატესტო გარემოს კონექტორი პროგრამულად ბლოკავს (`throw Error`) მთავარ საწარმოო ბაზასთან (`team_workspace_db`) ნებისმიერ შეერთებას.
+- **ტიპების შემოწმება & ლინტინგი:**
+  ```bash
+  npx tsc --noEmit
+  npm run lint
+  ```
+- **Production Build:**
+  ```bash
+  npm run build
+  ```
+
+---
+
+## 📁 დოკუმენტაცია (Documentation)
+
+სრული დოკუმენტაცია იხილეთ `docs/` დირექტორიაში:
+- [`docs/ARCHITECTURE.md`](file:///c:/Users/fiord/OneDrive/Desktop/Team-Workspace/docs/ARCHITECTURE.md) — სისტემური არქიტექტურა, სერვისები და ბიზნეს წესები.
+- [`docs/DATA_MODEL.md`](file:///c:/Users/fiord/OneDrive/Desktop/Team-Workspace/docs/DATA_MODEL.md) — მონაცემთა მოდელი, ER დიაგრამა და Prisma სქემა.
+- [`docs/PRODUCT_REQUIREMENTS.md`](file:///c:/Users/fiord/OneDrive/Desktop/Team-Workspace/docs/PRODUCT_REQUIREMENTS.md) — პროდუქტის მოთხოვნები და როლების მატრიცა.
+- [`docs/IMPLEMENTATION_PLAN.md`](file:///c:/Users/fiord/OneDrive/Desktop/Team-Workspace/docs/IMPLEMENTATION_PLAN.md) — იმპლემენტაციისა და სტაბილიზაციის გეგმა.
