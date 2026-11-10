@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { QueryProvider } from "@/components/providers/QueryProvider";
 
 export const metadata: Metadata = {
   title: "Team Workspace — სამუშაო სივრცე",
@@ -24,7 +25,7 @@ export default function RootLayout({
   return (
     <html lang="ka" className="h-full overflow-hidden">
       <body className="h-full overflow-hidden flex flex-col bg-[#F8F7F4] text-[#1C1917]">
-        {children}
+        <QueryProvider>{children}</QueryProvider>
       </body>
     </html>
   );
