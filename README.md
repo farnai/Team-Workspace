@@ -115,6 +115,7 @@ npm run dev
 ## 📁 დოკუმენტაცია (Documentation)
 
 სრული დოკუმენტაცია იხილეთ `docs/` დირექტორიაში:
+- [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) — **კოდის სტრუქტურა და პატერნები (სავალდებულო წესები: Route → Action → Repository, Modules, DTO, Policy, Resource).**
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — სისტემური არქიტექტურა, სერვისები და ბიზნეს წესები.
 - [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) — მონაცემთა მოდელი, ER დიაგრამა და Prisma სქემა.
 - [`docs/PRODUCT_REQUIREMENTS.md`](docs/PRODUCT_REQUIREMENTS.md) — პროდუქტის მოთხოვნები და როლების მატრიცა.

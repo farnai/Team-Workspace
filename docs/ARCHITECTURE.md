@@ -21,6 +21,10 @@ Unlike commercial multi-tenant SaaS products, the architecture optimizes for zer
 | **Audit Log** | Append-Only Transactional Event Store | Tamper-proof, immutable record of every user action and state transition. |
 | **File Storage** | Private Local Secure Volume Storage | Authorization-checked static file serving with MIME validation and safe UUID-based filenames. |
 | **Timezone** | `Asia/Tbilisi` (UTC+4) | Centralized dynamic date parsing and calendar rendering. Zero hardcoded mock dates. |
+| **Layering** | Route → Action → Repository | Strict backend separation of concerns (`naturel-core` pattern). |
+| **Frontend Modularity** | Domain Modules (`src/modules/`) | Feature-encapsulated views, hooks, types, schema and api clients (`nando/client` pattern). |
+
+> **სავალდებულო კოდის სტანდარტები:** პროექტის დეტალური კოდის სტრუქტურა და წესები აღწერილია [`docs/CONVENTIONS.md`](CONVENTIONS.md)-ში.
 
 ---
 
