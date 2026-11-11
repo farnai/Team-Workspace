@@ -29,6 +29,16 @@ export const taskRepository = {
             },
             subtasks: {
               orderBy: { position: 'asc' },
+              include: {
+                completedBy: { select: { id: true, name: true, avatarUrl: true } },
+                assignments: {
+                  include: {
+                    user: {
+                      select: { id: true, name: true, email: true, avatarUrl: true },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -41,6 +51,7 @@ export const taskRepository = {
         subtasks: {
           orderBy: { position: 'asc' },
           include: {
+            completedBy: { select: { id: true, name: true, avatarUrl: true } },
             assignments: {
               include: {
                 user: {

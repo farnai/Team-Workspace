@@ -963,10 +963,10 @@ export function TaskDetailsDrawer({
   }, [isOpen, taskId]);
 
   // Currently responsible participants (from active stage or direct task assignments)
-  const activeStage = task?.stages.find((s) => s.isActive && !s.isCompleted);
-  const responsibleUsers = activeStage?.assignments.length
+  const activeStage = task?.stages?.find((s) => s.isActive && !s.isCompleted);
+  const responsibleUsers = (activeStage?.assignments && activeStage.assignments.length > 0)
     ? activeStage.assignments.map((a) => a.user)
-    : task?.assignments.map((a) => a.user) || [];
+    : (task?.assignments || []).map((a) => a.user);
 
   // Step 7: Conflicts detection for current task
   const taskConflicts = task ? detectTaskConflicts(task) : [];
@@ -1557,11 +1557,11 @@ export function TaskDetailsDrawer({
                 {/* Stages Sequence */}
                 {task?.stages && task.stages.length > 0 ? (
                   <div className="space-y-3">
-                    {task.stages.map((stage, sIdx) => {
-                      const totalStageSubtasks = stage.subtasks.filter(
+                    {(task.stages || []).map((stage, sIdx) => {
+                      const totalStageSubtasks = (stage.subtasks || []).filter(
                         (st) => st.status !== SubtaskStatus.CANCELLED
                       ).length;
-                      const doneStageSubtasks = stage.subtasks.filter(
+                      const doneStageSubtasks = (stage.subtasks || []).filter(
                         (st) => st.status === SubtaskStatus.DONE
                       ).length;
                       const canCompleteStage =
@@ -1649,13 +1649,13 @@ export function TaskDetailsDrawer({
                                 {/* Assignees & Dates */}
                                 <div className="flex items-center gap-2 text-[11px] text-stone-500 mt-0.5 flex-wrap">
                                   <div className="flex items-center gap-1 font-medium">
-                                    {stage.assignments.length > 0 ? (
+                                    {stage.assignments && stage.assignments.length > 0 ? (
                                       stage.assignments.map((a) => (
                                         <span
-                                          key={a.user.id}
+                                          key={a.user?.id || Math.random()}
                                           className="text-stone-700 font-semibold"
                                         >
-                                          {a.user.name}
+                                          {a.user?.name}
                                         </span>
                                       ))
                                     ) : (
@@ -1758,7 +1758,7 @@ export function TaskDetailsDrawer({
 
                           {/* Stage Subtasks Checklist */}
                           <div className="p-3 space-y-2 bg-white/50">
-                            {stage.subtasks.length === 0 ? (
+                            {(!stage.subtasks || stage.subtasks.length === 0) ? (
                               <div className="text-[11px] text-stone-400 italic py-1">
                                 ეტაპში საბტასკები არ არის დამატებული.
                               </div>
@@ -1805,13 +1805,13 @@ export function TaskDetailsDrawer({
                                       <div className="flex items-center gap-2 text-[10px] text-stone-500 mt-1 flex-wrap">
                                         {/* Multi Assignees Avatars */}
                                         <div className="flex items-center -space-x-1">
-                                          {st.assignments.map((a) => (
+                                          {(st.assignments || []).map((a) => (
                                             <div
-                                              key={a.user.id}
+                                              key={a.user?.id || Math.random()}
                                               className="w-4 h-4 rounded-full bg-stone-200 text-stone-700 font-bold text-[9px] flex items-center justify-center border border-white"
-                                              title={a.user.name}
+                                              title={a.user?.name}
                                             >
-                                              {a.user.name.charAt(0)}
+                                              {a.user?.name ? a.user.name.charAt(0) : "?"}
                                             </div>
                                           ))}
                                         </div>
@@ -1948,13 +1948,13 @@ export function TaskDetailsDrawer({
 
                             <div className="flex items-center gap-2 text-[10px] text-stone-500 mt-1 flex-wrap">
                               <div className="flex items-center -space-x-1">
-                                {st.assignments.map((a) => (
+                                {(st.assignments || []).map((a) => (
                                   <div
-                                    key={a.user.id}
+                                    key={a.user?.id || Math.random()}
                                     className="w-4 h-4 rounded-full bg-stone-200 text-stone-700 font-bold text-[9px] flex items-center justify-center border border-white"
-                                    title={a.user.name}
+                                    title={a.user?.name}
                                   >
-                                    {a.user.name.charAt(0)}
+                                    {a.user?.name ? a.user.name.charAt(0) : "?"}
                                   </div>
                                 ))}
                               </div>
@@ -2339,7 +2339,7 @@ export function TaskDetailsDrawer({
             currentDeadline={task.deadline || null}
             isDeadlineLocked={task.deadlineLocked}
             isAdmin={isAdmin}
-            stages={task.stages.map((s) => ({
+            stages={(task.stages || []).map((s) => ({
               id: s.id,
               title: s.title,
               deadline: s.deadline || null,

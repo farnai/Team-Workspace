@@ -14,3 +14,4 @@ export const getTimelineQueryDto = z.object({
 })
 
 export type GetTimelineQueryDto = z.infer<typeof getTimelineQueryDto>
+
