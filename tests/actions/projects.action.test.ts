@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert'
 import { testPrisma } from '../test-db'
 import { Role } from '@prisma/client'
+import { createProjectDto } from '@/server/dto/project.dto'
 import { createProjectAction } from '@/server/actions/projects/create-project.action'
 import { updateProjectAction } from '@/server/actions/projects/update-project.action'
 import { deleteProjectAction } from '@/server/actions/projects/delete-project.action'
@@ -48,6 +49,18 @@ test('Actions: Projects Lifecycle & Governance', async (t) => {
     assert.strictEqual(proj.name, `Action Project ${ts}`)
     assert.strictEqual(proj.color, '#2563EB')
     createdProjectId = proj.id
+  })
+
+  await t.test('createProjectAction: creates a project with optional/null description', async () => {
+    const parsedInput = createProjectDto.parse({
+      name: `Action Project Null Desc ${ts}`,
+      description: null,
+      color: '#EA580C',
+    })
+    const proj = await createProjectAction(parsedInput, admin)
+
+    assert.ok(proj.id)
+    assert.strictEqual(proj.description, null)
   })
 
   await t.test('listProjectsAction: includes the created project with task metrics', async () => {

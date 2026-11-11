@@ -4,7 +4,7 @@ import { SubtaskStatus } from '@prisma/client';
 
 export const createSubtaskDto = z.object({
   title: z.string().min(1, 'საბტასკის სათაური სავალდებულოა'),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   stageId: z.string().nullable().optional(),
   deadline: z.string().nullable().optional(),
   assigneeIds: z.array(z.string()).optional(),

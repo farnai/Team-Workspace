@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 export const createStageDto = z.object({
   title: z.string().min(1, 'ეტაპის სათაური სავალდებულოა'),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   deadline: z.string().nullable().optional(),
   assigneeIds: z.array(z.string()).optional(),

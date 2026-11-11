@@ -18,7 +18,7 @@ export const assigneeStageInputDto = z.object({
 export const createTaskDto = z.object({
   projectId: z.string().optional(),
   title: z.string().trim().min(1, 'სათაური სავალდებულოა').max(200),
-  description: z.string().trim().optional(),
+  description: z.string().trim().nullable().optional(),
   type: z.nativeEnum(TaskType).default(TaskType.FEATURE),
   priority: z.nativeEnum(Priority).default(Priority.MEDIUM),
   department: z.nativeEnum(Department).default(Department.DEVELOPMENT),
