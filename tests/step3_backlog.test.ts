@@ -9,7 +9,6 @@ import {
 import { testPrisma } from "./test-db";
 import { validateDeadlineModification } from "../src/lib/workflow";
 import { logAuditEvent } from "../src/lib/audit";
-});
 
 test("Step 3: Comprehensive Shared Backlog, Task Governance & Timeline Integration Tests", async () => {
   // Setup: Project & Users
