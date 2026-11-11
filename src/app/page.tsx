@@ -122,15 +122,8 @@ export default function WorkspacePage({
 
     async function initializeWorkspace() {
       try {
-        const [userRes, metricsRes, notifRes, projRes, usersRes, tasksRes] =
-          await Promise.all([
-            fetch("/api/auth/me"),
-            fetch("/api/overview"),
-            fetch("/api/notifications"),
-            fetch("/api/projects"),
-            fetch("/api/users"),
-            fetch("/api/tasks"),
-          ]);
+        // Step 1: Verify authentication first before fetching sensitive workspace data
+        const userRes = await fetch("/api/auth/me");
 
         if (!userRes.ok) {
           document.cookie = "tw_session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
@@ -144,6 +137,16 @@ export default function WorkspacePage({
           router.push("/login?error=unauthorized");
           return;
         }
+
+        // Step 2: Fetch workspace data only after user identity is established
+        const [metricsRes, notifRes, projRes, usersRes, tasksRes] =
+          await Promise.all([
+            fetch("/api/overview"),
+            fetch("/api/notifications"),
+            fetch("/api/projects"),
+            fetch("/api/users"),
+            fetch("/api/tasks"),
+          ]);
 
         if (active) {
           setCurrentUser(userData.user);
