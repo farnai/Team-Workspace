@@ -146,7 +146,7 @@ export function KanbanBoard({
 
       // User filter
       if (selectedUser !== "ALL") {
-        const hasUser = task.assignments.some((a) => a.user.id === selectedUser);
+        const hasUser = (task.assignments || []).some((a) => a.user?.id === selectedUser);
         if (!hasUser) return false;
       }
 
@@ -255,8 +255,8 @@ export function KanbanBoard({
         }
 
         case "assignees": {
-          const nameA = a.assignments[0]?.user.name || "";
-          const nameB = b.assignments[0]?.user.name || "";
+          const nameA = a.assignments?.[0]?.user?.name || "";
+          const nameB = b.assignments?.[0]?.user?.name || "";
           comparison = nameA.localeCompare(nameB, "ka");
           break;
         }

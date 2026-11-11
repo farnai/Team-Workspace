@@ -141,7 +141,7 @@ export function ProjectsView({
         (t) =>
           t.title.toLowerCase().includes(q) ||
           String(t.taskNumber).includes(q) ||
-          t.assignments.some((a) => a.user.name.toLowerCase().includes(q))
+          (t.assignments || []).some((a) => a.user?.name?.toLowerCase().includes(q))
       );
     }
 

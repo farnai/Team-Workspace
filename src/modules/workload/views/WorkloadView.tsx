@@ -887,12 +887,12 @@ export function WorkloadDashboard({
                               title={cell.conflictMessage || "პარალელური დავალებები"}
                             >
                               <AlertTriangle size={10} className="shrink-0 text-amber-600" />
-                              <span className="truncate">პარალელური ({cell.assignments.length})</span>
+                              <span className="truncate">პარალელური ({(cell.assignments || []).length})</span>
                             </div>
                           )}
 
                           {/* Task Chips */}
-                          {cell.assignments.map((task) => {
+                          {(cell.assignments || []).map((task) => {
                             const isSelected = selectedTaskId === task.id;
                             return (
                               <div

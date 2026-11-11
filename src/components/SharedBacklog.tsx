@@ -129,8 +129,8 @@ export function SharedBacklog({
 
         // Assignee filter
         if (assigneeFilter !== "ALL") {
-          const hasAssignee = task.assignments.some(
-            (a) => a.user.id === assigneeFilter
+          const hasAssignee = (task.assignments || []).some(
+            (a) => a.user?.id === assigneeFilter
           );
           if (!hasAssignee) return false;
         }
@@ -141,7 +141,7 @@ export function SharedBacklog({
         }
 
         // Quick filters
-        if (quickFilter === "UNASSIGNED" && task.assignments.length > 0) {
+        if (quickFilter === "UNASSIGNED" && (task.assignments || []).length > 0) {
           return false;
         }
         if (quickFilter === "UNSCHEDULED" && (task.deadline || task.startDate)) {
@@ -731,18 +731,18 @@ export function SharedBacklog({
 
                   {/* Assignees Avatars */}
                   <div className="flex items-center -space-x-1.5">
-                    {task.assignments.length === 0 ? (
+                    {(!task.assignments || task.assignments.length === 0) ? (
                       <span className="text-[10px] text-stone-400 font-medium">
                         დაუნიშნავი
                       </span>
                     ) : (
-                      task.assignments.map((a) => (
+                      (task.assignments || []).map((a) => (
                         <div
-                          key={a.user.id}
+                          key={a.user?.id || Math.random()}
                           className="w-5 h-5 rounded-full bg-orange-100 border border-white flex items-center justify-center text-[10px] font-bold text-orange-700 shadow-2xs"
-                          title={a.user.name}
+                          title={a.user?.name}
                         >
-                          {a.user.name.charAt(0)}
+                          {a.user?.name ? a.user.name.charAt(0) : "?"}
                         </div>
                       ))
                     )}

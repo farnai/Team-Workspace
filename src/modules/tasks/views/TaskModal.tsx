@@ -183,7 +183,7 @@ function TaskModalForm({
         })).filter((a) => Boolean(a.userId));
       }
       return initialTask.assignments?.map((a) => ({
-        userId: a.user.id,
+        userId: a.user?.id || "",
         deadline: initialTask.deadline ? initialTask.deadline.split("T")[0] : "",
       })) || [];
     }

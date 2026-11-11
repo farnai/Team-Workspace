@@ -141,7 +141,7 @@ export function MyWorkDashboard({
     const activeStage = task.stages?.find((s) => s.isActive && !s.isCompleted);
     // User stage
     const userStage = task.stages?.find((s) =>
-      s.assignments.some((a) => a.user.id === currentUserId)
+      (s.assignments || []).some((a) => a.user?.id === currentUserId)
     );
 
     return (

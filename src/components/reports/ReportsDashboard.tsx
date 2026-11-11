@@ -304,7 +304,7 @@ export function ReportsDashboard({
     const now = new Date();
     return users.map((u) => {
       const uTasks = filteredTasks.filter((t) =>
-        t.assignments.some((a) => a.user.id === u.id)
+        (t.assignments || []).some((a) => a.user?.id === u.id)
       );
       const total = uTasks.length;
       const completed = uTasks.filter((t) => t.status === TaskStatus.DONE).length;

@@ -215,12 +215,12 @@ export function Header({
                 )}
               </div>
               <div className="max-h-72 overflow-y-auto divide-y divide-stone-100/60">
-                {notifications.length === 0 ? (
+                {(!notifications || notifications.length === 0) ? (
                   <div className="p-6 text-center text-xs text-stone-400">
                     შეტყობინებები არ არის
                   </div>
                 ) : (
-                  notifications.map((n) => (
+                  (notifications || []).map((n) => (
                     <div
                       key={n.id}
                       onClick={() => handleNotificationClick(n)}
