@@ -1,17 +1,10 @@
 import test from "node:test";
 import assert from "node:assert";
-import { PrismaClient, Role, TaskType, Priority, TaskStatus } from "@prisma/client";
+import { Role, TaskType, Priority, TaskStatus } from "@prisma/client";
+import { testPrisma } from "./test-db";
+import { canDeleteTask } from "@/server/policies/task.policy";
+import { deleteTaskAction } from "@/server/actions/tasks/delete-task.action";
 import bcrypt from "bcryptjs";
-
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ||
-  "postgresql://workspace_user:workspace_secret_password@localhost:5434/team_workspace_test_db?schema=public";
-
-const testPrisma = new PrismaClient({
-  datasources: {
-    db: { url: TEST_DATABASE_URL },
-  },
-});
 
 test("Task Deletion Lifecycle & Permission Guard", async (t) => {
   const ts = Date.now();
@@ -102,25 +95,23 @@ test("Task Deletion Lifecycle & Permission Guard", async (t) => {
   });
 
   await t.test("Rule 1: Other non-admin user cannot delete creator's task", () => {
-    const canDelete = otherUser.role === Role.ADMIN || task.createdById === otherUser.id;
-    assert.strictEqual(canDelete, false, "Other user must be denied task deletion");
+    const allowed = canDeleteTask(otherUser, task);
+    assert.strictEqual(allowed, false, "Other user must be denied task deletion");
   });
 
   await t.test("Rule 2: Creator user CAN delete their own task", () => {
-    const canDelete = creatorUser.role === Role.ADMIN || task.createdById === creatorUser.id;
-    assert.strictEqual(canDelete, true, "Creator user must be allowed task deletion");
+    const allowed = canDeleteTask(creatorUser, task);
+    assert.strictEqual(allowed, true, "Creator user must be allowed task deletion");
   });
 
   await t.test("Rule 3: Admin CAN delete any task", () => {
-    const canDelete = admin.role === Role.ADMIN || task.createdById === admin.id;
-    assert.strictEqual(canDelete, true, "Admin must be allowed task deletion");
+    const allowed = canDeleteTask(admin, task);
+    assert.strictEqual(allowed, true, "Admin must be allowed task deletion");
   });
 
-  await t.test("Rule 4: Cascading cleanup upon task deletion", async () => {
-    // Perform task deletion in database
-    await testPrisma.task.delete({
-      where: { id: task.id },
-    });
+  await t.test("Rule 4: Cascading cleanup upon task deletion via deleteTaskAction", async () => {
+    // Perform task deletion using real application Action
+    await deleteTaskAction(task.id, admin);
 
     // Verify task is gone
     const deletedTask = await testPrisma.task.findUnique({

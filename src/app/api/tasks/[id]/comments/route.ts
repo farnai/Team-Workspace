@@ -1,92 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
-import { logAuditEvent } from "@/lib/audit";
-import { z } from "zod";
+import { handle } from '@/server/http/route';
+import { listCommentsAction } from '@/server/actions/comments/list-comments.action';
+import { createCommentAction } from '@/server/actions/comments/create-comment.action';
 
-const createCommentSchema = z.object({
-  content: z.string().min(1, "კომენტარი არ შეიძლება იყოს ცარიელი"),
+export const GET = handle(async (_req, { params }) => {
+  const { id } = await params;
+  const comments = await listCommentsAction(id);
+  return { comments };
 });
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await requireAuth();
-    const { id: taskId } = await params;
-
-    const comments = await prisma.comment.findMany({
-      where: { taskId },
-      orderBy: { createdAt: "asc" },
-      include: {
-        user: { select: { id: true, name: true, avatarUrl: true } },
-      },
-    });
-
-    return NextResponse.json({ success: true, comments });
-  } catch (error: unknown) {
-    const err = error as Error;
-    if (err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
-    }
-    console.error("GET /api/tasks/[id]/comments error:", error);
-    return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
-  }
-}
-
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await requireAuth();
-    const { id: taskId } = await params;
-    const body = await req.json();
-
-    const result = createCommentSchema.safeParse(body);
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error.issues[0]?.message || "არასწორი მონაცემები" },
-        { status: 400 }
-      );
-    }
-
-    const { content } = result.data;
-
-    const comment = await prisma.$transaction(async (tx) => {
-      const created = await tx.comment.create({
-        data: {
-          taskId,
-          userId: user.id,
-          content,
-        },
-        include: {
-          user: { select: { id: true, name: true, avatarUrl: true } },
-        },
-      });
-
-      await logAuditEvent({
-        taskId,
-        actorId: user.id,
-        action: "COMMENT_ADDED",
-        entityType: "COMMENT",
-        entityId: created.id,
-        newValues: { snippet: content.slice(0, 100) },
-        reason: "ახალი კომენტარის დამატება",
-        tx,
-      });
-
-      return created;
-    });
-
-    return NextResponse.json({ success: true, comment });
-  } catch (error: unknown) {
-    const err = error as Error;
-    if (err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "გთხოვთ გაიაროთ ავტორიზაცია" }, { status: 401 });
-    }
-    console.error("POST /api/tasks/[id]/comments error:", error);
-    return NextResponse.json({ error: "სერვერის შეცდომა" }, { status: 500 });
-  }
-}
+export const POST = handle(async (req, { params }) => {
+  const { id } = await params;
+  const body = await req.json();
+  const comment = await createCommentAction(id, body);
+  return { comment };
+}, 201);

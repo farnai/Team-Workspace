@@ -1,5 +1,18 @@
 // Global test setup preload
 import { before } from "node:test";
+import Module from "node:module";
+
+// Mock server-only in the test runner environment so server files can be imported directly
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const originalRequire = (Module as any).prototype.require;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(Module as any).prototype.require = function (id: string, ...args: any[]) {
+  if (id === "server-only") {
+    return {};
+  }
+  return originalRequire.apply(this, [id, ...args]);
+};
+
 import { testPrisma } from "./test-db";
 
 // Ensure sequence is synchronized with max(taskNumber) in the isolated test DB to prevent collisions

@@ -9,3 +9,4 @@ export async function completeStageAction(stageId: string, actor: User) {
   })
   return { nextStage: result.nextStage }
 }
+

@@ -1,25 +1,15 @@
 import test from "node:test";
 import assert from "node:assert";
 import {
-  PrismaClient,
   Role,
   TaskType,
   Priority,
   TaskStatus,
   SubtaskStatus,
 } from "@prisma/client";
+import { testPrisma } from "./test-db";
 import bcrypt from "bcryptjs";
 import { detectTeamWorkloadConflicts, BasicTaskForConflict } from "../src/lib/conflicts";
-
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ||
-  "postgresql://workspace_user:workspace_secret_password@localhost:5434/team_workspace_test_db?schema=public";
-
-const testPrisma = new PrismaClient({
-  datasources: {
-    db: { url: TEST_DATABASE_URL },
-  },
-});
 
 test("Step 8: Admin User Management - Creation, Deactivation, History Preservation & Login Guard", async () => {
   // 1. Create an admin and a regular user

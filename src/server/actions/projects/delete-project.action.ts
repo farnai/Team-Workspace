@@ -33,3 +33,4 @@ export async function deleteProjectAction(id: string, actor: User) {
     return { success: true, message: 'პროექტი წარმატებით წაიშალა' }
   })
 }
+

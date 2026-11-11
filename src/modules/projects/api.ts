@@ -10,3 +10,4 @@ export const projectsApi = {
     api.patch<{ project: ProjectItem }>(`/projects/${id}`, payload),
   delete: (id: string) => api.delete<{ success: boolean }>(`/projects/${id}`),
 }
+

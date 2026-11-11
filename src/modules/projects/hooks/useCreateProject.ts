@@ -10,3 +10,4 @@ export function useCreateProject() {
     invalidate: [projectKeys.all],
   })
 }
+

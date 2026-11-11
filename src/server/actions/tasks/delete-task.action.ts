@@ -70,3 +70,4 @@ export async function deleteTaskAction(id: string, actor: User) {
     message: `დავალება #${existing.taskNumber} წარმატებით წაიშალა`,
   }
 }
+

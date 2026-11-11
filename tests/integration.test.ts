@@ -1,23 +1,13 @@
 import test from "node:test";
 import assert from "node:assert";
-import { PrismaClient, TaskStatus, SubtaskStatus } from "@prisma/client";
+import { TaskStatus, SubtaskStatus } from "@prisma/client";
+import { testPrisma } from "./test-db";
 import {
   calculateAndSyncTaskProgress,
   validateDeadlineModification,
   advanceWorkflowStage,
 } from "../src/lib/workflow";
 import { logAuditEvent } from "../src/lib/audit";
-
-// Dedicated connection to ISOLATED test database (never touched dev DB)
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ||
-  "postgresql://workspace_user:workspace_secret_password@localhost:5434/team_workspace_test_db?schema=public";
-
-const testPrisma = new PrismaClient({
-  datasources: {
-    db: { url: TEST_DATABASE_URL },
-  },
-});
 
 test("Isolated Integration Test: Users, Tasks, Deadline Governance, Workflow & Progress", async () => {
   // 1. Create clean test project

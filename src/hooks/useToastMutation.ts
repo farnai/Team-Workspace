@@ -36,3 +36,4 @@ export function useToastMutation<TData = unknown, TVariables = void>(
     },
   })
 }
+

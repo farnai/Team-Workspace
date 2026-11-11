@@ -6,3 +6,4 @@ export async function listProjectsAction() {
   const projects = await projectRepository.findAll()
   return projects.map(toProjectSummaryResource)
 }
+

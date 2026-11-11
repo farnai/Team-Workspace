@@ -24,3 +24,4 @@ export interface UpdateProjectPayload {
   color?: string
   isArchived?: boolean
 }
+

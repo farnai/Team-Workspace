@@ -11,3 +11,4 @@ export const auditRepository = {
     return logAuditEvent({ ...options, tx })
   },
 }
+

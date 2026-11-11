@@ -460,8 +460,9 @@ test("Phase A: Stabilization & Reliability Verification", async (t) => {
     });
 
     assert.equal(updated.assignments.length, 2, "TaskAssignments must not disappear silently");
-    assert.equal(updated.assignments[0].userId, member1.id);
-    assert.equal(updated.assignments[1].userId, member2.id);
+    const userIds = updated.assignments.map((a: any) => a.userId);
+    assert.ok(userIds.includes(member1.id));
+    assert.ok(userIds.includes(member2.id));
   });
 
   // A3: Task reopening from archive

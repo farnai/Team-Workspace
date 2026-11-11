@@ -70,3 +70,4 @@ export const taskQueryDto = z.object({
 })
 
 export type TaskQueryDto = z.infer<typeof taskQueryDto>
+

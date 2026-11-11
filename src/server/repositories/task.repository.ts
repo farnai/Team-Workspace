@@ -2,7 +2,8 @@ import 'server-only'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
-type Db = PrismaClient | Prisma.TransactionClient
+export { prisma };
+export type Db = PrismaClient | Prisma.TransactionClient;
 
 export const taskRepository = {
   findById(id: string, db: Db = prisma) {

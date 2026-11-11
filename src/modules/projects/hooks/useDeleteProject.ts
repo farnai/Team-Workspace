@@ -9,3 +9,4 @@ export function useDeleteProject() {
     invalidate: [projectKeys.all],
   })
 }
+

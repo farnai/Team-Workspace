@@ -1,21 +1,11 @@
 import test from "node:test";
 import assert from "node:assert";
 import {
-  PrismaClient,
   Role,
 } from "@prisma/client";
+import { testPrisma } from "./test-db";
 import { calculateAndSyncTaskProgress } from "../src/lib/workflow";
 import path from "path";
-
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ||
-  "postgresql://workspace_user:workspace_secret_password@localhost:5434/team_workspace_test_db?schema=public";
-
-const testPrisma = new PrismaClient({
-  datasources: {
-    db: { url: TEST_DATABASE_URL },
-  },
-});
 
 test("Step 5: Complete Task Details: Comments, Attachments, External Links, Daily Updates & Activity", async () => {
   // 1. Setup Project & Users (Giorgi - Author, Salome - Other User, Dato - Admin)

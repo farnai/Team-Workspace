@@ -69,3 +69,4 @@ export async function listTasksAction(query: TaskQueryDto) {
   const tasks = await taskRepository.findMany(where, orderBy)
   return tasks.map((t) => toTaskResource(t as unknown as Parameters<typeof toTaskResource>[0]))
 }
+

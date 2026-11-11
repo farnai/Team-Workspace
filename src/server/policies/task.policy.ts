@@ -35,3 +35,4 @@ export function canCompleteStage(user: User, stage: StageWithActors): boolean {
   if (user.role === Role.ADMIN) return true
   return stage.assignments?.some((a) => a.userId === user.id) ?? false
 }
+

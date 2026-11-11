@@ -40,3 +40,4 @@ export function toProjectSummaryResource(p: ProjectWithTasks) {
     progress,
   }
 }
+

@@ -22,3 +22,4 @@ export function toTaskResource(task: Task & Record<string, unknown>) {
     updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : undefined,
   }
 }
+

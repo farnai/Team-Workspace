@@ -29,3 +29,4 @@ export async function updateProjectAction(id: string, input: UpdateProjectDto, a
     )
   })
 }
+

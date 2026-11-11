@@ -1,26 +1,16 @@
 import test from "node:test";
 import assert from "node:assert";
 import {
-  PrismaClient,
   TaskStatus,
   SubtaskStatus,
   Role,
 } from "@prisma/client";
+import { testPrisma } from "./test-db";
 import {
   calculateAndSyncTaskProgress,
   advanceWorkflowStage,
   validateDeadlineModification,
 } from "../src/lib/workflow";
-
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ||
-  "postgresql://workspace_user:workspace_secret_password@localhost:5434/team_workspace_test_db?schema=public";
-
-const testPrisma = new PrismaClient({
-  datasources: {
-    db: { url: TEST_DATABASE_URL },
-  },
-});
 
 test("Step 4: Ordered Workflow Stages, Multi-Assignee Subtasks & Automatic Progress", async () => {
   // 1. Setup Project & Users (Vaska, Tornike, Farna)

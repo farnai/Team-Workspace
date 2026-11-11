@@ -17,3 +17,4 @@ export const updateProjectDto = z.object({
 })
 
 export type UpdateProjectDto = z.infer<typeof updateProjectDto>
+

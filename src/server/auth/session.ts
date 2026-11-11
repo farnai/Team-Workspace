@@ -5,6 +5,8 @@ import { User, Role } from '@prisma/client'
 import crypto from 'crypto'
 import { UnauthorizedError, ForbiddenError } from '@/server/http/errors'
 
+export type UserSession = User;
+
 export const SESSION_COOKIE_NAME = 'tw_session_token'
 const SESSION_MAX_AGE_DAYS = 30
 
@@ -97,3 +99,4 @@ export async function requireAdmin(): Promise<User> {
   }
   return user
 }
+

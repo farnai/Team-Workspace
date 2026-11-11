@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/server/auth/session';
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -13,6 +13,7 @@ export async function GET() {
       email: user.email,
       name: user.name,
       role: user.role,
+      department: user.department,
       avatarUrl: user.avatarUrl,
     },
   });

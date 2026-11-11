@@ -204,7 +204,7 @@ test("Task Redesign Workflow: Optional Deadlines, Sequential Assignees & Deadlin
           ],
         },
       },
-      include: { stages: true },
+      include: { stages: { orderBy: { position: "asc" } } },
     });
 
     const s1 = task.stages[0];

@@ -1,24 +1,14 @@
 import test from "node:test";
 import assert from "node:assert";
 import {
-  PrismaClient,
   TaskStatus,
   TaskType,
   Priority,
   Role,
 } from "@prisma/client";
+import { testPrisma } from "./test-db";
 import { validateDeadlineModification } from "../src/lib/workflow";
 import { logAuditEvent } from "../src/lib/audit";
-
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ||
-  "postgresql://workspace_user:workspace_secret_password@localhost:5434/team_workspace_test_db?schema=public";
-
-const testPrisma = new PrismaClient({
-  datasources: {
-    db: { url: TEST_DATABASE_URL },
-  },
-});
 
 test("Step 3: Comprehensive Shared Backlog, Task Governance & Timeline Integration Tests", async () => {
   // Setup: Project & Users

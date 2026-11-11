@@ -1,20 +1,11 @@
 import test from "node:test";
 import assert from "node:assert";
-import { PrismaClient, Role, TaskType, Priority, TaskStatus, SubtaskStatus, AuditAction } from "@prisma/client";
+import { Role, TaskType, Priority, TaskStatus, SubtaskStatus, AuditAction } from "@prisma/client";
+import { testPrisma } from "./test-db";
 import {
   detectTaskConflicts,
   detectTeamWorkloadConflicts,
 } from "../src/lib/conflicts";
-
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ||
-  "postgresql://workspace_user:workspace_secret_password@localhost:5434/team_workspace_test_db?schema=public";
-
-const testPrisma = new PrismaClient({
-  datasources: {
-    db: { url: TEST_DATABASE_URL },
-  },
-});
 
 test("Step 7: Conflict Detection Engine - Factual Conflict Rules", () => {
   // 1. Start date after deadline conflict
