@@ -6,3 +6,4 @@ export const overviewApi = {
     return api.get<OverviewData>('/api/overview');
   },
 };
+

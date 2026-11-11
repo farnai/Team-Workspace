@@ -90,3 +90,4 @@ export interface TaskFilterParams {
   type?: TaskType;
   search?: string;
 }
+

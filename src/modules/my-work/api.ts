@@ -6,3 +6,4 @@ export const myWorkApi = {
     return api.get<MyWorkData>('/api/my-work');
   },
 };
+

@@ -102,3 +102,4 @@ export async function updateUserAction(id: string, input: unknown) {
     isActive: updatedUser.isActive,
   };
 }
+

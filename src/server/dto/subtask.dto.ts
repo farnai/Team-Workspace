@@ -24,3 +24,4 @@ export const updateSubtaskDto = z.object({
 
 export type CreateSubtaskInput = z.infer<typeof createSubtaskDto>;
 export type UpdateSubtaskInput = z.infer<typeof updateSubtaskDto>;
+

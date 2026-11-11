@@ -37,3 +37,4 @@ export const tasksApi = {
     return api.post<{ success: boolean }>(`/api/stages/${stageId}/complete`);
   },
 };
+

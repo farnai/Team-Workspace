@@ -13,3 +13,4 @@ export const archiveApi = {
     return api.get<ArchiveData>(`/api/archive${query}`);
   },
 };
+

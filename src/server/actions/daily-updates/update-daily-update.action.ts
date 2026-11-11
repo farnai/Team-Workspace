@@ -40,3 +40,4 @@ export async function updateDailyUpdateAction(id: string, input: unknown) {
     return updated;
   });
 }
+

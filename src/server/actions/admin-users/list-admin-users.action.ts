@@ -6,3 +6,4 @@ export async function listAdminUsersAction() {
   await requireAdmin();
   return userRepository.findAllAdminUsers();
 }
+

@@ -18,3 +18,4 @@ export const settingsApi = {
     return api.delete<{ success: boolean }>(`/api/settings/calendar?id=${id}`);
   },
 };
+

@@ -35,3 +35,4 @@ export async function createDailyUpdateAction(taskId: string, input: unknown) {
     return created;
   });
 }
+

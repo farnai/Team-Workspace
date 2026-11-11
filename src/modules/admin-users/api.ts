@@ -17,3 +17,4 @@ export const adminUsersApi = {
     return res.user;
   },
 };
+

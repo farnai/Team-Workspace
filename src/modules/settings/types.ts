@@ -10,3 +10,4 @@ export interface CreateHolidayInput {
   name: string;
   isOfficial?: boolean;
 }
+

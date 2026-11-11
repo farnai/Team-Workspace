@@ -16,3 +16,4 @@ export interface WorkloadData {
   workingDays: unknown[];
   holidays: unknown[];
 }
+

@@ -21,3 +21,4 @@ export const updateUserDto = z.object({
 
 export type CreateUserInput = z.infer<typeof createUserDto>;
 export type UpdateUserInput = z.infer<typeof updateUserDto>;
+

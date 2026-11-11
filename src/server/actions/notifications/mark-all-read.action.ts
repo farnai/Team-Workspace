@@ -12,3 +12,4 @@ export async function markAllNotificationsReadAction() {
 
   return { success: true };
 }
+

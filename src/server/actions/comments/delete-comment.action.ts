@@ -37,3 +37,4 @@ export async function deleteCommentAction(id: string) {
 
   return { message: 'კომენტარი წარმატებით წაიშალა' };
 }
+

@@ -11,3 +11,4 @@ export const updateDailyUpdateDto = z.object({
 
 export type CreateDailyUpdateInput = z.infer<typeof createDailyUpdateDto>;
 export type UpdateDailyUpdateInput = z.infer<typeof updateDailyUpdateDto>;
+

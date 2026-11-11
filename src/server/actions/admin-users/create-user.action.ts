@@ -51,3 +51,4 @@ export async function createUserAction(input: unknown) {
     isActive: newUser.isActive,
   };
 }
+

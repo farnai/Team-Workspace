@@ -26,3 +26,4 @@ export const updateLinkDto = z.object({
 
 export type CreateLinkInput = z.infer<typeof createLinkDto>;
 export type UpdateLinkInput = z.infer<typeof updateLinkDto>;
+

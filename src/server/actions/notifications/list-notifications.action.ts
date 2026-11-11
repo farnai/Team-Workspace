@@ -17,3 +17,4 @@ export async function listNotificationsAction() {
 
   return { notifications, unreadCount };
 }
+

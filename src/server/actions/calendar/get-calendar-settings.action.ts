@@ -12,3 +12,4 @@ export async function getCalendarSettingsAction() {
 
   return { workingCalendar, holidays };
 }
+

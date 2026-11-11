@@ -29,3 +29,4 @@ export async function deleteHolidayAction(id: string | null) {
 
   return { success: true };
 }
+

@@ -21,3 +21,4 @@ export interface UpdateUserInput {
   role?: Role;
   department?: Department;
 }
+

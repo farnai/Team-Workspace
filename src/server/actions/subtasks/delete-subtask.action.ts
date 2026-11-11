@@ -34,3 +34,4 @@ export async function deleteSubtaskAction(subtaskId: string) {
   const progress = await calculateAndSyncTaskProgress(existing.taskId);
   return { progress };
 }
+

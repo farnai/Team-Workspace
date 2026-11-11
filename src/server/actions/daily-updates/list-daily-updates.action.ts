@@ -6,3 +6,4 @@ export async function listDailyUpdatesAction(taskId: string) {
   await requireUser();
   return dailyUpdateRepository.findByTaskId(taskId);
 }
+

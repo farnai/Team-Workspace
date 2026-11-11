@@ -9,3 +9,4 @@ export function useArchive(filters?: ArchiveFilterParams) {
     queryFn: () => archiveApi.get(filters),
   });
 }
+

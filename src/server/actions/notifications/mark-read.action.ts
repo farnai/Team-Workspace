@@ -21,3 +21,4 @@ export async function markNotificationReadAction(id: string) {
 
   return { notification: updated };
 }
+

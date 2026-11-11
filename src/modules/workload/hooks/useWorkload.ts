@@ -9,3 +9,4 @@ export function useWorkload(filters?: WorkloadFilterParams) {
     queryFn: () => workloadApi.get(filters),
   });
 }
+

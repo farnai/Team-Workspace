@@ -6,3 +6,4 @@ export async function listUsersAction() {
   await requireUser();
   return userRepository.findAllActiveUsers();
 }
+

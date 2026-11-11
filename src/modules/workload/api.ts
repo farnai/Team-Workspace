@@ -13,3 +13,4 @@ export const workloadApi = {
     return api.get<WorkloadData>(`/api/workload${query}`);
   },
 };
+
