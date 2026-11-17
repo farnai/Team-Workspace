@@ -15,10 +15,11 @@ import { AdminUsersManagement } from "@/components/admin/AdminUsersManagement";
 import { CalendarSettings } from "@/components/settings/CalendarSettings";
 import { ArchiveView } from "@/components/archive/ArchiveView";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
+import { QualityControlView } from "@/components/qa/QualityControlView";
 import { ReportsDashboard } from "@/components/reports/ReportsDashboard";
 import { ActivityLogDashboard } from "@/components/audit/ActivityLogDashboard";
 import { ProjectsView } from "@/components/projects/ProjectsView";
-import { TaskStatus } from "@prisma/client";
+import { TaskStatus, Department, TaskType } from "@prisma/client";
 import { format } from "date-fns";
 import { getTbilisiTodayDate } from "@/lib/dateUtils";
 import {
@@ -65,6 +66,7 @@ export default function WorkspacePage({
           "projects",
           "timeline",
           "backlog",
+          "qa",
           "archive",
           "my-work",
           "workload",
@@ -97,6 +99,8 @@ export default function WorkspacePage({
   const [tasks, setTasks] = useState<BacklogTask[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createTaskDefaultProjectId, setCreateTaskDefaultProjectId] = useState<string | undefined>(undefined);
+  const [createTaskDefaultDepartment, setCreateTaskDefaultDepartment] = useState<Department | undefined>(undefined);
+  const [createTaskDefaultType, setCreateTaskDefaultType] = useState<TaskType | undefined>(undefined);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<BacklogTask | null>(null);
@@ -236,6 +240,7 @@ export default function WorkspacePage({
         "projects",
         "timeline",
         "backlog",
+        "qa",
         "archive",
         "my-work",
         "workload",
@@ -381,9 +386,15 @@ export default function WorkspacePage({
     }
   };
 
-  const handleOpenNewTask = (defaultProjectId?: unknown) => {
+  const handleOpenNewTask = (
+    defaultProjectId?: unknown,
+    defaultDepartment?: Department,
+    defaultType?: TaskType
+  ) => {
     const validProjectId = typeof defaultProjectId === "string" ? defaultProjectId : undefined;
     setCreateTaskDefaultProjectId(validProjectId);
+    setCreateTaskDefaultDepartment(defaultDepartment);
+    setCreateTaskDefaultType(defaultType);
     setIsCreateModalOpen(true);
   };
 
@@ -529,6 +540,31 @@ export default function WorkspacePage({
                 />
               </div>
             </div>
+          ) : currentView === "qa" ? (
+            <div className="flex-1 flex overflow-hidden min-h-0 w-full h-full">
+              {/* Dedicated Quality Control View (Single-line Registry / Matrix) */}
+              <QualityControlView
+                tasks={tasks}
+                onSelectTask={handleSelectTask}
+                selectedTaskId={selectedTaskId}
+                onOpenNewTask={() => handleOpenNewTask(undefined, Department.QA, TaskType.QA)}
+                onEditTask={handleEditTask}
+                onStatusChange={handleStatusChange}
+                onDeleteTask={handleTaskDelete}
+                projects={projects}
+                users={users}
+                isAdmin={currentUser.role === "ADMIN"}
+                externalSearchQuery={searchQuery}
+                onNavigateToTimeline={() => {
+                  setCurrentView("timeline");
+                  if (typeof window !== "undefined") {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("view", "timeline");
+                    window.history.pushState({}, "", url.toString());
+                  }
+                }}
+              />
+            </div>
           ) : currentView === "backlog" ? (
             <div className="flex-1 flex overflow-hidden min-h-0 w-full h-full">
               {/* Dedicated Kanban Board for Backlog */}
@@ -544,6 +580,7 @@ export default function WorkspacePage({
                 users={users}
                 isAdmin={currentUser.role === "ADMIN"}
                 externalSearchQuery={searchQuery}
+                isQAView={false}
                 onNavigateToTimeline={() => {
                   setCurrentView("timeline");
                   if (typeof window !== "undefined") {
@@ -620,6 +657,8 @@ export default function WorkspacePage({
           onClose={() => {
             setIsCreateModalOpen(false);
             setCreateTaskDefaultProjectId(undefined);
+            setCreateTaskDefaultDepartment(undefined);
+            setCreateTaskDefaultType(undefined);
           }}
           onSuccess={handleTaskSaved}
           mode="create"
@@ -627,6 +666,8 @@ export default function WorkspacePage({
           projects={projects}
           users={users}
           defaultProjectId={createTaskDefaultProjectId}
+          defaultDepartment={createTaskDefaultDepartment}
+          defaultType={createTaskDefaultType}
           onProjectsUpdated={refreshProjects}
         />
       )}

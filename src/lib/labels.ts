@@ -85,6 +85,12 @@ export const DEPARTMENT_LABELS: Record<Department, { label: string; color: strin
     bg: 'bg-purple-50',
     border: 'border-purple-200',
   },
+  QA: {
+    label: 'ხარისხის კონტროლი',
+    color: 'text-emerald-700',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-200',
+  },
 }
 
 export const TASK_TYPE_LABELS: Record<TaskType, { label: string; color: string; bg: string; border: string }> = {
@@ -105,6 +111,12 @@ export const TASK_TYPE_LABELS: Record<TaskType, { label: string; color: string; 
     color: 'text-amber-700',
     bg: 'bg-amber-50',
     border: 'border-amber-200',
+  },
+  QA: {
+    label: 'QA ტესტი',
+    color: 'text-teal-700',
+    bg: 'bg-teal-50',
+    border: 'border-teal-200',
   },
 }
 
@@ -149,5 +161,6 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   DAILY_UPDATE_ADDED: 'დღიური ანგარიში',
   USER_CREATED: 'მომხმარებლის დამატება',
   USER_STATUS_CHANGED: 'მომხმარებლის სტატუსი',
+  USER_DELETED: 'მომხმარებლის წაშლა',
   CALENDAR_UPDATED: 'კალენდრის განახლება',
 }

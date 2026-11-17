@@ -361,4 +361,29 @@ describe('GTU Team Workspace: Automated Browser Smoke Tests', () => {
       await page.close()
     }
   })
+
+  it('11. Quality Control (QA View): renders dedicated QA board without console or runtime errors', async () => {
+    const page = await browser.newPage()
+    const collector = attachPreNavErrorCollector(page)
+
+    try {
+      await setAuthSessionCookie(page, fixtures.adminUser.token)
+      await page.goto(`${SMOKE_BASE_URL}/?view=qa`, {
+        waitUntil: 'networkidle2',
+        timeout: 15000,
+      })
+
+      // Verify QA board title and new QA test button
+      await waitForDomText(page, 'ხარისხის კონტროლი', 8000)
+      await waitForDomText(page, 'ახალი QA შემოწმება', 8000)
+
+      collector.assertClean('Quality Control QA View')
+    } catch (err) {
+      await takeFailureScreenshot(page, 'qa_view_failure')
+      throw err
+    } finally {
+      collector.detach()
+      await page.close()
+    }
+  })
 })

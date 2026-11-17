@@ -125,6 +125,7 @@ export const timelineRepository = {
             taskNumber: true,
             title: true,
             type: true,
+            department: true,
             status: true,
           },
         },

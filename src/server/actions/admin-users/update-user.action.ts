@@ -6,10 +6,10 @@ import { NotFoundError, ValidationError } from '@/server/http/errors';
 import { updateUserDto } from '@/server/dto/user.dto';
 import { userRepository } from '@/server/repositories/user.repository';
 import { auditRepository } from '@/server/repositories/audit.repository';
-import { Role, Prisma } from '@prisma/client';
+import { Role, Prisma, User } from '@prisma/client';
 
-export async function updateUserAction(id: string, input: unknown) {
-  const admin = await requireAdmin();
+export async function updateUserAction(id: string, input: unknown, adminUser?: User) {
+  const admin = adminUser || (await requireAdmin());
   const data = updateUserDto.parse(input);
 
   const targetUser = await userRepository.findById(id);
@@ -57,7 +57,10 @@ export async function updateUserAction(id: string, input: unknown) {
       }
     }
 
-    if (data.password || data.isActive === false) {
+    if (data.isActive === false) {
+      await userRepository.unassignFromActiveTasksAndClearDeadlines(id, tx);
+      await userRepository.invalidateSessions(id, tx);
+    } else if (data.password) {
       await userRepository.invalidateSessions(id, tx);
     }
 

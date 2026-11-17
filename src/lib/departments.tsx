@@ -1,6 +1,6 @@
 import React from "react";
 import { Department } from "@prisma/client";
-import { Code2, PenTool } from "lucide-react";
+import { Code2, PenTool, CheckSquare } from "lucide-react";
 
 export interface DepartmentMeta {
   key: Department;
@@ -28,15 +28,25 @@ export const DEPARTMENTS: Record<Department, DepartmentMeta> = {
     activeTabClass: "bg-purple-600 text-white",
     iconName: "PenTool",
   },
+  QA: {
+    key: "QA",
+    label: "ხარისხის კონტროლი",
+    shortLabel: "QA",
+    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200/90",
+    activeTabClass: "bg-emerald-600 text-white",
+    iconName: "CheckSquare",
+  },
 };
 
 export function getDepartmentLabel(dep?: Department | string | null): string {
   if (dep === "CONTENT") return "კონტენტი";
+  if (dep === "QA") return "ხარისხის კონტროლი";
   return "დეველოპმენტი";
 }
 
 export function getDepartmentBadge(dep?: Department | string | null) {
   if (dep === "CONTENT") return DEPARTMENTS.CONTENT;
+  if (dep === "QA") return DEPARTMENTS.QA;
   return DEPARTMENTS.DEVELOPMENT;
 }
 
@@ -55,6 +65,7 @@ export function DepartmentBadge({
 }: DepartmentBadgeProps) {
   const meta = getDepartmentBadge(department);
   const isContent = meta.key === "CONTENT";
+  const isQA = meta.key === "QA";
 
   const sizeClasses =
     size === "xs"
@@ -69,7 +80,9 @@ export function DepartmentBadge({
       title={`გუნდი: ${meta.label}`}
     >
       {showIcon && (
-        isContent ? (
+        isQA ? (
+          <CheckSquare size={size === "xs" ? 10 : 12} className="shrink-0" />
+        ) : isContent ? (
           <PenTool size={size === "xs" ? 10 : 12} className="shrink-0" />
         ) : (
           <Code2 size={size === "xs" ? 10 : 12} className="shrink-0" />

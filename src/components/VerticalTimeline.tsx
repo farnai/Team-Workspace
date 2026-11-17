@@ -21,12 +21,15 @@ import {
   isTaskOverdue,
 } from "@/lib/dateUtils";
 import { DatePicker } from "@/components/ui/DatePicker";
+import { Department } from "@prisma/client";
+import { DepartmentBadge } from "@/lib/departments";
 
 export interface TimelineTask {
   id: string;
   taskNumber: number;
   title: string;
   type: string;
+  department?: string;
   priority: string;
   status: string;
   progress: number;
@@ -64,6 +67,7 @@ export interface TimelineActivity {
     taskNumber?: number;
     title: string;
     type?: string;
+    department?: string;
     status?: string;
   } | null;
   oldValues?: unknown;
@@ -176,6 +180,34 @@ function formatTimelineActivity(act: TimelineActivity): {
     default:
       return { label: act.action, details: act.reason || null };
   }
+}
+
+export function getTimelineTaskTypeBadge(type?: string, department?: string): {
+  label: string;
+  class: string;
+} {
+  if (type === "QA" || department === "QA") {
+    return {
+      label: "ტესტირება",
+      class: "bg-teal-50 text-teal-800 border-teal-300/80 font-bold",
+    };
+  }
+  if (type === "BUG") {
+    return {
+      label: "ბაგ ფიქსი",
+      class: "bg-rose-50 text-rose-800 border-rose-300/80 font-bold",
+    };
+  }
+  if (type === "HOTFIX") {
+    return {
+      label: "ჰოტფიქსი",
+      class: "bg-purple-50 text-purple-800 border-purple-300/80 font-bold",
+    };
+  }
+  return {
+    label: "ფუნქციონალი",
+    class: "bg-blue-50 text-blue-800 border-blue-300/80 font-bold",
+  };
 }
 
 export function VerticalTimeline({
@@ -452,9 +484,10 @@ export function VerticalTimeline({
               className="text-[11px] font-semibold bg-transparent text-stone-700 focus:outline-none cursor-pointer"
             >
               <option value="ALL">ყველა ტიპი</option>
-              <option value="FEATURE">Feature</option>
-              <option value="BUG">Bug</option>
-              <option value="HOTFIX">Hotfix</option>
+              <option value="FEATURE">ფუნქციონალი</option>
+              <option value="BUG">ბაგ ფიქსი</option>
+              <option value="HOTFIX">ჰოტფიქსი</option>
+              <option value="QA">ტესტირება (QA)</option>
             </select>
           </div>
         </div>
@@ -482,7 +515,12 @@ export function VerticalTimeline({
             const filteredTasks =
               filterType === "ALL"
                 ? day.tasks
-                : day.tasks.filter((t) => t.type === filterType);
+                : day.tasks.filter((t) => {
+                    if (filterType === "QA") {
+                      return t.type === "QA" || t.department === "QA";
+                    }
+                    return t.type === filterType;
+                  });
             const hasTasks = filteredTasks.length > 0;
 
             const isTodayAndActive = isTodayDate && isActiveDate;
@@ -591,22 +629,7 @@ export function VerticalTimeline({
                     <div className="space-y-1.5">
                       {filteredTasks.map((t) => {
                         const isSelected = selectedTaskId === t.id;
-
-                        let typeBadge = {
-                          label: "FEAT",
-                          class: "bg-indigo-50 text-indigo-700 border-indigo-200/60",
-                        };
-                        if (t.type === "BUG") {
-                          typeBadge = {
-                            label: "BUG",
-                            class: "bg-amber-50 text-amber-700 border-amber-200/60",
-                          };
-                        } else if (t.type === "HOTFIX") {
-                          typeBadge = {
-                            label: "HOTFIX",
-                            class: "bg-rose-50 text-rose-700 border-rose-200/60",
-                          };
-                        }
+                        const typeBadge = getTimelineTaskTypeBadge(t.type, t.department);
 
                         const activeResponsibles =
                           t.responsibleUsers && t.responsibleUsers.length > 0
@@ -666,6 +689,11 @@ export function VerticalTimeline({
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                 <span className="text-[8px] font-bold px-1 py-0.2 rounded bg-stone-200/80 text-stone-600 uppercase shrink-0">
                                   გაგრძელება
+                                </span>
+                                <span
+                                  className={`text-[8px] font-black px-1.5 py-0.2 rounded border uppercase tracking-wider shrink-0 ${typeBadge.class}`}
+                                >
+                                  {typeBadge.label}
                                 </span>
                                 <span className="text-[10px] font-mono text-stone-400 shrink-0">
                                   #{t.taskNumber}
@@ -856,9 +884,19 @@ export function VerticalTimeline({
                             {a.task && (
                               <div
                                 onClick={() => a.task?.id && onSelectTask(a.task.id)}
-                                className="pt-0.5 text-orange-600 hover:text-orange-700 cursor-pointer font-bold text-[10px] flex items-center gap-1"
+                                className="pt-0.5 text-stone-700 hover:text-stone-900 cursor-pointer text-[10px] flex items-center gap-1.5 flex-wrap"
                               >
-                                <span>
+                                {(() => {
+                                  const tb = getTimelineTaskTypeBadge(a.task.type, a.task.department);
+                                  return (
+                                    <span
+                                      className={`text-[8px] font-extrabold px-1.5 py-0.2 rounded border tracking-tight shrink-0 ${tb.class}`}
+                                    >
+                                      {tb.label}
+                                    </span>
+                                  );
+                                })()}
+                                <span className="font-bold text-orange-600 hover:underline">
                                   #{a.task.taskNumber || ""} {a.task.title}
                                 </span>
                               </div>

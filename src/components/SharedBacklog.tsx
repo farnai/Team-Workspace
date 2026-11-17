@@ -45,12 +45,26 @@ export interface BacklogTask {
       role: "ADMIN" | "USER";
     };
   }[];
-  subtasks?: { id: string; status: string }[];
+  subtasks?: {
+    id: string;
+    title?: string;
+    status: string;
+    deadline?: string | null;
+    completedAt?: string | null;
+    position?: number;
+  }[];
   stages?: {
     id: string;
     title: string;
     isCompleted: boolean;
-    subtasks?: { id: string; status: string }[];
+    subtasks?: {
+    id: string;
+    title?: string;
+    status: string;
+    deadline?: string | null;
+    completedAt?: string | null;
+    position?: number;
+  }[];
   }[];
 }
 

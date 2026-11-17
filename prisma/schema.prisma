@@ -15,12 +15,14 @@ enum Role {
 enum Department {
   DEVELOPMENT
   CONTENT
+  QA
 }
 
 enum TaskType {
   FEATURE
   BUG
   HOTFIX
+  QA
 }
 
 enum Priority {
@@ -76,6 +78,7 @@ enum AuditAction {
   CALENDAR_UPDATED
   DEPARTMENT_CHANGED
   TASK_DELETED
+  USER_DELETED
 }
 
 model User {
@@ -87,6 +90,8 @@ model User {
   passwordHash String
   avatarUrl    String?
   isActive     Boolean    @default(true)
+  isDeleted    Boolean    @default(false)
+  deletedAt    DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -102,6 +107,8 @@ model User {
   auditEvents        AuditEvent[]        @relation("AuditActor")
   notifications      Notification[]
 
+  @@index([isDeleted])
+  @@index([isActive, isDeleted])
   @@map("users")
 }
 

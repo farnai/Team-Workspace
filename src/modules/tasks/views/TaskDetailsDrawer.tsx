@@ -25,6 +25,7 @@ import {
   Pause,
   Play,
   AlertTriangle,
+  ShieldCheck,
   RotateCcw,
   Clock,
 } from "lucide-react";
@@ -1078,6 +1079,11 @@ export function TaskDetailsDrawer({
                   Feature
                 </span>
               )}
+              {task?.type === TaskType.QA && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                  QA შემოწმება
+                </span>
+              )}
               {task?.type === TaskType.BUG && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                   Bug
@@ -1545,7 +1551,140 @@ export function TaskDetailsDrawer({
           ) : activeTab === "work" ? (
             /* TAB 1: სამუშაო (Ordered Workflow Stages & Subtasks) */
             <div className="space-y-6">
-              {/* Ordered Stages List */}
+              {task?.department === Department.QA || task?.type === TaskType.QA ? (
+                /* QA Testing Checklist Mode (No workflow stages) */
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xs font-black text-stone-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <ShieldCheck size={16} className="text-emerald-600" />
+                        <span>სატესტო ჩექლისთი / შესამოწმებელი პუნქტები</span>
+                        <span className="text-[11px] font-bold text-stone-500">
+                          ({task?.subtasks?.length || 0})
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-stone-500 mt-0.5">
+                        მოდულის ვიზუალური და ფუნქციონალური შემოწმების პუნქტები.
+                      </p>
+                    </div>
+                    {(!showAddSubtask || targetStageId !== null) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTargetStageId(null);
+                          setShowAddSubtask(true);
+                          setNewSubtaskAssigneeIds([]);
+                        }}
+                        className="flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-emerald-200"
+                      >
+                        <Plus size={13} strokeWidth={2.5} />
+                        <span>პუნქტის დამატება</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Subtask Form */}
+                  {showAddSubtask && targetStageId === null && renderSubtaskForm(false)}
+
+                  {/* Subtasks List */}
+                  {task?.subtasks && task.subtasks.length > 0 ? (
+                    <div className="space-y-2">
+                      {task.subtasks.map((st) => (
+                        <div
+                          key={st.id}
+                          className={`flex items-start justify-between gap-2 p-2.5 rounded-xl border text-xs transition-colors ${
+                            st.status === SubtaskStatus.DONE
+                              ? "bg-emerald-50/40 border-emerald-200/60"
+                              : st.status === SubtaskStatus.CANCELLED
+                              ? "bg-stone-50 border-stone-200 opacity-50 line-through"
+                              : "bg-white border-stone-200/80 hover:border-stone-300"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2 flex-1">
+                            <button
+                              onClick={() => handleToggleSubtask(st)}
+                              className="mt-0.5 text-stone-400 hover:text-emerald-600 transition-colors cursor-pointer"
+                            >
+                              {st.status === SubtaskStatus.DONE ? (
+                                <CheckCircle2
+                                  size={16}
+                                  className="text-emerald-600 fill-emerald-100"
+                                />
+                              ) : (
+                                <Circle size={16} />
+                              )}
+                            </button>
+
+                            <div className="flex-1">
+                              <div
+                                className={`font-semibold ${
+                                  st.status === SubtaskStatus.DONE
+                                    ? "text-stone-500 line-through"
+                                    : "text-stone-900"
+                                }`}
+                              >
+                                {st.title}
+                              </div>
+
+                              <div className="flex items-center gap-2 text-[10px] text-stone-500 mt-1 flex-wrap">
+                                <div className="flex items-center -space-x-1">
+                                  {(st.assignments || []).map((a) => (
+                                    <div
+                                      key={a.user?.id || Math.random()}
+                                      className="w-4 h-4 rounded-full bg-stone-200 text-stone-700 font-bold text-[9px] flex items-center justify-center border border-white"
+                                      title={a.user?.name}
+                                    >
+                                      {a.user?.name ? a.user.name.charAt(0) : "?"}
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {st.deadline && (
+                                  <span className="flex items-center gap-0.5 text-stone-600 font-medium">
+                                    <Calendar size={10} className="text-stone-400" />
+                                    <span>{formatGeorgianDateShort(st.deadline)}</span>
+                                  </span>
+                                )}
+
+                                {st.status === SubtaskStatus.DONE && st.completedBy && (
+                                  <span className="text-emerald-700 font-medium">
+                                    შესრულდა: {st.completedBy.name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            {st.status !== SubtaskStatus.CANCELLED && (
+                              <button
+                                onClick={() => handleCancelSubtask(st.id)}
+                                className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100 transition-colors cursor-pointer"
+                                title="გაუქმება"
+                              >
+                                <Ban size={12} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteSubtask(st.id)}
+                              className="p-1 text-stone-400 hover:text-rose-600 rounded hover:bg-stone-100 transition-colors cursor-pointer"
+                              title="წაშლა"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-6 bg-stone-50 rounded-2xl border border-dashed border-stone-200 text-center text-xs text-stone-500">
+                      სატესტო ჩექლისთი ცარიელია. დაამატეთ შესამოწმებელი პუნქტები.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* Ordered Stages List */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-black text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
@@ -2106,7 +2245,9 @@ export function TaskDetailsDrawer({
                 {/* Independent subtask form rendered directly inside this section */}
                 {showAddSubtask && targetStageId === null && renderSubtaskForm(false)}
               </div>
-            </div>
+            </>
+          )}
+        </div>
           ) : activeTab === "details" ? (
             /* TAB 2: დეტალები (Task Description & Metadata) */
             <div className="space-y-5 text-xs">

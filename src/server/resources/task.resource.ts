@@ -19,6 +19,7 @@ export function toTaskResource(task: Task & Record<string, unknown>) {
     project: task.project,
     assignments: task.assignments,
     stages: task.stages,
+    subtasks: task.subtasks,
     _count: task._count,
     createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : undefined,
     updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : undefined,

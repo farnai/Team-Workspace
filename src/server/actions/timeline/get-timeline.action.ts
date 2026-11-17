@@ -142,6 +142,7 @@ export async function getTimelineAction(rawInput: unknown) {
             taskNumber: t.taskNumber,
             title: t.title,
             type: t.type,
+            department: t.department,
             priority: t.priority,
             status: t.status,
             progress: t.progress,

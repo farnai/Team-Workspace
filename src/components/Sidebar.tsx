@@ -15,6 +15,7 @@ import {
   FolderKanban,
   PanelLeftClose,
   PanelLeftOpen,
+  CheckSquare,
 } from "lucide-react";
 
 export type NavView =
@@ -22,6 +23,7 @@ export type NavView =
   | "projects"
   | "timeline"
   | "backlog"
+  | "qa"
   | "archive"
   | "my-work"
   | "workload"
@@ -86,6 +88,7 @@ export function Sidebar({
     { id: "projects", label: "პროექტები", icon: <FolderKanban size={18} /> },
     { id: "timeline", label: "თაიმლაინი", icon: <Calendar size={18} /> },
     { id: "backlog", label: "ბექლოგი", icon: <Layers size={18} /> },
+    { id: "qa", label: "ხარისხის კონტროლი", icon: <CheckSquare size={18} /> },
     { id: "archive", label: "არქივი", icon: <Archive size={18} /> },
     { id: "my-work", label: "ჩემი სამუშაოები", icon: <UserCheck size={18} /> },
     { id: "workload", label: "დატვირთვა", icon: <BarChart2 size={18} /> },

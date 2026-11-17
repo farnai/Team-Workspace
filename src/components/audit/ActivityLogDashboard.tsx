@@ -275,6 +275,13 @@ const ACTION_MAP: Record<AuditAction, ActionMeta> = {
     bgClass: "bg-stone-100 text-stone-700",
     icon: Shield,
   },
+  USER_DELETED: {
+    label: "მომხმარებლის წაშლა",
+    category: "user",
+    colorClass: "text-rose-700 border-rose-200",
+    bgClass: "bg-rose-50 text-rose-700",
+    icon: Trash2,
+  },
   CALENDAR_UPDATED: {
     label: "კალენდრის განახლება",
     category: "system",

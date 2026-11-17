@@ -20,6 +20,7 @@ import {
   ChevronUp,
   Code2,
   PenTool,
+  CheckSquare,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus, Department } from "@prisma/client";
 import { DatePicker } from "@/components/ui/DatePicker";
@@ -86,6 +87,8 @@ interface TaskModalProps {
   projects: ProjectOption[];
   users: UserOption[];
   defaultProjectId?: string;
+  defaultDepartment?: Department;
+  defaultType?: TaskType;
   onProjectsUpdated?: () => Promise<void> | void;
 }
 
@@ -108,6 +111,8 @@ function TaskModalForm({
   projects,
   users,
   defaultProjectId,
+  defaultDepartment,
+  defaultType,
   onProjectsUpdated,
 }: Omit<TaskModalProps, "isOpen">) {
   // 1. Title & Project
@@ -123,11 +128,15 @@ function TaskModalForm({
     }
     return projects[0]?.id || "";
   });
-  const [department, setDepartment] = useState<Department>(() =>
-    mode === "edit" && initialTask?.department
-      ? initialTask.department
-      : Department.DEVELOPMENT
-  );
+  const [department, setDepartment] = useState<Department>(() => {
+    if (mode === "edit" && initialTask?.department) {
+      return initialTask.department;
+    }
+    if (defaultDepartment) {
+      return defaultDepartment;
+    }
+    return Department.DEVELOPMENT;
+  });
 
   // Quick Project Creation
   const [isQuickProjectOpen, setIsQuickProjectOpen] = useState(false);
@@ -210,9 +219,18 @@ function TaskModalForm({
 
   // 6. Additional Parameters (Collapsible)
   const [showAdditionalParams, setShowAdditionalParams] = useState(false);
-  const [type, setType] = useState<TaskType>(() =>
-    mode === "edit" && initialTask ? initialTask.type : TaskType.FEATURE
-  );
+  const [type, setType] = useState<TaskType>(() => {
+    if (mode === "edit" && initialTask) {
+      return initialTask.type;
+    }
+    if (defaultType) {
+      return defaultType;
+    }
+    if (defaultDepartment === Department.QA) {
+      return TaskType.QA;
+    }
+    return TaskType.FEATURE;
+  });
   const [priority, setPriority] = useState<Priority>(() =>
     mode === "edit" && initialTask ? initialTask.priority : Priority.MEDIUM
   );
@@ -753,28 +771,48 @@ function TaskModalForm({
             <label className="block font-bold text-stone-700 mb-1.5 text-xs">
               გუნდი / მიმართულება <span className="text-rose-500">*</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => setDepartment(Department.DEVELOPMENT)}
-                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${department === Department.DEVELOPMENT
+                onClick={() => {
+                  setDepartment(Department.DEVELOPMENT);
+                  if (type === TaskType.QA) setType(TaskType.FEATURE);
+                }}
+                className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${department === Department.DEVELOPMENT
                     ? "bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-500/20"
                     : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
                   }`}
               >
-                <Code2 size={14} className={department === Department.DEVELOPMENT ? "text-white" : "text-blue-600"} />
+                <Code2 size={13} className={department === Department.DEVELOPMENT ? "text-white" : "text-blue-600"} />
                 <span>დეველოპმენტი</span>
               </button>
               <button
                 type="button"
-                onClick={() => setDepartment(Department.CONTENT)}
-                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${department === Department.CONTENT
+                onClick={() => {
+                  setDepartment(Department.CONTENT);
+                  if (type === TaskType.QA) setType(TaskType.FEATURE);
+                }}
+                className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${department === Department.CONTENT
                     ? "bg-purple-600 text-white border-purple-600 shadow-xs ring-2 ring-purple-500/20"
                     : "bg-white text-stone-700 border-stone-200 hover:bg-purple-50/50"
                   }`}
               >
-                <PenTool size={14} className={department === Department.CONTENT ? "text-white" : "text-purple-600"} />
+                <PenTool size={13} className={department === Department.CONTENT ? "text-white" : "text-purple-600"} />
                 <span>კონტენტი</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDepartment(Department.QA);
+                  setType(TaskType.QA);
+                }}
+                className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${department === Department.QA
+                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20"
+                    : "bg-white text-stone-700 border-stone-200 hover:bg-emerald-50/50"
+                  }`}
+              >
+                <CheckSquare size={13} className={department === Department.QA ? "text-white" : "text-emerald-600"} />
+                <span>ხარისხის კონტროლი</span>
               </button>
             </div>
           </div>
@@ -1200,6 +1238,7 @@ function TaskModalForm({
                     <option value={TaskType.FEATURE}>Feature (ფუნქციონალი)</option>
                     <option value={TaskType.BUG}>Bug (ხარვეზი)</option>
                     <option value={TaskType.HOTFIX}>Hotfix (სასწრაფო)</option>
+                    <option value={TaskType.QA}>QA (შემოწმება / ტესტირება)</option>
                   </select>
                 </div>
               </div>

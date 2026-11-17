@@ -127,7 +127,15 @@ export const taskRepository = {
           },
         },
         subtasks: {
-          select: { id: true, status: true },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            deadline: true,
+            completedAt: true,
+            position: true,
+          },
+          orderBy: { position: 'asc' },
         },
         attachments: {
           select: { id: true, originalName: true, isExternal: true, url: true },

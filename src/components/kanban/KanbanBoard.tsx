@@ -22,7 +22,7 @@ import {
   CheckSquare,
   Trash2,
 } from "lucide-react";
-import { Priority, TaskStatus, Department } from "@prisma/client";
+import { Priority, TaskStatus, Department, TaskType } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
 import { BacklogTask } from "@/components/SharedBacklog";
 import { DepartmentBadge } from "@/lib/departments";
@@ -52,6 +52,7 @@ interface KanbanBoardProps {
   isAdmin: boolean;
   onNavigateToTimeline?: () => void;
   externalSearchQuery?: string;
+  isQAView?: boolean;
 }
 
 type KanbanColumnId = "TODO" | "IN_PROGRESS" | "DONE";
@@ -80,6 +81,7 @@ export function KanbanBoard({
   users,
   onNavigateToTimeline,
   externalSearchQuery,
+  isQAView = false,
 }: KanbanBoardProps) {
   // View mode switcher: Board (დაფა) vs Table (ცხრილი) — default to board
   const [viewMode, setViewMode] = useState<"board" | "table">("board");
@@ -90,7 +92,9 @@ export function KanbanBoard({
   // Search and Filters State
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProject, setSelectedProject] = useState<string>("ALL");
-  const [selectedDepartment, setSelectedDepartment] = useState<"ALL" | "DEVELOPMENT" | "CONTENT">("ALL");
+  const [selectedDepartment, setSelectedDepartment] = useState<"ALL" | "DEVELOPMENT" | "CONTENT" | "QA">(
+    isQAView ? "QA" : "ALL"
+  );
   const [selectedPriority, setSelectedPriority] = useState<string>("ALL");
   const [selectedUser, setSelectedUser] = useState<string>("ALL");
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -119,6 +123,18 @@ export function KanbanBoard({
     return tasks.filter((task) => {
       // Exclude cancelled tasks from active backlog
       if (task.status === TaskStatus.CANCELLED) return false;
+
+      // In QA View: strictly show QA tasks (department QA or type QA)
+      if (isQAView) {
+        const isQA = task.department === Department.QA || task.type === TaskType.QA;
+        if (!isQA) return false;
+      } else {
+        // In Backlog View: when "ALL" is selected, exclude QA tasks so they don't mix!
+        if (selectedDepartment === "ALL") {
+          const isQA = task.department === Department.QA || task.type === TaskType.QA;
+          if (isQA) return false;
+        }
+      }
 
       // Search query (from global header or internal input)
       const effectiveSearch = (externalSearchQuery || searchQuery).toLowerCase().trim();
@@ -152,7 +168,7 @@ export function KanbanBoard({
 
       return true;
     });
-  }, [tasks, searchQuery, externalSearchQuery, selectedProject, selectedDepartment, selectedPriority, selectedUser]);
+  }, [tasks, searchQuery, externalSearchQuery, selectedProject, selectedDepartment, selectedPriority, selectedUser, isQAView]);
 
   // Status Counts for Tabs
   const counts = useMemo(() => {
@@ -407,15 +423,21 @@ export function KanbanBoard({
       {/* 1. Header Banner (Matching "My Work" Style Banner) */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200/90 shadow-2xs shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
-            <Layers size={18} />
+          <div
+            className={`w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-xs shrink-0 ${
+              isQAView ? "bg-emerald-600" : "bg-blue-600"
+            }`}
+          >
+            {isQAView ? <CheckSquare size={18} /> : <Layers size={18} />}
           </div>
           <div>
             <h1 className="text-sm sm:text-base font-black text-stone-900 tracking-tight leading-tight">
-              ბექლოგი (Backlog)
+              {isQAView ? "ხარისხის კონტროლი (QA & Testing)" : "ბექლოგი (Backlog)"}
             </h1>
             <p className="text-[11px] text-stone-500 font-medium">
-              პროექტის დავალებები, სამუშაო ეტაპები და მიმდინარე სტატუსები.
+              {isQAView
+                ? "პლატფორმის გვერდებისა და მოდულების ხარისხის კონტროლი, ვიზუალური და ფუნქციონალური შემოწმება."
+                : "პროექტის დავალებები, სამუშაო ეტაპები და მიმდინარე სტატუსები."}
             </p>
           </div>
         </div>
@@ -424,10 +446,14 @@ export function KanbanBoard({
         <div className="flex items-center gap-2">
           <button
             onClick={() => onOpenNewTask()}
-            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer"
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer ${
+              isQAView
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
+            }`}
           >
             <Plus size={14} strokeWidth={2.5} />
-            <span>ახალი ტასკი</span>
+            <span>{isQAView ? "ახალი QA შემოწმება" : "ახალი ტასკი"}</span>
           </button>
 
           <button
@@ -614,12 +640,21 @@ export function KanbanBoard({
         <div className="relative">
           <select
             value={selectedDepartment}
-            onChange={(e) => setSelectedDepartment(e.target.value as "ALL" | "DEVELOPMENT" | "CONTENT")}
-            className="appearance-none bg-stone-50 border border-stone-200 hover:border-stone-300 rounded-xl pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            onChange={(e) => setSelectedDepartment(e.target.value as "ALL" | "DEVELOPMENT" | "CONTENT" | "QA")}
+            className={`appearance-none bg-stone-50 border border-stone-200 hover:border-stone-300 rounded-xl pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 cursor-pointer ${
+              isQAView ? "focus:ring-emerald-500" : "focus:ring-blue-500"
+            }`}
           >
-            <option value="ALL">ყველა გუნდი</option>
-            <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
-            <option value="CONTENT">✍️ კონტენტი</option>
+            {isQAView ? (
+              <option value="QA">🛡️ ხარისხის კონტროლი</option>
+            ) : (
+              <>
+                <option value="ALL">ყველა გუნდი (Dev & Content)</option>
+                <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
+                <option value="CONTENT">✍️ კონტენტი</option>
+                <option value="QA">🛡️ ხარისხის კონტროლი</option>
+              </>
+            )}
           </select>
           <ChevronDown
             size={12}
@@ -1017,25 +1052,34 @@ function KanbanTaskBox({
 
       {/* 2. Bottom Row: [☑] Task Number (Left) & Assignee Avatar (Right) */}
       <div className="flex items-center justify-between pt-1">
-        <div className="flex items-center gap-1.5">
-          {/* Blue Outline Checkbox Square Matching Exact Screenshot */}
-          <svg
-            className="w-4 h-4 text-blue-600 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="4" />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Check icon: Emerald for QA, Blue outline for others */}
+          {task.department === Department.QA || task.type === TaskType.QA ? (
+            <CheckSquare size={15} className="text-emerald-600 shrink-0" />
+          ) : (
+            <svg
+              className="w-4 h-4 text-blue-600 shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="4" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+          )}
           {/* Task Code (e.g. SSP-7) */}
           <span className="text-[13px] font-medium text-stone-700 tracking-tight">
             {taskCode}
           </span>
           <DepartmentBadge department={task.department} size="xs" />
+          {task.type === TaskType.QA && (
+            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+              QA ტესტი
+            </span>
+          )}
         </div>
 
         {/* Assignee Avatar (ONLY if someone is assigned) */}

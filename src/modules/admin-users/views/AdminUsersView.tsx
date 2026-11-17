@@ -14,6 +14,7 @@ import {
   X,
   Code2,
   PenTool,
+  Trash2,
 } from "lucide-react";
 import { Department } from "@prisma/client";
 import { DepartmentBadge } from "@/lib/departments";
@@ -112,7 +113,11 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
     }
 
     const actionText = user.isActive ? "დეაქტივაცია" : "გააქტიურება";
-    if (!confirm(`ნამდვილად გსურთ მომხმარებლის (${user.name}) ${actionText}?`)) {
+    const confirmMessage = user.isActive
+      ? `ნამდვილად გსურთ მომხმარებლის (${user.name}) დეაქტივაცია?\n\nმიმდინარე აქტიური დავალებებიდან მომხმარებელი ამოიშლება და დედლაინები განულდება, ხოლო არქივში შესრულებული სამუშაოების ისტორია შენარჩუნდება.`
+      : `ნამდვილად გსურთ მომხმარებლის (${user.name}) გააქტიურება?`;
+
+    if (!confirm(confirmMessage)) {
       return;
     }
 
@@ -135,6 +140,38 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "შეცდომა სტატუსის შეცვლისას");
+    }
+  };
+
+  const handleDeleteUser = async (user: ManagedUser) => {
+    if (user.id === currentAdminId) {
+      alert("საკუთარი ადმინისტრატორის ანგარიშის წაშლა შეუძლებელია");
+      return;
+    }
+
+    if (
+      !confirm(
+        `ნამდვილად გსურთ მომხმარებლის (${user.name}) წაშლა?\n\nყურადღება: მომხმარებელი სრულად წაიშლება სიიდან, მიმდინარე აქტიური დავალებებიდან ამოიშლება და დედლაინები განულდება. არქივში შესრულებული სამუშაოების ისტორია და სახელი შენარჩუნდება.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "მომხმარებლის წაშლა ვერ მოხერხდა");
+      }
+
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      setSuccessMessage(data.message || `მომხმარებელი (${user.name}) წარმატებით წაიშალა`);
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "შეცდომა მომხმარებლის წაშლისას");
     }
   };
 
@@ -449,16 +486,27 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                       </button>
 
                       {user.id !== currentAdminId && (
-                        <button
-                          onClick={() => handleToggleStatus(user)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
-                            user.isActive
-                              ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/50"
-                              : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/50"
-                          }`}
-                        >
-                          {user.isActive ? "დეაქტივაცია" : "გააქტიურება"}
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleToggleStatus(user)}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                              user.isActive
+                                ? "bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/50"
+                                : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/50"
+                            }`}
+                          >
+                            {user.isActive ? "დეაქტივაცია" : "გააქტიურება"}
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteUser(user)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/50 rounded-lg font-semibold transition-colors cursor-pointer"
+                            title="მომხმარებლის წაშლა"
+                          >
+                            <Trash2 size={12} />
+                            <span>წაშლა</span>
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>
