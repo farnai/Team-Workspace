@@ -971,6 +971,85 @@ export function TaskDetailsDrawer({
   // Step 7: Conflicts detection for current task
   const taskConflicts = task ? detectTaskConflicts(task) : [];
 
+  const renderSubtaskForm = (isStage: boolean) => (
+    <form
+      onSubmit={handleCreateSubtask}
+      className="p-3.5 bg-orange-50/70 border border-orange-200 rounded-2xl space-y-3 text-xs animate-in slide-in-from-top-2 mt-2"
+    >
+      <div className="font-bold text-stone-800">
+        ახალი საბტასკის შექმნა {isStage ? "(ეტაპისთვის)" : "(დამოუკიდებელი)"}
+      </div>
+      <input
+        type="text"
+        placeholder="საბტასკის სათაური..."
+        value={newSubtaskTitle}
+        onChange={(e) => setNewSubtaskTitle(e.target.value)}
+        className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-stone-900 font-medium"
+        required
+        autoFocus
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] font-bold text-stone-500 block mb-1">
+            დედლაინი (სავალდებულოა თუ მინიჭებულია)
+          </label>
+          <DatePicker
+            value={newSubtaskDeadline}
+            onChange={(val) => setNewSubtaskDeadline(val)}
+            placeholder="დედლაინი"
+            size="sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold text-stone-500 block mb-1">
+            შემსრულებლები (მრავალარჩევითი)
+          </label>
+          <select
+            multiple
+            value={newSubtaskAssigneeIds}
+            onChange={(e) =>
+              setNewSubtaskAssigneeIds(
+                Array.from(e.target.selectedOptions, (o) => o.value)
+              )
+            }
+            className="w-full px-2 py-1 bg-white border border-stone-200 rounded-xl text-xs font-medium h-16"
+          >
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => {
+            setShowAddSubtask(false);
+            setTargetStageId(null);
+            setNewSubtaskTitle("");
+            setNewSubtaskDeadline("");
+            setNewSubtaskAssigneeIds([]);
+          }}
+          className="px-3 py-1.5 border border-stone-200 text-stone-600 rounded-lg font-semibold hover:bg-white cursor-pointer"
+        >
+          გაუქმება
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmittingSubtask}
+          className="px-4 py-1.5 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50 cursor-pointer"
+        >
+          {isSubmittingSubtask ? "ემატება..." : "საბტასკის დამატება"}
+        </button>
+      </div>
+    </form>
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -1068,9 +1147,11 @@ export function TaskDetailsDrawer({
               </button>
 
               <button
+                data-testid="close-task-drawer"
                 onClick={onClose}
                 className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-full transition-colors cursor-pointer"
                 title="დახურვა (Esc)"
+                aria-label="დახურვა"
               >
                 <X size={18} />
               </button>
@@ -1861,17 +1942,30 @@ export function TaskDetailsDrawer({
                               ))
                             )}
 
-                            {/* Add Subtask Trigger for this stage */}
-                            <button
-                              onClick={() => {
-                                setTargetStageId(stage.id);
-                                setShowAddSubtask(true);
-                              }}
-                              className="w-full flex items-center justify-center gap-1 py-1 text-[11px] font-bold text-stone-600 hover:text-orange-600 hover:bg-orange-50/50 rounded-lg border border-dashed border-stone-200 transition-all cursor-pointer"
-                            >
-                              <Plus size={12} />
-                              <span>საბტასკის დამატება ეტაპზე</span>
-                            </button>
+                            {/* Stage Subtask Form or Trigger */}
+                            {showAddSubtask && targetStageId === stage.id ? (
+                              renderSubtaskForm(true)
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTargetStageId(stage.id);
+                                  setShowAddSubtask(true);
+                                  if (stage.assignments && stage.assignments.length > 0) {
+                                    const stageUserIds = stage.assignments
+                                      .map((a) => a.user?.id)
+                                      .filter(Boolean) as string[];
+                                    setNewSubtaskAssigneeIds(stageUserIds);
+                                  } else {
+                                    setNewSubtaskAssigneeIds([]);
+                                  }
+                                }}
+                                className="w-full flex items-center justify-center gap-1 py-1.5 text-[11px] font-bold text-stone-600 hover:text-orange-600 hover:bg-orange-50/50 rounded-lg border border-dashed border-stone-200 transition-all cursor-pointer"
+                              >
+                                <Plus size={12} />
+                                <span>საბტასკის დამატება ეტაპზე</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -1894,16 +1988,20 @@ export function TaskDetailsDrawer({
                       ({task?.subtasks?.length || 0})
                     </span>
                   </h3>
-                  <button
-                    onClick={() => {
-                      setTargetStageId(null);
-                      setShowAddSubtask(true);
-                    }}
-                    className="flex items-center gap-1 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
-                  >
-                    <Plus size={13} strokeWidth={2.5} />
-                    <span>საბტასკის დამატება</span>
-                  </button>
+                  {(!showAddSubtask || targetStageId !== null) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTargetStageId(null);
+                        setShowAddSubtask(true);
+                        setNewSubtaskAssigneeIds([]);
+                      }}
+                      className="flex items-center gap-1 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                    >
+                      <Plus size={13} strokeWidth={2.5} />
+                      <span>საბტასკის დამატება</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Subtasks List */}
@@ -2004,84 +2102,10 @@ export function TaskDetailsDrawer({
                     დამოუკიდებელი საბტასკები არ არის.
                   </div>
                 )}
+
+                {/* Independent subtask form rendered directly inside this section */}
+                {showAddSubtask && targetStageId === null && renderSubtaskForm(false)}
               </div>
-
-              {/* Add Subtask Drawer/Modal */}
-              {showAddSubtask && (
-                <form
-                  onSubmit={handleCreateSubtask}
-                  className="p-4 bg-orange-50/60 border border-orange-200 rounded-2xl space-y-3 text-xs animate-in slide-in-from-top-2"
-                >
-                  <div className="font-bold text-stone-800">
-                    ახალი საბტასკის შექმნა{" "}
-                    {targetStageId ? "(ეტაპისთვის)" : "(დამოუკიდებელი)"}
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="საბტასკის სათაური..."
-                    value={newSubtaskTitle}
-                    onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-stone-900 font-medium"
-                    required
-                  />
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] font-bold text-stone-500 block mb-1">
-                        დედლაინი (სავალდებულოა თუ მინიჭებულია)
-                      </label>
-                      <DatePicker
-                        value={newSubtaskDeadline}
-                        onChange={(val) => setNewSubtaskDeadline(val)}
-                        placeholder="დედლაინი"
-                        size="sm"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-stone-500 block mb-1">
-                        შემსრულებლები (მრავალარჩევითი)
-                      </label>
-                      <select
-                        multiple
-                        value={newSubtaskAssigneeIds}
-                        onChange={(e) =>
-                          setNewSubtaskAssigneeIds(
-                            Array.from(e.target.selectedOptions, (o) => o.value)
-                          )
-                        }
-                        className="w-full px-2 py-1 bg-white border border-stone-200 rounded-xl text-xs font-medium h-16"
-                      >
-                        {users.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowAddSubtask(false);
-                        setTargetStageId(null);
-                      }}
-                      className="px-3 py-1.5 border border-stone-200 text-stone-600 rounded-lg font-semibold hover:bg-white"
-                    >
-                      გაუქმება
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmittingSubtask}
-                      className="px-4 py-1.5 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50"
-                    >
-                      {isSubmittingSubtask ? "ემატება..." : "საბტასკის დამატება"}
-                    </button>
-                  </div>
-                </form>
-              )}
             </div>
           ) : activeTab === "details" ? (
             /* TAB 2: დეტალები (Task Description & Metadata) */

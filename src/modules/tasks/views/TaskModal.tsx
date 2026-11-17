@@ -703,9 +703,8 @@ function TaskModalForm({
                         key={c}
                         type="button"
                         onClick={() => setQuickProjectColor(c)}
-                        className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
-                          quickProjectColor === c ? "ring-2 ring-stone-900 scale-110" : ""
-                        }`}
+                        className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${quickProjectColor === c ? "ring-2 ring-stone-900 scale-110" : ""
+                          }`}
                         style={{ backgroundColor: c }}
                       />
                     ))}
@@ -758,11 +757,10 @@ function TaskModalForm({
               <button
                 type="button"
                 onClick={() => setDepartment(Department.DEVELOPMENT)}
-                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                  department === Department.DEVELOPMENT
+                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${department === Department.DEVELOPMENT
                     ? "bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-500/20"
                     : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
-                }`}
+                  }`}
               >
                 <Code2 size={14} className={department === Department.DEVELOPMENT ? "text-white" : "text-blue-600"} />
                 <span>დეველოპმენტი</span>
@@ -770,11 +768,10 @@ function TaskModalForm({
               <button
                 type="button"
                 onClick={() => setDepartment(Department.CONTENT)}
-                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                  department === Department.CONTENT
+                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${department === Department.CONTENT
                     ? "bg-purple-600 text-white border-purple-600 shadow-xs ring-2 ring-purple-500/20"
                     : "bg-white text-stone-700 border-stone-200 hover:bg-purple-50/50"
-                }`}
+                  }`}
               >
                 <PenTool size={14} className={department === Department.CONTENT ? "text-white" : "text-purple-600"} />
                 <span>კონტენტი</span>
@@ -821,11 +818,10 @@ function TaskModalForm({
           {/* Conflict Alert if dates order is mismatched */}
           {sequenceConflict && (
             <div
-              className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-semibold ${
-                sequenceConflict.severity === "error"
+              className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-semibold ${sequenceConflict.severity === "error"
                   ? "bg-rose-50 border-rose-200 text-rose-800"
                   : "bg-amber-50 border-amber-200 text-amber-800"
-              }`}
+                }`}
             >
               <AlertTriangle size={15} className="shrink-0" />
               <span>{sequenceConflict.message}</span>
@@ -1008,7 +1004,7 @@ function TaskModalForm({
           <div className="space-y-2">
             <div className="text-[11px] font-bold text-stone-600 flex items-center gap-1">
               <LinkIcon size={12} className="text-stone-400" />
-              <span>გარე ბმულები (GitLab, Figma, Docs...)</span>
+              <span>გარე ბმულები (Links, GitLab, Figma, Docs...)</span>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2">

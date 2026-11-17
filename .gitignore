@@ -54,3 +54,6 @@ backups/
 # deploy keys
 gtu-deploy-key*
 *.key
+
+# test artifacts
+tests/smoke/screenshots/

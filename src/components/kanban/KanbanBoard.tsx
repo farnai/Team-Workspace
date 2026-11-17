@@ -999,6 +999,7 @@ function KanbanTaskBox({
 
   return (
     <div
+      data-testid={`kanban-task-${task.id}`}
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}

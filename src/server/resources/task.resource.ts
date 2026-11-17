@@ -4,9 +4,11 @@ import type { Task } from '@prisma/client'
 export function toTaskResource(task: Task & Record<string, unknown>) {
   return {
     id: task.id,
+    projectId: task.projectId,
     number: task.taskNumber,
     taskNumber: task.taskNumber,
     title: task.title,
+    description: task.description,
     status: task.status,
     priority: task.priority,
     type: task.type,
