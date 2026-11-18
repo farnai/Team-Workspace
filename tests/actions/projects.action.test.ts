@@ -35,6 +35,22 @@ test('Actions: Projects Lifecycle & Governance', async (t) => {
 
   let createdProjectId = ''
 
+  await t.test('createProjectAction: non-admin cannot create project', async () => {
+    await assert.rejects(
+      async () => {
+        await createProjectAction(
+          {
+            name: `Unauthorized Project ${ts}`,
+            description: 'Should fail',
+            color: '#2563EB',
+          },
+          member
+        )
+      },
+      /პროექტის შექმნის უფლება აქვს მხოლოდ ადმინისტრატორს/
+    )
+  })
+
   await t.test('createProjectAction: creates a new project', async () => {
     const proj = await createProjectAction(
       {

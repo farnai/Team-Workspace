@@ -1,9 +1,12 @@
 import 'server-only';
+import type { User } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/server/auth/session';
 
-export async function getDeadlineRequestAction(taskId: string) {
-  await requireUser();
+export async function getDeadlineRequestAction(taskId: string, actor?: User) {
+  if (!actor) {
+    await requireUser();
+  }
 
   const recentRequests = await prisma.auditEvent.findMany({
     where: {
@@ -17,10 +20,9 @@ export async function getDeadlineRequestAction(taskId: string) {
     },
   });
 
-  const pendingRequest = recentRequests.find((reqItem) => {
-    const val = reqItem.newValues as { status?: string } | null;
-    return val?.status === 'PENDING';
-  });
+  const latestEvent = recentRequests[0];
+  const latestVal = latestEvent?.newValues as { status?: string } | null;
+  const pendingRequest = latestVal?.status === 'PENDING' ? latestEvent : undefined;
 
   return {
     pendingRequest: pendingRequest

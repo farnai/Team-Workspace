@@ -53,12 +53,14 @@ enum Role {
 enum Department {
   DEVELOPMENT
   CONTENT
+  QA
 }
 
 enum TaskType {
   FEATURE
   BUG
   HOTFIX
+  QA
 }
 
 enum Priority {
@@ -88,6 +90,7 @@ enum SubtaskStatus {
 enum AuditAction {
   TASK_CREATED
   TASK_UPDATED
+  TASK_DELETED
   TASK_ASSIGNED
   TASK_UNASSIGNED
   STAGE_CREATED
@@ -112,6 +115,7 @@ enum AuditAction {
   DAILY_UPDATE_ADDED
   USER_CREATED
   USER_STATUS_CHANGED
+  USER_DELETED
   CALENDAR_UPDATED
   DEPARTMENT_CHANGED
 }
@@ -125,6 +129,8 @@ model User {
   passwordHash String
   avatarUrl    String?
   isActive     Boolean    @default(true)
+  isDeleted    Boolean    @default(false)
+  deletedAt    DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -140,6 +146,9 @@ model User {
   auditEvents         AuditEvent[]          @relation("AuditActor")
   notifications       Notification[]
 
+  @@index([isActive])
+  @@index([isDeleted])
+  @@index([department])
   @@map("users")
 }
 
@@ -215,14 +224,18 @@ model Task {
 }
 
 model WorkflowStage {
-  id          String    @id @default(uuid())
-  taskId      String
-  position    Int       @default(0)
-  title       String    // e.g. დიზაინი, Development, QA
-  description String?
-  isActive    Boolean   @default(false) // The currently active sequential stage
-  isCompleted Boolean   @default(false)
-  completedAt DateTime?
+  id             String    @id @default(uuid())
+  taskId         String
+  position       Int       @default(0)
+  title          String    // e.g. დიზაინი, Development, QA
+  description    String?
+  isActive       Boolean   @default(false) // The currently active sequential stage
+  isCompleted    Boolean   @default(false)
+  completedAt    DateTime?
+
+  startDate      DateTime?
+  deadline       DateTime?
+  deadlineLocked Boolean   @default(false)
 
   task        Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
   assignments StageAssignment[]
@@ -254,8 +267,9 @@ model Subtask {
   description String?
   status      SubtaskStatus @default(TODO)
   
-  startDate   DateTime?
-  deadline    DateTime?
+  startDate      DateTime?
+  deadline       DateTime?
+  deadlineLocked Boolean       @default(false)
 
   completedById String?
   completedAt   DateTime?
@@ -355,10 +369,12 @@ model AuditEvent {
   reason     String?
   createdAt  DateTime    @default(now())
 
-  task  Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task  Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
   actor User  @relation("AuditActor", fields: [actorId], references: [id])
 
   @@index([taskId])
+  @@index([actorId])
+  @@index([action])
   @@index([createdAt])
   @@map("audit_events")
 }

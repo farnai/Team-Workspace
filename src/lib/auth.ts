@@ -66,7 +66,7 @@ export async function getCurrentUser(): Promise<User | null> {
       return null;
     }
 
-    if (!session.user.isActive) {
+    if (!session.user.isActive || session.user.isDeleted) {
       return null;
     }
 

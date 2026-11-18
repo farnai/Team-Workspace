@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
+  Edit3,
   ShieldCheck,
   ListCheck,
   Clock,
@@ -45,6 +46,7 @@ interface QualityControlViewProps {
   onEditTask?: (task: BacklogTask) => void;
   onStatusChange: (taskId: string, newStatus: TaskStatus) => Promise<void>;
   onDeleteTask?: (taskId: string) => Promise<void>;
+  onTaskUpdated?: () => Promise<void> | void;
   projects: ProjectOption[];
   users: UserOption[];
   isAdmin: boolean;
@@ -59,8 +61,10 @@ export function QualityControlView({
   onSelectTask,
   selectedTaskId,
   onOpenNewTask,
+  onEditTask,
   onStatusChange,
   onDeleteTask,
+  onTaskUpdated,
   projects,
   users,
   isAdmin,
@@ -188,8 +192,9 @@ export function QualityControlView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
-      // Trigger parent task refresh through status change or custom update
-      window.location.reload(); // Fallback fast sync or state update
+      if (onTaskUpdated) {
+        await onTaskUpdated();
+      }
     } catch (err) {
       console.error("Failed to update subtask status:", err);
     } finally {
@@ -598,6 +603,20 @@ export function QualityControlView({
 
                     {/* 5. Quick Status Button & Actions */}
                     <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {onEditTask && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditTask(task);
+                          }}
+                          className="p-1.5 text-stone-500 hover:text-stone-800 hover:bg-stone-100 border border-stone-200 rounded-xl transition-colors cursor-pointer"
+                          title="რედაქტირება"
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                      )}
+
                       {task.status !== TaskStatus.DONE ? (
                         <button
                           type="button"

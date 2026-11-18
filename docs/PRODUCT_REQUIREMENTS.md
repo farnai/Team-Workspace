@@ -18,19 +18,21 @@ The **Private Team Workspace** is a high-reliability, internal work-tracking sys
 
 | Feature / Action | Admin | User | Domain Rules & Constraints |
 | :--- | :---: | :---: | :--- |
-| **User Management** | ✅ | ❌ | Admin creates users, resets passwords, activates/deactivates accounts. |
+| **User Management** | ✅ | ❌ | Admin creates users, resets passwords, activates/deactivates or soft-deletes accounts (auto-unassigning active tasks & clearing active deadlines while keeping Archive history). |
 | **System Settings** | ✅ | ❌ | Admin configures working days, company holidays, and global options. |
-| **Create Project / Task** | ✅ | ✅ | Any authenticated member can create projects and backlog tasks. |
-| **Edit Task Content** | ✅ | ✅ | Title, rich description, type, priority, and tags can be edited. |
+| **Create Project** | ✅ | ❌ | Only Admin can create, edit, or delete projects. |
+| **Create Task** | ✅ | ✅ | Any authenticated active member can create tasks. |
+| **Edit Task & Assign Members** | ✅ | ✅ | Any active user can edit task details (title, description, type, priority, project, department) and assign tasks/stages to themselves or any other team member. |
+| **Delete Task** | ✅ | ❌ | Only Admin can permanently delete a task (logged in audit history). |
 | **Initial Deadline Setting** | ✅ | ✅ | Regular user can set the deadline when first creating or scheduling work. |
-| **Modify Established Deadline** | ✅ | ❌ | **CRITICAL**: Once set, only Admin can extend or reschedule deadlines. |
-| **Workflow Stages** | ✅ | ✅ | Create, reorder, and assign workflow stages. |
-| **Subtask Management** | ✅ | ✅ | Create subtasks, assign single or multiple assignees, set initial dates. |
-| **Mark Subtask Done/Reopen** | ✅ | ✅ | Authorized assignee or Admin can mark subtask done; automatically updates task %. |
+| **Modify Established Deadline** | ✅ | ❌ | **CRITICAL**: Once locked, only Admin can modify deadlines directly (users can submit a deadline change request). |
+| **Workflow Stages** | ✅ | ✅ | Create, reorder, edit, and assign workflow stages (for non-QA tasks). |
+| **Subtask / QA Checklist Management** | ✅ | ✅ | Create subtasks/checklist items, assign single or multiple assignees, set initial dates. |
+| **Mark Subtask Done/Reopen** | ✅ | ✅ | Any active team member or Admin can mark subtask done; automatically updates task %. |
 | **Pause Work** | ✅ | ✅ | Pausing requires an explicit reason (e.g., interrupted by hotfix). Retains progress. |
-| **Reschedule Work** | ✅ | ❌ | Admin can adjust planned dates with old vs. new date audit comparison. |
-| **Optional Daily Update** | ✅ | ✅ | Lightweight "დღეს რა გაკეთდა?" input; never mandatory for task completion. |
-| **View All Dashboards** | ✅ | ✅ | Overview, Timeline, Backlog, My Work, Workload, Activity Log. |
+| **Reschedule Work** | ✅ | ❌ | Admin can adjust locked planned dates with old vs. new date audit comparison. |
+| **Optional Daily Update** | ✅ | ✅ | Lightweight "დღეს რა გააკეთე?" input; never mandatory for task completion. |
+| **View All Dashboards** | ✅ | ✅ | Overview, Timeline, Backlog, QA Registry, Projects, My Work, Workload, Reports, Archive, Activity Log. |
 
 ---
 
@@ -48,11 +50,14 @@ The **Private Team Workspace** is a high-reliability, internal work-tracking sys
 - Navigation links:
   - `საწყისი` (Home / Overview Dashboard)
   - `თაიმლაინი` (Vertical Timeline - primary schedule view)
-  - `ბექლოგი` (Shared Backlog)
+  - `ბექლოგი` (Shared Backlog - Kanban & List view)
+  - `ხარისხის კონტროლი` (Dedicated QA & Testing single-line registry)
+  - `პროექტები` (Projects Directory & project-level task breakdown)
   - `ჩემი სამუშაოები` (My Work - personalized workbench)
   - `დატვირთვა` (Team Workload & Capacity)
   - `რეპორტები` (Project Progress & Reports)
   - `ლოგი / ისტორია` (Comprehensive Audit Log)
+  - `არქივი` (Completed & Cancelled Tasks Archive)
   - `მომხმარებლები` (User Management - Admin only)
   - `პარამეტრები` (System Calendar & Settings - Admin only)
 - Bottom Summary Card (`ძირითადი შეჯამება`):
@@ -148,9 +153,10 @@ The **Private Team Workspace** is a high-reliability, internal work-tracking sys
 
 ## 5. Extended Governance & Business Policies
 
-### 5.1 Department Division
-- Users and Tasks belong to either `DEVELOPMENT` or `CONTENT`.
-- Tasks can be filtered across Backlog, Kanban, Timeline, and Reports by department to avoid visual collisions between software engineering and media production.
+### 5.1 Department Division & Dedicated QA Registry
+- Users and Tasks belong to `DEVELOPMENT`, `CONTENT`, or `QA`.
+- Tasks can be filtered across Backlog, Kanban, Timeline, and Reports by department.
+- `ხარისხის კონტროლი (QA & Testing)` renders as a single-line horizontal registry (`QualityControlView`) rather than a Kanban board, without sequential workflow stages (`სამუშაო ეტაპები`), showing the verification scope, project, responsible QA assignee, testing date interval (`startDate – deadline`), expandable inline verification checklist, and QA status badge.
 
 ### 5.2 Stage Deletion Governance (Founder Invariants)
 - **Prevent Orphaned Tasks**: Deletion of the ONLY stage of a stage-based task is strictly prohibited.

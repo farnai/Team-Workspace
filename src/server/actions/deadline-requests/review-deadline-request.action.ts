@@ -1,13 +1,17 @@
 import 'server-only';
+import { Role, type User } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/server/auth/session';
-import { NotFoundError } from '@/server/http/errors';
+import { ForbiddenError, NotFoundError } from '@/server/http/errors';
 import { reviewDeadlineRequestDto } from '@/server/dto/stage.dto';
 import { auditRepository } from '@/server/repositories/audit.repository';
 import { formatGeorgianDateShort } from '@/lib/dateUtils';
 
-export async function reviewDeadlineRequestAction(taskId: string, input: unknown) {
-  const admin = await requireAdmin();
+export async function reviewDeadlineRequestAction(taskId: string, input: unknown, actor?: User) {
+  if (actor && actor.role !== Role.ADMIN) {
+    throw new ForbiddenError();
+  }
+  const admin = actor ?? (await requireAdmin());
   const { action, responseNote } = reviewDeadlineRequestDto.parse(input);
 
   const pendingEvents = await prisma.auditEvent.findMany({
@@ -19,10 +23,9 @@ export async function reviewDeadlineRequestAction(taskId: string, input: unknown
     take: 10,
   });
 
-  const pendingRequest = pendingEvents.find((e) => {
-    const val = e.newValues as { status?: string } | null;
-    return val?.status === 'PENDING';
-  });
+  const latestEvent = pendingEvents[0];
+  const latestVal = latestEvent?.newValues as { status?: string } | null;
+  const pendingRequest = latestVal?.status === 'PENDING' ? latestEvent : undefined;
 
   if (!pendingRequest) {
     throw new NotFoundError('აქტიური მოთხოვნა არ მოიძებნა');

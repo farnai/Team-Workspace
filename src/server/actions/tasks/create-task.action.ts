@@ -1,6 +1,6 @@
 import 'server-only'
 import type { User } from '@prisma/client'
-import { TaskStatus } from '@prisma/client'
+import { Department, TaskStatus, TaskType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auditRepository } from '@/server/repositories/audit.repository'
 import { AppError } from '@/server/http/errors'
@@ -106,7 +106,8 @@ export async function createTaskAction(input: CreateTaskDto, actor: User) {
         })),
       })
 
-      if (resolvedAssignees.length > 1) {
+      const isQaTask = input.department === Department.QA || input.type === TaskType.QA
+      if (resolvedAssignees.length > 1 && !isQaTask) {
         const assigneeUsers = await tx.user.findMany({
           where: { id: { in: uniqueUserIds } },
           select: { id: true, name: true },

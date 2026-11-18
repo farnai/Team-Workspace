@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
       where: { email: normalizedEmail },
     });
 
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || user.isDeleted) {
       recordFailedAttempt(emailKey, 5);
       recordFailedAttempt(ipKey, 20);
       return NextResponse.json(

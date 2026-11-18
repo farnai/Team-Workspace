@@ -97,11 +97,20 @@ export async function GET(req: NextRequest) {
     }
 
     // Load active users
-    const userWhere: { id?: string; isActive: boolean; department?: "DEVELOPMENT" | "CONTENT" } = filterUserId
-      ? { id: filterUserId, isActive: true }
-      : { isActive: true };
+    const userWhere: {
+      id?: string;
+      isActive: boolean;
+      isDeleted: boolean;
+      department?: "DEVELOPMENT" | "CONTENT" | "QA";
+    } = filterUserId
+      ? { id: filterUserId, isActive: true, isDeleted: false }
+      : { isActive: true, isDeleted: false };
 
-    if (departmentParam === "DEVELOPMENT" || departmentParam === "CONTENT") {
+    if (
+      departmentParam === "DEVELOPMENT" ||
+      departmentParam === "CONTENT" ||
+      departmentParam === "QA"
+    ) {
       userWhere.department = departmentParam;
     }
 
@@ -119,8 +128,15 @@ export async function GET(req: NextRequest) {
     });
 
     // Load all tasks with assignments, stages, and subtasks
-    const taskWhere: { projectId?: string; department?: "DEVELOPMENT" | "CONTENT" } = projectId ? { projectId } : {};
-    if (departmentParam === "DEVELOPMENT" || departmentParam === "CONTENT") {
+    const taskWhere: {
+      projectId?: string;
+      department?: "DEVELOPMENT" | "CONTENT" | "QA";
+    } = projectId ? { projectId } : {};
+    if (
+      departmentParam === "DEVELOPMENT" ||
+      departmentParam === "CONTENT" ||
+      departmentParam === "QA"
+    ) {
       taskWhere.department = departmentParam;
     }
     const allTasks = await prisma.task.findMany({

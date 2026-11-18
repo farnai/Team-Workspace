@@ -28,6 +28,8 @@ import {
   ShieldCheck,
   RotateCcw,
   Clock,
+  UserPlus,
+  Users,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus, SubtaskStatus, Department } from "@prisma/client";
 import { formatGeorgianDate, formatGeorgianDateShort, isTaskOverdue } from "@/lib/dateUtils";
@@ -174,6 +176,7 @@ interface TaskDetailsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onTaskUpdated: () => void;
+  onEditTask?: (task: FullTaskDetails) => void;
   currentUser: {
     id: string;
     name: string;
@@ -189,6 +192,7 @@ export function TaskDetailsDrawer({
   isOpen,
   onClose,
   onTaskUpdated,
+  onEditTask,
   currentUser,
   users,
   projects,
@@ -217,6 +221,10 @@ export function TaskDetailsDrawer({
   // Inline Description Edit
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   const [descValue, setDescValue] = useState("");
+
+  // Inline Assignee Pickers (Task & Stage)
+  const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+  const [editingStageAssigneesId, setEditingStageAssigneesId] = useState<string | null>(null);
 
   // Modals & Paste State
   const [isUploadingFile, setIsUploadingFile] = useState(false);
@@ -638,6 +646,48 @@ export function TaskDetailsDrawer({
         throw new Error(d.error || "გუნდის შეცვლა ვერ მოხერხდა");
       }
       setTask((prev) => (prev ? { ...prev, department: newDepartment } : null));
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
+  };
+
+  // Update Task Assignees
+  const handleUpdateTaskAssignees = async (newAssigneeIds: string[]) => {
+    if (!task) return;
+    try {
+      setError(null);
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assigneeIds: newAssigneeIds }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "შემსრულებლების განახლება ვერ მოხერხდა");
+      }
+      await refreshTaskDetails();
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
+  };
+
+  // Update Stage Assignees
+  const handleUpdateStageAssignees = async (stageId: string, newAssigneeIds: string[]) => {
+    if (!task) return;
+    try {
+      setError(null);
+      const res = await fetch(`/api/stages/${stageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assigneeIds: newAssigneeIds }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "ეტაპის შემსრულებლების განახლება ვერ მოხერხდა");
+      }
+      await refreshTaskDetails();
       onTaskUpdated();
     } catch (err: unknown) {
       setError((err as Error).message);
@@ -1221,11 +1271,22 @@ export function TaskDetailsDrawer({
             ) : null}
 
             <div className="flex items-center gap-1.5 ml-auto shrink-0">
-              {isAdmin && (
+              {onEditTask && task && (
+                <button
+                  onClick={() => onEditTask(task)}
+                  className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="დავალების რედაქტირება"
+                >
+                  <Edit3 size={12} />
+                  <span>რედაქტირება</span>
+                </button>
+              )}
+
+              {(isAdmin || !task?.deadlineLocked) && (
                 <button
                   onClick={() => setIsRescheduleModalOpen(true)}
                   className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="განრიგის შეცვლა (Admin)"
+                  title="განრიგის შეცვლა"
                 >
                   <Calendar size={12} />
                   <span>განრიგის შეცვლა</span>
@@ -1307,7 +1368,7 @@ export function TaskDetailsDrawer({
             </div>
 
             {/* Current Responsible Participants */}
-            <div className="flex items-center gap-1.5">
+            <div className="relative flex items-center gap-1.5 flex-wrap justify-end">
               <span className="text-[10px] text-stone-400 font-semibold hidden sm:inline">
                 პასუხისმგებელი:
               </span>
@@ -1326,6 +1387,82 @@ export function TaskDetailsDrawer({
                   <span className="text-[11px] text-stone-400">დაუნიშნავი</span>
                 )}
               </div>
+
+              {task && !(task.assignments || []).some((a) => a.user.id === currentUser.id) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentIds = (task.assignments || []).map((a) => a.user.id);
+                    handleUpdateTaskAssignees([...currentIds, currentUser.id]);
+                  }}
+                  className="px-2 py-0.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                  title="დავალების საკუთარ თავზე მინიჭება"
+                >
+                  <UserPlus size={11} />
+                  <span>ჩემზე მინიჭება</span>
+                </button>
+              )}
+
+              {task && (
+                <button
+                  type="button"
+                  onClick={() => setShowAssigneePicker((prev) => !prev)}
+                  className="px-2 py-0.5 bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                  title="შემსრულებლების შეცვლა"
+                >
+                  <Users size={11} />
+                  <span>შეცვლა</span>
+                </button>
+              )}
+
+              {showAssigneePicker && task && (
+                <div className="absolute right-0 top-full mt-1.5 z-30 w-60 bg-white border border-stone-200 rounded-2xl shadow-xl p-2.5 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-stone-100">
+                    <span className="text-[10px] font-extrabold text-stone-500 uppercase tracking-wider">
+                      შემსრულებლების მინიჭება
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAssigneePicker(false)}
+                      className="text-stone-400 hover:text-stone-600 cursor-pointer"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {users.map((u) => {
+                      const taskAssigneeIds = (task.assignments || []).map((a) => a.user.id);
+                      const isChecked = taskAssigneeIds.includes(u.id);
+                      return (
+                        <label
+                          key={u.id}
+                          className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-stone-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              const nextIds = isChecked
+                                ? taskAssigneeIds.filter((id) => id !== u.id)
+                                : [...taskAssigneeIds, u.id];
+                              handleUpdateTaskAssignees(nextIds);
+                            }}
+                            className="rounded border-stone-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                          />
+                          <span className="font-semibold text-stone-800 truncate flex-1">
+                            {u.name}
+                          </span>
+                          {u.id === currentUser.id && (
+                            <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">
+                              ჩემზე
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1884,6 +2021,72 @@ export function TaskDetailsDrawer({
                                       </span>
                                     )}
                                   </div>
+
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setEditingStageAssigneesId(
+                                          editingStageAssigneesId === stage.id ? null : stage.id
+                                        )
+                                      }
+                                      className="px-1.5 py-0.5 bg-stone-100 hover:bg-orange-50 text-stone-600 hover:text-orange-700 border border-stone-200 hover:border-orange-200 rounded text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                      title="ეტაპის შემსრულებლის შეცვლა"
+                                    >
+                                      <UserPlus size={10} />
+                                      <span>შემსრულებელი</span>
+                                    </button>
+                                    {editingStageAssigneesId === stage.id && (
+                                      <div className="absolute left-0 top-full mt-1 z-30 w-56 bg-white border border-stone-200 rounded-xl shadow-xl p-2 space-y-1 text-xs">
+                                        <div className="flex items-center justify-between px-1 pb-1 border-b border-stone-100">
+                                          <span className="text-[10px] font-extrabold text-stone-500 uppercase">
+                                            ეტაპის შემსრულებლები
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditingStageAssigneesId(null)}
+                                            className="text-stone-400 hover:text-stone-600 cursor-pointer"
+                                          >
+                                            <X size={12} />
+                                          </button>
+                                        </div>
+                                        <div className="max-h-44 overflow-y-auto space-y-0.5">
+                                          {users.map((u) => {
+                                            const stageAssigneeIds = (stage.assignments || [])
+                                              .map((a) => a.user?.id)
+                                              .filter(Boolean) as string[];
+                                            const isChecked = stageAssigneeIds.includes(u.id);
+                                            return (
+                                              <label
+                                                key={u.id}
+                                                className="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-stone-50 cursor-pointer"
+                                              >
+                                                <input
+                                                  type="checkbox"
+                                                  checked={isChecked}
+                                                  onChange={() => {
+                                                    const nextIds = isChecked
+                                                      ? stageAssigneeIds.filter((id) => id !== u.id)
+                                                      : [...stageAssigneeIds, u.id];
+                                                    handleUpdateStageAssignees(stage.id, nextIds);
+                                                  }}
+                                                  className="rounded border-stone-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                                                />
+                                                <span className="font-semibold text-stone-800 truncate flex-1">
+                                                  {u.name}
+                                                </span>
+                                                {u.id === currentUser.id && (
+                                                  <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">
+                                                    ჩემზე
+                                                  </span>
+                                                )}
+                                              </label>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
                                   {stage.deadline && (
                                     <>
                                       <span>•</span>
@@ -2301,11 +2504,66 @@ export function TaskDetailsDrawer({
 
               {/* Metadata Grid */}
               <div className="grid grid-cols-2 gap-3 pt-3 border-t border-stone-200">
+                <div className="col-span-2 p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
+                      პასუხისმგებელი შემსრულებლები
+                    </span>
+                    {task && !(task.assignments || []).some((a) => a.user.id === currentUser.id) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentIds = (task.assignments || []).map((a) => a.user.id);
+                          handleUpdateTaskAssignees([...currentIds, currentUser.id]);
+                        }}
+                        className="px-2 py-0.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <UserPlus size={11} />
+                        <span>ჩემზე მინიჭება</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    {users.map((u) => {
+                      const taskAssigneeIds = (task?.assignments || []).map((a) => a.user.id);
+                      const isChecked = taskAssigneeIds.includes(u.id);
+                      return (
+                        <label
+                          key={u.id}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                            isChecked
+                              ? "bg-orange-50/70 border-orange-200 text-stone-900"
+                              : "bg-white border-stone-200/80 text-stone-700 hover:bg-stone-50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              const nextIds = isChecked
+                                ? taskAssigneeIds.filter((id) => id !== u.id)
+                                : [...taskAssigneeIds, u.id];
+                              handleUpdateTaskAssignees(nextIds);
+                            }}
+                            className="rounded border-stone-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                          />
+                          <span className="font-semibold truncate flex-1">{u.name}</span>
+                          {u.id === currentUser.id && (
+                            <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full shrink-0">
+                              ჩემზე
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">
                   <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">
                     პროექტი
                   </span>
-                  {isAdmin && projects && projects.length > 0 ? (
+                  {projects && projects.length > 0 ? (
                     <select
                       value={task?.projectId}
                       onChange={(e) => handleUpdateProject(e.target.value)}
@@ -2328,20 +2586,15 @@ export function TaskDetailsDrawer({
                   <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">
                     გუნდი / მიმართულება
                   </span>
-                  {isAdmin ? (
-                    <select
-                      value={task?.department || "DEVELOPMENT"}
-                      onChange={(e) => handleUpdateDepartment(e.target.value as Department)}
-                      className="w-full text-xs font-bold text-stone-900 bg-white border border-stone-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                    >
-                      <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
-                      <option value="CONTENT">✍️ კონტენტი</option>
-                    </select>
-                  ) : (
-                    <div className="pt-0.5">
-                      <DepartmentBadge department={task?.department} size="sm" />
-                    </div>
-                  )}
+                  <select
+                    value={task?.department || "DEVELOPMENT"}
+                    onChange={(e) => handleUpdateDepartment(e.target.value as Department)}
+                    className="w-full text-xs font-bold text-stone-900 bg-white border border-stone-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                  >
+                    <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
+                    <option value="CONTENT">✍️ კონტენტი</option>
+                    <option value="QA">🛡️ ხარისხის კონტროლი (QA)</option>
+                  </select>
                 </div>
 
                 <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">
@@ -2397,14 +2650,18 @@ export function TaskDetailsDrawer({
                   </span>
                 </div>
 
-                {isAdmin && (
+                {(isAdmin || !task?.deadlineLocked) && (
                   <div className="col-span-2 pt-2">
                     <button
                       onClick={() => setIsRescheduleModalOpen(true)}
                       className="w-full py-2.5 px-3 bg-stone-100 hover:bg-stone-200/80 text-stone-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer border border-stone-200 shadow-2xs"
                     >
                       <Calendar size={14} className="text-stone-600" />
-                      <span>განრიგისა და დედლაინის შეცვლა (Admin)</span>
+                      <span>
+                        {isAdmin
+                          ? "განრიგისა და დედლაინის შეცვლა (Admin)"
+                          : "განრიგისა და დედლაინის შეცვლა"}
+                      </span>
                     </button>
                   </div>
                 )}

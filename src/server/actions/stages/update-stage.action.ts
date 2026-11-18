@@ -18,16 +18,10 @@ export async function updateStageAction(stageId: string, input: unknown) {
   }
 
   const isAdmin = user.role === Role.ADMIN;
-  const isCreator = existing.task?.createdById === user.id;
-  const isAssignee = existing.assignments.some((a: (typeof existing.assignments)[number]) => a.userId === user.id);
-  const isAuthorized = isAdmin || isCreator || isAssignee;
+  const isAuthorized = Boolean(user.isActive && !user.isDeleted);
 
   if (!isAuthorized) {
     throw new ForbiddenError('არ გაქვთ ამ ეტაპის რედაქტირების უფლება');
-  }
-
-  if ((data.isActive !== undefined || data.position !== undefined) && !isAdmin && !isCreator) {
-    throw new ForbiddenError('ეტაპის გააქტიურების ან თანამიმდევრობის შეცვლის უფლება აქვს მხოლოდ ადმინს ან ტასკის შემქმნელს');
   }
 
   const incomingDeadline =

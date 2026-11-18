@@ -136,3 +136,26 @@
   - Zero demo tasks, zero demo projects, single clean Admin user (`admin@team.local` / `admin123`).
   - Task number autoincrement sequence reset to 1.
 - **Verification Gate**: Production build compiles with zero errors; full automated test suite passes with 64/64 tests.
+
+---
+
+### STEP 13 — Automated Browser Smoke Suite & Inline Stage Subtask Form
+- [x] **Inline Subtask Rendering**: Fixed subtask creation form inside `TaskDetailsDrawer` so creating a subtask inside a specific workflow stage renders inline within that stage card rather than at the bottom of the drawer.
+- [x] **Automated Puppeteer E2E Smoke Suite (`tests/smoke/run.ts`)**: Added `npm run test:smoke` to automatically verify login, navigation views, task details drawer opening, and zero uncaught page/console errors.
+- **Verification Gate**: Both `npm test` and `npm run test:smoke` pass cleanly.
+
+---
+
+### STEP 14 — Dedicated Quality Control (`QA & Testing`) Registry & Timeline Category Badges
+- [x] **Timeline Task Category Badges**: Added explicit visual badges on Timeline cards distinguishing `🛡️ ტესტირება (QA)`, `🐞 ბაგ-ფიქსი`, `🔥 ჰოთფიქსი`, and `✨ ფიჩერი`, alongside department badges.
+- [x] **QA Department & Task Type**: Extended Prisma schema (`Department.QA`, `TaskType.QA`) with migration `20261118000000_add_qa_and_user_soft_delete`.
+- [x] **Single-Line QA Registry (`QualityControlView`)**: Built a dedicated tabular/matrix view for `ხარისხის კონტროლი (QA & Testing)` (no Kanban columns, no workflow stages), displaying full testing scope, project, assignee, testing window (`startDate - deadline`), inline expandable verification checklist, and QA status filter pills.
+- [x] **Stage-Less QA Mode in Drawer & Modal**: Hid `სამუშაო ეტაპები` for QA tasks in `TaskDetailsDrawer` and `TaskModal`, replacing them with a direct `🛡️ ტესტირების ჩეკლისტი (QA პუნქტები)`.
+- **Verification Gate**: QA tasks display in a single-line registry and operate without workflow stages.
+
+---
+
+### STEP 15 — User Deactivation/Deletion Task Reset & Open Team Task Editing/Assignment
+- [x] **User Soft-Deletion & Active Task Reset**: Added `DELETE /api/admin/users/[id]` (`deleteUserAction`) and enhanced `updateUserAction` deactivation so that deactivating or deleting a user revokes sessions, unassigns all active (non-`DONE`/`CANCELLED`) tasks, stages, and subtasks, and clears active task deadlines (`startDate`, `deadline`, `deadlineLocked`) when no assignees remain, while preserving the user's name in Archive records.
+- [x] **Open Task Editing & Assignment for Regular Users**: Updated `canUpdateTask` policy, `updateStageAction`, and `TaskDetailsDrawer` so regular active users (`Role.USER`) can edit tasks and stages and assign tasks/stages both to themselves (`ჩემზე მინიჭება`) and to other team members (`შეცვლა`).
+- **Verification Gate**: `npx tsc --noEmit` compiles with 0 errors and `npm test` passes 82/82 tests.

@@ -20,6 +20,8 @@ export async function GET(req: NextRequest) {
       status: TaskStatus.DONE,
     };
 
+    const andConditions: Prisma.TaskWhereInput[] = [];
+
     if (search) {
       const q = search.trim();
       const orClauses: Prisma.TaskWhereInput[] = [
@@ -30,18 +32,23 @@ export async function GET(req: NextRequest) {
       if (!isNaN(parsedNum)) {
         orClauses.push({ taskNumber: parsedNum });
       }
-      where.OR = orClauses;
+      andConditions.push({ OR: orClauses });
     }
 
     if (projectId) where.projectId = projectId;
     if (type) where.type = type;
 
     if (assigneeId) {
-      where.OR = [
-        ...(where.OR || []),
-        { assignments: { some: { userId: assigneeId } } },
-        { stages: { some: { assignments: { some: { userId: assigneeId } } } } },
-      ];
+      andConditions.push({
+        OR: [
+          { assignments: { some: { userId: assigneeId } } },
+          { stages: { some: { assignments: { some: { userId: assigneeId } } } } },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
     }
 
     // Date range filter on completedAt

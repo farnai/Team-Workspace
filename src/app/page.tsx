@@ -551,6 +551,7 @@ export default function WorkspacePage({
                 onEditTask={handleEditTask}
                 onStatusChange={handleStatusChange}
                 onDeleteTask={handleTaskDelete}
+                onTaskUpdated={handleTaskSaved}
                 projects={projects}
                 users={users}
                 isAdmin={currentUser.role === "ADMIN"}
@@ -682,6 +683,7 @@ export default function WorkspacePage({
             setSelectedTaskId(null);
           }}
           onTaskUpdated={handleTaskSaved}
+          onEditTask={(t) => handleEditTask(t as unknown as BacklogTask)}
           currentUser={currentUser}
           users={users}
           projects={projects}

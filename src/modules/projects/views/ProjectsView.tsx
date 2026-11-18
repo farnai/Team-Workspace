@@ -88,7 +88,7 @@ export function ProjectsView({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [taskStatusTab, setTaskStatusTab] = useState<"ALL" | "TODO" | "IN_PROGRESS" | "DONE">("ALL");
-  const [taskDepartmentFilter, setTaskDepartmentFilter] = useState<"ALL" | "DEVELOPMENT" | "CONTENT">("ALL");
+  const [taskDepartmentFilter, setTaskDepartmentFilter] = useState<"ALL" | "DEVELOPMENT" | "CONTENT" | "QA">("ALL");
 
   // Project Modal State (Create & Edit)
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -409,12 +409,13 @@ export function ProjectsView({
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <select
                 value={taskDepartmentFilter}
-                onChange={(e) => setTaskDepartmentFilter(e.target.value as "ALL" | "DEVELOPMENT" | "CONTENT")}
+                onChange={(e) => setTaskDepartmentFilter(e.target.value as "ALL" | "DEVELOPMENT" | "CONTENT" | "QA")}
                 className="bg-white border border-stone-200 rounded-xl px-2.5 py-1.5 text-xs font-medium text-stone-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
               >
                 <option value="ALL">ყველა გუნდი</option>
                 <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
                 <option value="CONTENT">✍️ კონტენტი</option>
+                <option value="QA">🛡️ ხარისხის კონტროლი</option>
               </select>
 
               {/* Search */}

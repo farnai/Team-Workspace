@@ -69,8 +69,12 @@ flowchart TD
 
 ### 4.1 Authentication & Role-Based Access Control (RBAC)
 - **Two Roles Only**:
-  - `ADMIN`: User provisioning, password resets, holiday configuration, full task & stage management, **exclusive permission to modify established deadlines**, manual rescheduling with reason capture.
-  - `USER`: Task creation, subtask creation, stage/task assignment, marking subtasks complete, commenting, daily updates, pausing assigned work with reason.
+  - `ADMIN`: User provisioning, user deactivation & soft-deletion, password resets, holiday configuration, full task & stage management, **exclusive permission to modify established deadlines**, manual rescheduling with reason capture, and task deletion.
+  - `USER`: Task creation, full task & stage editing (title, description, type, priority, department, project), **assigning tasks and stages both to themselves and to other team members**, subtask creation, marking subtasks complete, commenting, daily updates, pausing assigned work with reason, and requesting deadline extensions.
+- **User Deactivation & Deletion Task Reset**:
+  - When an `ADMIN` deactivates (`isActive = false`) or deletes (`isDeleted = true`) a user, the user's active sessions are revoked and all non-completed tasks (`status NOT IN ['DONE', 'CANCELLED']`) assigned to them are automatically unassigned.
+  - If a task has no remaining active assignees, its `startDate`, `deadline`, and `deadlineLocked` are cleared (`null` / `false`) and any active `PLANNED` / `IN_PROGRESS` status resets to `BACKLOG`.
+  - Historical records in the Archive (`DONE` / `CANCELLED` tasks, completed stages, completed subtasks, and `AuditEvent` records) preserve the user's full name for audit and historical integrity.
 - **No Public Registration**: Accounts are provisioned solely by Administrators.
 - **Session Security**: Session tokens are cryptographically secure random tokens stored in the database with expiry, served via `httpOnly`, `SameSite=Lax`, secure cookies.
 
@@ -102,10 +106,12 @@ flowchart TD
 - Any attempt to demote (`role = USER`) or deactivate (`isActive = false`) the sole remaining active admin is rejected.
 - Concurrency protection: To prevent race conditions from simultaneous demotion/deactivation requests, checks are executed inside transactional queries, ensuring fail-closed safety.
 
-### 4.6 Department Division (DEVELOPMENT vs. CONTENT)
-- Users and Tasks belong to a `Department` (`DEVELOPMENT` or `CONTENT`).
-- Backlog, Kanban, and Timeline provide immediate filtering by department, preventing visual clutter between engineering work and content generation.
-- Tasks default to `DEVELOPMENT` and can be transitioned cleanly.
+### 4.6 Three-Department Architecture (`DEVELOPMENT`, `CONTENT`, `QA`) & Dedicated Quality Control Registry
+- Users and Tasks belong to one of three departments: `DEVELOPMENT`, `CONTENT`, or `QA` (with `TaskType.QA` supported alongside `FEATURE`, `BUG`, `HOTFIX`).
+- Backlog, Kanban, and Timeline provide immediate filtering by department and display clear category badges (`🛡️ ტესტირება (QA)`, `🐞 ბაგ-ფიქსი`, `🔥 ჰოთფიქსი`, `✨ ფიჩერი`).
+- **Dedicated Quality Control View (`QualityControlView`)**:
+  - Unlike Backlog and Kanban, the `ხარისხის კონტროლი (QA & Testing)` section uses a single-line horizontal tabular/matrix layout (`1 row = 1 testing object`).
+  - QA tasks (`department === 'QA'` or `type === 'QA'`) bypass multi-stage workflow orchestration (`სამუშაო ეტაპები` are hidden) and instead use a direct verification checklist (`ტესტირების ჩეკლისტი`) with inline expandable checklist items, testing date ranges (`startDate – deadline`), and status indicators (`მზადაა ტესტირებისთვის`, `მიმდინარეობს ტესტირება`, `ხარვეზი აღმოჩენილია`, `ტესტირება წარმატებულია`).
 
 ### 4.7 Reports & Analytics Metric Engine
 - **Accurate On-Time Delivery Rate**:

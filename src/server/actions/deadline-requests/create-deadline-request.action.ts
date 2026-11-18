@@ -5,10 +5,10 @@ import { NotFoundError } from '@/server/http/errors';
 import { createDeadlineRequestDto } from '@/server/dto/stage.dto';
 import { auditRepository } from '@/server/repositories/audit.repository';
 import { formatGeorgianDateShort } from '@/lib/dateUtils';
-import { Role } from '@prisma/client';
+import { Role, type User } from '@prisma/client';
 
-export async function createDeadlineRequestAction(taskId: string, input: unknown) {
-  const user = await requireUser();
+export async function createDeadlineRequestAction(taskId: string, input: unknown, actor?: User) {
+  const user = actor ?? (await requireUser());
   const { requestedDeadline, reason, stageId } = createDeadlineRequestDto.parse(input);
 
   const task = await prisma.task.findUnique({
@@ -24,7 +24,7 @@ export async function createDeadlineRequestAction(taskId: string, input: unknown
 
   const targetStage = stageId ? task.stages.find((s) => s.id === stageId) : null;
   const admins = await prisma.user.findMany({
-    where: { role: Role.ADMIN, isActive: true },
+    where: { role: Role.ADMIN, isActive: true, isDeleted: false },
     select: { id: true },
   });
 

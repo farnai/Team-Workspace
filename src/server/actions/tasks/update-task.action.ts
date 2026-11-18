@@ -1,6 +1,6 @@
 import 'server-only'
 import type { User } from '@prisma/client'
-import { TaskStatus, Role, Prisma } from '@prisma/client'
+import { Department, TaskStatus, TaskType, Role, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { taskRepository } from '@/server/repositories/task.repository'
 import { auditRepository } from '@/server/repositories/audit.repository'
@@ -53,6 +53,9 @@ export async function updateTaskAction(id: string, data: UpdateTaskDto, actor: U
     incomingDeadline !== undefined ? incomingDeadline : existing.deadline
 
   const targetStatus = data.status || existing.status
+  const effectiveDepartment = data.department ?? existing.department
+  const effectiveType = data.type ?? existing.type
+  const isQaTask = effectiveDepartment === Department.QA || effectiveType === TaskType.QA
 
   if (data.assignees && data.assignees.length > 1) {
     const sorted = [...data.assignees].sort(
@@ -119,6 +122,37 @@ export async function updateTaskAction(id: string, data: UpdateTaskDto, actor: U
         stages: { include: { assignments: { include: { user: true } } } },
       },
     })
+
+    // Synchronize workflow stages when task status transitions to DONE or reopens from DONE
+    if (data.status && data.status !== existing.status && existing.stages.length > 0) {
+      if (data.status === TaskStatus.DONE) {
+        await tx.workflowStage.updateMany({
+          where: { taskId: id, isCompleted: true, isActive: true },
+          data: { isActive: false },
+        })
+        await tx.workflowStage.updateMany({
+          where: { taskId: id, isCompleted: false },
+          data: {
+            isActive: false,
+            isCompleted: true,
+            completedAt: new Date(),
+          },
+        })
+      } else if (existing.status === TaskStatus.DONE) {
+        await tx.workflowStage.updateMany({
+          where: { taskId: id },
+          data: { isActive: false },
+        })
+        await tx.workflowStage.update({
+          where: { id: existing.stages[existing.stages.length - 1].id },
+          data: {
+            isCompleted: false,
+            isActive: true,
+            completedAt: null,
+          },
+        })
+      }
+    }
 
     // Audit logs for status and properties
     if (data.status && data.status !== existing.status) {
@@ -209,6 +243,109 @@ export async function updateTaskAction(id: string, data: UpdateTaskDto, actor: U
 
     if (finalAssigneeIds !== null) {
       await taskRepository.setAssignees(id, finalAssigneeIds, tx)
+
+      if (data.assignees && data.assignees.length > 1 && !isQaTask) {
+        const sortedAssignees = data.assignees
+          .map((a, idx) => ({ ...a, _idx: idx }))
+          .sort((a, b) => (a.position ?? a._idx) - (b.position ?? b._idx))
+
+        const assigneeUsers = await tx.user.findMany({
+          where: { id: { in: finalAssigneeIds } },
+          select: { id: true, name: true },
+        })
+        const userNameMap = new Map(assigneeUsers.map((u) => [u.id, u.name]))
+
+        const resolvedFirstStart =
+          data.startDate !== undefined
+            ? data.startDate
+              ? new Date(data.startDate)
+              : null
+            : existing.startDate
+
+        if (existing.stages.length === 0) {
+          for (let i = 0; i < sortedAssignees.length; i++) {
+            const a = sortedAssignees[i]
+            const uName = userNameMap.get(a.userId) || `შემსრულებელი ${i + 1}`
+            const parsedStageDeadline = a.deadline ? new Date(a.deadline) : null
+            const stage = await tx.workflowStage.create({
+              data: {
+                taskId: id,
+                position: i,
+                title: `ეტაპი ${i + 1}: ${uName}`,
+                isActive: targetStatus !== TaskStatus.DONE && i === 0,
+                isCompleted: targetStatus === TaskStatus.DONE,
+                completedAt: targetStatus === TaskStatus.DONE ? new Date() : null,
+                startDate: i === 0 ? resolvedFirstStart : null,
+                deadline: parsedStageDeadline,
+                deadlineLocked: Boolean(parsedStageDeadline),
+              },
+            })
+
+            await tx.stageAssignment.create({
+              data: {
+                stageId: stage.id,
+                userId: a.userId,
+              },
+            })
+          }
+        } else {
+          const sharedCount = Math.min(existing.stages.length, sortedAssignees.length)
+          for (let i = 0; i < sharedCount; i++) {
+            const st = existing.stages[i]
+            const a = sortedAssignees[i]
+            const uName = userNameMap.get(a.userId) || `შემსრულებელი ${i + 1}`
+
+            await tx.stageAssignment.deleteMany({ where: { stageId: st.id } })
+            await tx.stageAssignment.create({
+              data: { stageId: st.id, userId: a.userId },
+            })
+
+            const stageUpdateData: Prisma.WorkflowStageUpdateInput = {}
+            if (st.title.startsWith('ეტაპი ')) {
+              stageUpdateData.title = `ეტაპი ${i + 1}: ${uName}`
+            }
+            if (!st.deadlineLocked || isAdmin) {
+              const parsedStageDeadline = a.deadline ? new Date(a.deadline) : null
+              stageUpdateData.deadline = parsedStageDeadline
+              stageUpdateData.deadlineLocked = Boolean(parsedStageDeadline)
+            }
+            if (Object.keys(stageUpdateData).length > 0) {
+              await tx.workflowStage.update({
+                where: { id: st.id },
+                data: stageUpdateData,
+              })
+            }
+          }
+
+          if (sortedAssignees.length > existing.stages.length) {
+            for (let i = existing.stages.length; i < sortedAssignees.length; i++) {
+              const a = sortedAssignees[i]
+              const uName = userNameMap.get(a.userId) || `შემსრულებელი ${i + 1}`
+              const parsedStageDeadline = a.deadline ? new Date(a.deadline) : null
+              const stage = await tx.workflowStage.create({
+                data: {
+                  taskId: id,
+                  position: i,
+                  title: `ეტაპი ${i + 1}: ${uName}`,
+                  isActive: false,
+                  isCompleted: targetStatus === TaskStatus.DONE,
+                  completedAt: targetStatus === TaskStatus.DONE ? new Date() : null,
+                  startDate: null,
+                  deadline: parsedStageDeadline,
+                  deadlineLocked: Boolean(parsedStageDeadline),
+                },
+              })
+
+              await tx.stageAssignment.create({
+                data: {
+                  stageId: stage.id,
+                  userId: a.userId,
+                },
+              })
+            }
+          }
+        }
+      }
 
       await auditRepository.log(
         {

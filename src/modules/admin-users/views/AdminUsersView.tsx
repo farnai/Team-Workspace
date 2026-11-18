@@ -14,6 +14,7 @@ import {
   X,
   Code2,
   PenTool,
+  ShieldCheck,
   Trash2,
 } from "lucide-react";
 import { Department } from "@prisma/client";
@@ -427,6 +428,7 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                       >
                         <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
                         <option value="CONTENT">✍️ კონტენტი</option>
+                        <option value="QA">🛡️ ხარისხის კონტროლი</option>
                       </select>
                     </td>
 
@@ -593,11 +595,11 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                 <label className="block text-xs font-bold text-stone-700 mb-1">
                   გუნდი / მიმართულება *
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setNewUserDepartment(Department.DEVELOPMENT)}
-                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                       newUserDepartment === Department.DEVELOPMENT
                         ? "bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-500/20"
                         : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
@@ -609,7 +611,7 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                   <button
                     type="button"
                     onClick={() => setNewUserDepartment(Department.CONTENT)}
-                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                       newUserDepartment === Department.CONTENT
                         ? "bg-purple-600 text-white border-purple-600 shadow-xs ring-2 ring-purple-500/20"
                         : "bg-white text-stone-700 border-stone-200 hover:bg-purple-50/50"
@@ -617,6 +619,18 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                   >
                     <PenTool size={13} className={newUserDepartment === Department.CONTENT ? "text-white" : "text-purple-600"} />
                     <span>კონტენტი</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewUserDepartment(Department.QA)}
+                    className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      newUserDepartment === Department.QA
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20"
+                        : "bg-white text-stone-700 border-stone-200 hover:bg-emerald-50/50"
+                    }`}
+                  >
+                    <ShieldCheck size={13} className={newUserDepartment === Department.QA ? "text-white" : "text-emerald-600"} />
+                    <span>QA</span>
                   </button>
                 </div>
               </div>

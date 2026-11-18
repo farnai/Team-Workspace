@@ -134,7 +134,7 @@ export async function GET() {
       }),
       // Active team members
       prisma.user.findMany({
-        where: { isActive: true },
+        where: { isActive: true, isDeleted: false },
         select: {
           id: true,
           name: true,

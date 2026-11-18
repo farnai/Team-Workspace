@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { SubtaskStatus, TaskStatus, Prisma, Role } from "@prisma/client";
+import { SubtaskStatus, TaskStatus, Prisma } from "@prisma/client";
 import { logAuditEvent } from "./audit";
 
 /**
@@ -116,16 +116,20 @@ export async function advanceWorkflowStage({
       throw new Error("ეტაპი უკვე დასრულებულია");
     }
 
-    // Permission check: Stage assignee or Admin
+    // Permission check: Any active non-deleted user
     const actor = await client.user.findUnique({
       where: { id: actorId },
-      select: { role: true },
+      select: { role: true, isActive: true, isDeleted: true },
     });
-    const isAssignee = currentStage.assignments.some((a) => a.userId === actorId);
-    const isAdmin = actor?.role === Role.ADMIN;
 
-    if (!isAssignee && !isAdmin) {
-      throw new Error("არ გაქვთ ამ ეტაპის დასრულების უფლება (მხოლოდ შემსრულებელს ან ადმინს შეუძლია)");
+    if (!actor || !actor.isActive || actor.isDeleted) {
+      throw new Error("არ გაქვთ ამ ეტაპის დასრულების უფლება");
+    }
+
+    if (currentStage.assignments.length === 0) {
+      await client.stageAssignment.create({
+        data: { stageId, userId: actorId },
+      });
     }
 
     // Check that all non-cancelled subtasks in this stage are completed
