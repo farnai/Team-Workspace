@@ -85,12 +85,12 @@ export function Sidebar({
     adminOnly?: boolean;
   }[] = [
     { id: "overview", label: "საწყისი", icon: <Home size={18} /> },
+    { id: "timeline", label: "ქრონოლოგია", icon: <Calendar size={18} /> },
+    { id: "backlog", label: "დავალებები", icon: <Layers size={18} /> },
+    { id: "my-work", label: "ჩემი სამუშაო", icon: <UserCheck size={18} /> },
     { id: "projects", label: "პროექტები", icon: <FolderKanban size={18} /> },
-    { id: "timeline", label: "თაიმლაინი", icon: <Calendar size={18} /> },
-    { id: "backlog", label: "ბექლოგი", icon: <Layers size={18} /> },
     { id: "qa", label: "ხარისხის კონტროლი", icon: <CheckSquare size={18} /> },
     { id: "archive", label: "არქივი", icon: <Archive size={18} /> },
-    { id: "my-work", label: "ჩემი სამუშაოები", icon: <UserCheck size={18} /> },
     { id: "workload", label: "დატვირთვა", icon: <BarChart2 size={18} /> },
     { id: "reports", label: "რეპორტები", icon: <PieChart size={18} /> },
     { id: "activity-log", label: "ლოგი / ისტორია", icon: <History size={18} /> },

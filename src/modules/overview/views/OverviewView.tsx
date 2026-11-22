@@ -8,12 +8,12 @@ import {
   Activity,
   Layers,
   RefreshCw,
-  Folder,
   LayoutGrid,
   Table as TableIcon,
   Calendar,
 } from "lucide-react";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
+import { formatTbilisiDateTime } from "@/lib/date";
 
 export interface OverviewMetrics {
   activeCount: number;
@@ -153,7 +153,6 @@ export function OverviewDashboard({
   refreshKey = 0,
 }: OverviewDashboardProps) {
   const [teamActivity, setTeamActivity] = useState<TeamMemberActivity[]>([]);
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [recentActivities, setRecentActivities] = useState<RecentActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -174,7 +173,6 @@ export function OverviewDashboard({
       .then((data) => {
         if (active) {
           if (data.teamActivity) setTeamActivity(data.teamActivity);
-          if (data.projects) setProjects(data.projects);
           if (data.recentActivities) setRecentActivities(data.recentActivities);
           setError(null);
         }
@@ -566,53 +564,8 @@ export function OverviewDashboard({
         )}
       </div>
 
-      {/* 4. Bottom Grid: Projects Health & Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Projects Summary */}
-        <div className="bg-white rounded-xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
-          <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
-            <div className="flex items-center gap-2">
-              <Folder size={16} className="text-orange-600" />
-              <h2 className="text-xs font-black text-stone-900 uppercase tracking-wider">
-                პროექტების მიმდინარეობა ({projects.length})
-              </h2>
-            </div>
-          </div>
-
-          <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
-            {projects.length === 0 ? (
-              <div className="p-6 text-center text-xs text-stone-400">
-                პროექტები არ არის
-              </div>
-            ) : (
-              projects.map((p) => (
-                <div
-                  key={p.id}
-                  className="p-2.5 bg-stone-50/60 rounded-lg border border-stone-200/80 flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: p.color || "#ea580c" }}
-                    />
-                    <span className="font-extrabold text-stone-900 text-xs truncate">
-                      {p.name}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 text-[11px] font-bold">
-                    <span className="px-2 py-0.5 rounded-md bg-white border border-stone-200 text-stone-600">
-                      სულ {p.totalTasks}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200/80 text-emerald-700">
-                      შესრულებულია {p.doneTasks}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
+      {/* 3. Recent Activity Feed */}
+      <div>
         {/* Recent Activity Feed */}
         <div className="bg-white rounded-xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
           <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
@@ -645,7 +598,7 @@ export function OverviewDashboard({
                         {act.actor.name}
                       </span>
                       <span className="text-[9.5px] text-stone-400 shrink-0 font-medium">
-                        {formatGeorgianDateShort(act.createdAt)}
+                        {formatTbilisiDateTime(act.createdAt)}
                       </span>
                     </div>
                     <div className="font-semibold text-stone-700 mt-0.5 flex items-center gap-1.5 flex-wrap text-[11px]">

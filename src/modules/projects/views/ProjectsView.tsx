@@ -560,13 +560,6 @@ export function ProjectsView({
                 const overdueTasks = projectTasks.filter(
                   (t) => isTaskOverdue(t.deadline, t.status)
                 ).length;
-                const progressPct =
-                  totalTasks > 0
-                    ? Math.round(
-                        projectTasks.reduce((acc, t) => acc + (t.progress || 0), 0) /
-                          totalTasks
-                      )
-                    : 0;
 
                 const color = p.color || "#EA580C";
 
@@ -677,23 +670,6 @@ export function ProjectsView({
                           >
                             ვადაგად.
                           </span>
-                        </div>
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="mt-3 space-y-1">
-                        <div className="flex justify-between text-[11px] font-bold text-stone-600">
-                          <span>პროგრესი</span>
-                          <span>{progressPct}%</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-stone-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-300"
-                            style={{
-                              width: `${progressPct}%`,
-                              backgroundColor: color,
-                            }}
-                          />
                         </div>
                       </div>
                     </div>

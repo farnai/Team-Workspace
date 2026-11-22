@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
-  Layers,
 } from "lucide-react";
 import {
   formatGeorgianDate,
@@ -217,8 +216,6 @@ export function VerticalTimeline({
   mode,
   onModeChange,
   isLoading,
-  onToggleBacklog,
-  isBacklogOpen,
   onDateChange,
   onPrev,
   onNext,
@@ -391,7 +388,7 @@ export function VerticalTimeline({
         {/* Left: Title & Date Controls */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <h2 className="text-sm font-extrabold text-stone-900 tracking-tight">
-            თაიმლაინი
+            ქრონოლოგია
           </h2>
 
           {/* Date Controls Bar */}
@@ -463,19 +460,8 @@ export function VerticalTimeline({
           </div>
         </div>
 
-        {/* Right: Filters & Backlog Toggle */}
+        {/* Right: Filters */}
         <div className="flex items-center gap-1.5">
-          {onToggleBacklog && !isBacklogOpen && (
-            <button
-              onClick={onToggleBacklog}
-              className="flex items-center gap-1 px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-full text-xs font-semibold transition-colors cursor-pointer"
-              title="საერთო ბექლოგის გახსნა"
-            >
-              <Layers size={13} className="text-orange-600" />
-              <span>ბექლოგი</span>
-            </button>
-          )}
-
           <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-xl px-2 py-0.5">
             <Filter size={12} className="text-stone-400" />
             <select
@@ -511,6 +497,7 @@ export function VerticalTimeline({
           dates.map((day) => {
             const isActiveDate = day.date === effectiveActiveDateKey;
             const isTodayDate = day.isToday || day.date === todayDateStr;
+            const isPastDate = !isTodayDate && day.date < todayDateStr;
             const relativeLabel = getDateRelativeLabel(day.date);
             const filteredTasks =
               filterType === "ALL"
@@ -548,6 +535,8 @@ export function VerticalTimeline({
                     className={`relative z-10 mt-3 rounded-full border-2 transition-all shrink-0 ${
                       isTodayDate
                         ? "w-3.5 h-3.5 border-blue-600 bg-blue-500 ring-4 ring-blue-100 scale-125 shadow-xs"
+                        : isPastDate
+                        ? "w-2 h-2 border-stone-300/80 bg-stone-200/70 opacity-60"
                         : day.holidayName
                         ? "w-2.5 h-2.5 border-amber-500 bg-amber-100"
                         : day.isWeekend
@@ -563,6 +552,8 @@ export function VerticalTimeline({
                     className={`transition-all duration-150 ${
                       isTodayDate
                         ? "bg-white border-2 border-blue-500/90 shadow-md ring-2 ring-blue-100/70 p-3 sm:p-3.5 rounded-2xl"
+                        : isPastDate
+                        ? "bg-stone-100/45 border border-stone-200/45 p-2 sm:p-2.5 rounded-xl opacity-55 grayscale-[45%] hover:opacity-80"
                         : day.isWeekend || !day.isWorking
                         ? "bg-stone-100/40 border border-stone-200/50 p-2 sm:p-2.5 rounded-xl"
                         : "bg-stone-100/60 hover:bg-stone-100/80 border border-stone-200/60 p-2 sm:p-2.5 rounded-xl"
@@ -574,6 +565,8 @@ export function VerticalTimeline({
                       className={`tracking-tight ${
                         isTodayDate
                           ? "text-base sm:text-lg font-black text-stone-900"
+                          : isPastDate
+                          ? "text-xs sm:text-[13px] font-medium text-stone-400"
                           : "text-xs sm:text-[13px] font-semibold text-stone-600"
                       }`}
                     >
@@ -584,6 +577,8 @@ export function VerticalTimeline({
                       className={`${
                         isTodayDate
                           ? "text-xs text-stone-600 font-semibold"
+                          : isPastDate
+                          ? "text-[11px] text-stone-400/80 font-normal"
                           : "text-[11px] text-stone-400 font-medium"
                       }`}
                     >

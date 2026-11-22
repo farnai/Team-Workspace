@@ -649,7 +649,7 @@ export function ReportsDashboard({
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-black text-stone-900 tracking-tight flex items-center gap-2">
               <Folder size={16} className="text-orange-600" />
-              <span>პროექტების პროგრესი</span>
+              <span>პროექტების მიმდინარეობა</span>
             </h3>
             <span className="text-xs text-stone-400 font-semibold">
               {projectStats.length} პროექტი

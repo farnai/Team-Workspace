@@ -343,6 +343,7 @@ export function ActivityLogDashboard({
   users,
   currentUser,
 }: ActivityLogDashboardProps) {
+  const isAdmin = currentUser?.role === Role.ADMIN;
   const [events, setEvents] = useState<AuditEventItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [stats, setStats] = useState({
@@ -912,8 +913,8 @@ export function ActivityLogDashboard({
                         {/* Visual Diff for Status or Deadline */}
                         {renderValueDiff(event.oldValues, event.newValues, event.action)}
 
-                        {/* Technical JSON Toggle */}
-                        {(event.oldValues || event.newValues) && (
+                        {/* Technical JSON Toggle (Admin only) */}
+                        {isAdmin && (event.oldValues || event.newValues) && (
                           <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center justify-between">
                             <button
                               onClick={() =>
@@ -939,8 +940,8 @@ export function ActivityLogDashboard({
                           </div>
                         )}
 
-                        {/* Expanded JSON Inspector */}
-                        {isExpanded && (
+                        {/* Expanded JSON Inspector (Admin only) */}
+                        {isAdmin && isExpanded && (
                           <div className="mt-2 p-3 bg-stone-900 text-stone-100 rounded-lg text-[10.5px] font-mono overflow-x-auto space-y-2">
                             {event.oldValues && (
                               <div>
