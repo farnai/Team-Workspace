@@ -64,6 +64,32 @@ export function formatGeorgianDateTime(dateInput: Date | string | null | undefin
   return `${day} ${month}, ${time}`
 }
 
+export function formatTbilisiDateTime(dateInput: Date | string | null | undefined): string {
+  if (!dateInput) return '-'
+  const date = new Date(dateInput)
+  if (isNaN(date.getTime())) return '-'
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tbilisi',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date)
+
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+  const day = get('day')
+  const monthIdx = Number(get('month')) - 1
+  const year = get('year')
+  const hour = get('hour') === '24' ? '00' : get('hour')
+  const minute = get('minute')
+  const month = GEORGIAN_MONTHS_SHORT[monthIdx] ?? get('month')
+
+  return `${day} ${month}, ${year} • ${hour}:${minute}`
+}
+
 export function formatGeorgianDateShort(dateInput: Date | string | null | undefined): string {
   if (!dateInput) return '-'
   const date = new Date(dateInput)

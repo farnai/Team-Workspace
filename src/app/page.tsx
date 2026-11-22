@@ -555,6 +555,7 @@ export default function WorkspacePage({
                 projects={projects}
                 users={users}
                 isAdmin={currentUser.role === "ADMIN"}
+                currentUser={{ id: currentUser.id, name: currentUser.name }}
                 externalSearchQuery={searchQuery}
                 onNavigateToTimeline={() => {
                   setCurrentView("timeline");

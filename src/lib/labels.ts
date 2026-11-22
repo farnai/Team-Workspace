@@ -2,13 +2,13 @@ import { TaskStatus, Priority, Department, TaskType, Role, AuditAction } from '@
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, { label: string; color: string; bg: string; border: string }> = {
   BACKLOG: {
-    label: 'ბექლოგი',
-    color: 'text-stone-700',
-    bg: 'bg-stone-100',
-    border: 'border-stone-200',
+    label: 'TBD / განსახილველი',
+    color: 'text-amber-800',
+    bg: 'bg-amber-50',
+    border: 'border-amber-200',
   },
   PLANNED: {
-    label: 'დაგეგმილი',
+    label: 'To Do (დაგეგმილი)',
     color: 'text-indigo-700',
     bg: 'bg-indigo-50',
     border: 'border-indigo-200',
@@ -163,4 +163,72 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   USER_STATUS_CHANGED: 'მომხმარებლის სტატუსი',
   USER_DELETED: 'მომხმარებლის წაშლა',
   CALENDAR_UPDATED: 'კალენდრის განახლება',
+  TEST_CASE_CREATED: 'ტესტ-ქეისის დამატება',
+  TEST_CASE_UPDATED: 'ტესტ-ქეისის რედაქტირება',
+  TEST_CASE_DELETED: 'ტესტ-ქეისის წაშლა',
+  TEST_RUN_RECORDED: 'ტესტის გაშვების დაფიქსირება',
+}
+
+export type TestRunVerdict = 'PASSED' | 'FAILED' | 'BLOCKED'
+export type TestStepVerdict = 'PASSED' | 'FAILED' | 'BLOCKED' | 'SKIPPED'
+
+export const TEST_RUN_STATUS_LABELS: Record<
+  TestRunVerdict,
+  { label: string; color: string; bg: string; border: string }
+> = {
+  PASSED: {
+    label: 'გაიარა',
+    color: 'text-emerald-700',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-200',
+  },
+  FAILED: {
+    label: 'ვერ გაიარა',
+    color: 'text-rose-700',
+    bg: 'bg-rose-50',
+    border: 'border-rose-200',
+  },
+  BLOCKED: {
+    label: 'დაბლოკილია',
+    color: 'text-amber-800',
+    bg: 'bg-amber-50',
+    border: 'border-amber-200',
+  },
+}
+
+export const TEST_NOT_RUN_LABEL = {
+  label: 'ჯერ არ გაშვებულა',
+  color: 'text-stone-600',
+  bg: 'bg-stone-100',
+  border: 'border-stone-200',
+} as const
+
+export const TEST_STEP_STATUS_LABELS: Record<
+  TestStepVerdict,
+  { label: string; color: string; bg: string; border: string }
+> = {
+  PASSED: {
+    label: 'გაიარა',
+    color: 'text-emerald-700',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-200',
+  },
+  FAILED: {
+    label: 'ვერ გაიარა',
+    color: 'text-rose-700',
+    bg: 'bg-rose-50',
+    border: 'border-rose-200',
+  },
+  BLOCKED: {
+    label: 'დაბლოკილია',
+    color: 'text-amber-800',
+    bg: 'bg-amber-50',
+    border: 'border-amber-200',
+  },
+  SKIPPED: {
+    label: 'გამოტოვებულია',
+    color: 'text-stone-600',
+    bg: 'bg-stone-100',
+    border: 'border-stone-200',
+  },
 }

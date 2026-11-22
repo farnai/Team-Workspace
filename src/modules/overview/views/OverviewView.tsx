@@ -139,6 +139,14 @@ function formatAuditActionGeorgian(action: string): string {
       return "ახალი მომხმარებელი შეიქმნა";
     case "USER_STATUS_CHANGED":
       return "მომხმარებლის სტატუსი განახლდა";
+    case "TEST_CASE_CREATED":
+      return "ტესტ-ქეისი დაემატა";
+    case "TEST_CASE_UPDATED":
+      return "ტესტ-ქეისი განახლდა";
+    case "TEST_CASE_DELETED":
+      return "ტესტ-ქეისი წაიშალა";
+    case "TEST_RUN_RECORDED":
+      return "ტესტის გაშვება დაფიქსირდა";
     default:
       return action;
   }
@@ -754,24 +762,24 @@ export function OverviewDashboard({
               projects.map((p) => (
                 <div
                   key={p.id}
-                  className="p-2.5 bg-stone-50/60 rounded-lg border border-stone-200/80 space-y-1.5"
+                  className="p-2.5 bg-stone-50/60 rounded-lg border border-stone-200/80 flex items-center justify-between gap-3"
                 >
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-extrabold text-stone-900">{p.name}</span>
-                    <span className="text-[11px] font-bold text-stone-500">
-                      {p.doneTasks}/{p.totalTasks} დასრულებული
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: p.color || "#ea580c" }}
+                    />
+                    <span className="font-extrabold text-stone-900 text-xs truncate">
+                      {p.name}
                     </span>
                   </div>
-
-                  <div className="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                      style={{ width: `${p.avgProgress}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-[10px] text-stone-400 font-semibold">
-                    <span>საშუალო პროგრესი</span>
-                    <span className="text-emerald-700 font-bold">{p.avgProgress}%</span>
+                  <div className="flex items-center gap-2 shrink-0 text-[11px] font-bold">
+                    <span className="px-2 py-0.5 rounded-md bg-white border border-stone-200 text-stone-600">
+                      სულ {p.totalTasks}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200/80 text-emerald-700">
+                      შესრულებულია {p.doneTasks}
+                    </span>
                   </div>
                 </div>
               ))

@@ -79,6 +79,16 @@ enum AuditAction {
   DEPARTMENT_CHANGED
   TASK_DELETED
   USER_DELETED
+  TEST_CASE_CREATED
+  TEST_CASE_UPDATED
+  TEST_CASE_DELETED
+  TEST_RUN_RECORDED
+}
+
+enum TestRunStatus {
+  PASSED
+  FAILED
+  BLOCKED
 }
 
 model User {
@@ -106,6 +116,9 @@ model User {
   dailyUpdates       DailyUpdate[]
   auditEvents        AuditEvent[]        @relation("AuditActor")
   notifications      Notification[]
+  createdTestCases   TestCase[]          @relation("TestCaseCreator")
+  updatedTestCases   TestCase[]          @relation("TestCaseUpdater")
+  executedTestRuns   TestRun[]           @relation("TestRunExecutor")
 
   @@index([isDeleted])
   @@index([isActive, isDeleted])
@@ -176,6 +189,8 @@ model Task {
   dailyUpdates  DailyUpdate[]
   auditEvents   AuditEvent[]
   notifications Notification[]
+  testCases     TestCase[]
+  testRuns      TestRun[]
 
   @@index([projectId])
   @@index([status])
@@ -302,6 +317,7 @@ model Attachment {
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testRunEvidences TestRunEvidence[]
 
   @@map("attachments")
 }
@@ -373,4 +389,81 @@ model Holiday {
   createdAt  DateTime @default(now())
 
   @@map("holidays")
+}
+
+model TestCase {
+  id           String   @id @default(uuid())
+  taskId       String
+  position     Int      @default(0)
+  title        String
+  precondition String?
+  createdById  String
+  updatedById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  task      Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdBy User       @relation("TestCaseCreator", fields: [createdById], references: [id])
+  updatedBy User?      @relation("TestCaseUpdater", fields: [updatedById], references: [id])
+  steps     TestStep[]
+  runs      TestRun[]
+
+  @@index([taskId, position])
+  @@map("test_cases")
+}
+
+model TestStep {
+  id             String   @id @default(uuid())
+  testCaseId     String
+  position       Int      @default(0)
+  action         String
+  testData       String?
+  expectedResult String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  testCase TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  @@index([testCaseId, position])
+  @@map("test_steps")
+}
+
+model TestRun {
+  id                   String        @id @default(uuid())
+  testCaseId           String
+  taskId               String
+  runNumber            Int
+  status               TestRunStatus
+  actualResult         String?
+  reason               String?
+  caseTitleSnapshot    String
+  preconditionSnapshot String?
+  stepsSnapshot        Json
+  executedById         String
+  executedAt           DateTime      @default(now())
+
+  testCase   TestCase          @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  task       Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  executedBy User              @relation("TestRunExecutor", fields: [executedById], references: [id])
+  evidences  TestRunEvidence[]
+
+  @@unique([testCaseId, runNumber])
+  @@index([testCaseId, executedAt])
+  @@index([taskId, executedAt])
+  @@map("test_runs")
+}
+
+model TestRunEvidence {
+  id           String   @id @default(uuid())
+  testRunId    String
+  attachmentId String
+  createdAt    DateTime @default(now())
+
+  testRun    TestRun    @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  attachment Attachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  @@unique([testRunId, attachmentId])
+  @@index([testRunId])
+  @@index([attachmentId])
+  @@map("test_run_evidences")
 }

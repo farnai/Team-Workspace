@@ -7,7 +7,7 @@ export interface SmokeFixtures {
   runId: string
   adminUser: { id: string; name: string; email: string; token: string }
   designerUser: { id: string; name: string; email: string; token: string }
-  leadDevUser: { id: string; name: string; email: string }
+  leadDevUser: { id: string; name: string; email: string; token: string }
   project: { id: string; name: string }
   taskWithStages: { id: string; title: string; taskNumber: number }
   simpleTask: { id: string; title: string; taskNumber: number }
@@ -68,11 +68,13 @@ export async function createSmokeFixtures(): Promise<{
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
   const adminToken = `tw_admin_${crypto.randomBytes(24).toString('hex')}`
   const designerToken = `tw_user_${crypto.randomBytes(24).toString('hex')}`
+  const leadDevToken = `tw_dev_${crypto.randomBytes(24).toString('hex')}`
 
   await smokePrisma.session.createMany({
     data: [
       { userId: admin.id, token: adminToken, expiresAt },
       { userId: designer.id, token: designerToken, expiresAt },
+      { userId: leadDev.id, token: leadDevToken, expiresAt },
     ],
   })
 
@@ -246,7 +248,7 @@ export async function createSmokeFixtures(): Promise<{
     runId,
     adminUser: { id: admin.id, name: admin.name, email: admin.email, token: adminToken },
     designerUser: { id: designer.id, name: designer.name, email: designer.email, token: designerToken },
-    leadDevUser: { id: leadDev.id, name: leadDev.name, email: leadDev.email },
+    leadDevUser: { id: leadDev.id, name: leadDev.name, email: leadDev.email, token: leadDevToken },
     project: { id: project.id, name: project.name },
     taskWithStages: { id: task1.id, title: task1.title, taskNumber: task1.taskNumber },
     simpleTask: { id: task2.id, title: task2.title, taskNumber: task2.taskNumber },

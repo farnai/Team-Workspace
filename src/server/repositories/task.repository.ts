@@ -85,6 +85,20 @@ export const taskRepository = {
             },
           },
         },
+        auditEvents: {
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+          include: {
+            actor: {
+              select: { id: true, name: true, avatarUrl: true },
+            },
+          },
+        },
+        _count: {
+          select: {
+            testCases: true,
+          },
+        },
       },
     })
   },
@@ -139,6 +153,18 @@ export const taskRepository = {
         },
         attachments: {
           select: { id: true, originalName: true, isExternal: true, url: true },
+        },
+        auditEvents: {
+          where: {
+            action: {
+              in: ['STATUS_CHANGED', 'TASK_ASSIGNED', 'SUBTASK_COMPLETED', 'TEST_RUN_RECORDED'],
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          include: {
+            actor: { select: { id: true, name: true, avatarUrl: true } },
+          },
         },
         _count: {
           select: {

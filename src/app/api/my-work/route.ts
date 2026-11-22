@@ -135,10 +135,10 @@ export async function GET() {
         // No stages: Direct task
         if (t.status === "IN_PROGRESS") {
           inProgress.push(t);
-        } else if (isPlanned) {
+        } else if (isPlanned || t.status === "BACKLOG") {
           planned.push(t);
-        } else {
-          inProgress.push(t);
+        } else if (t.status !== "CANCELLED") {
+          planned.push(t);
         }
       }
     }

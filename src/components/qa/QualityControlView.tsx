@@ -21,10 +21,14 @@ import {
   Play,
   RotateCcw,
   Sparkles,
+  XCircle,
+  History,
+  X,
 } from "lucide-react";
 import { TaskStatus, Priority, Department, TaskType } from "@prisma/client";
 import { BacklogTask } from "@/components/SharedBacklog";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
+import { formatTbilisiDateTime, getTbilisiTodayString } from "@/lib/date";
 
 interface ProjectOption {
   id: string;
@@ -50,6 +54,7 @@ interface QualityControlViewProps {
   projects: ProjectOption[];
   users: UserOption[];
   isAdmin: boolean;
+  currentUser?: { id: string; name: string };
   externalSearchQuery?: string;
   onNavigateToTimeline?: () => void;
 }
@@ -68,6 +73,7 @@ export function QualityControlView({
   projects,
   users,
   isAdmin,
+  currentUser,
   externalSearchQuery,
   onNavigateToTimeline,
 }: QualityControlViewProps) {
@@ -77,8 +83,13 @@ export function QualityControlView({
   const [selectedUser, setSelectedUser] = useState<string>("ALL");
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("ALL");
 
-  // Expanded Checklists State (Set of task IDs where checklist is opened)
+  // Expanded Checklists & History State
   const [expandedChecklists, setExpandedChecklists] = useState<Record<string, boolean>>({});
+  const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({});
+
+  // Start Testing Confirmation Modal State
+  const [startConfirmTask, setStartConfirmTask] = useState<BacklogTask | null>(null);
+  const [isStartingTest, setIsStartingTest] = useState(false);
 
   // Local optimistic subtasks state for immediate checklist check/uncheck
   const [subtaskTogglingId, setSubtaskTogglingId] = useState<string | null>(null);
@@ -89,6 +100,55 @@ export function QualityControlView({
       ...prev,
       [taskId]: !prev[taskId],
     }));
+  };
+
+  const toggleHistory = (taskId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedHistory((prev) => ({
+      ...prev,
+      [taskId]: !prev[taskId],
+    }));
+  };
+
+  const formatNumericTbilisiDate = (dateInput: string) => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Tbilisi",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date(dateInput));
+    const m = parts.find((p) => p.type === "month")?.value ?? "";
+    const d = parts.find((p) => p.type === "day")?.value ?? "";
+    const y = parts.find((p) => p.type === "year")?.value ?? "";
+    return `${m}.${d}.${y}`;
+  };
+
+  const todayTbilisiStr = getTbilisiTodayString();
+  const [ty, tm, td] = todayTbilisiStr.split("-");
+  const todayFormatted = `${tm}.${td}.${ty}`;
+
+  const handleConfirmStartTest = async () => {
+    if (!startConfirmTask || isStartingTest) return;
+    const startedTaskId = startConfirmTask.id;
+    setIsStartingTest(true);
+    try {
+      const res = await fetch(`/api/tasks/${startedTaskId}/qa-start`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "ტესტის დაწყება ვერ მოხერხდა");
+      }
+      setStartConfirmTask(null);
+      setExpandedChecklists((prev) => ({ ...prev, [startedTaskId]: true }));
+      if (onTaskUpdated) {
+        await onTaskUpdated();
+      }
+    } catch (err) {
+      console.error("Failed to start QA test:", err);
+    } finally {
+      setIsStartingTest(false);
+    }
   };
 
   // Filter ONLY QA Tasks (Department QA or Type QA)
@@ -149,43 +209,51 @@ export function QualityControlView({
       (t) => t.status === TaskStatus.BACKLOG || t.status === TaskStatus.PLANNED
     ).length;
     const inProgress = qaTasks.filter(
-      (t) =>
-        t.status === TaskStatus.IN_PROGRESS ||
-        t.status === TaskStatus.PAUSED ||
-        t.status === TaskStatus.BLOCKED
+      (t) => t.status === TaskStatus.IN_PROGRESS || t.status === TaskStatus.PAUSED
     ).length;
-    const done = qaTasks.filter((t) => t.status === TaskStatus.DONE).length;
+    const passedPages = qaTasks.filter((t) => t.status === TaskStatus.DONE).length;
+    const failedPages = qaTasks.filter((t) => t.status === TaskStatus.BLOCKED).length;
 
     let totalSubtasksCount = 0;
-    let completedSubtasksCount = 0;
+    let passedSubtasksCount = 0;
+    let failedSubtasksCount = 0;
     for (const t of qaTasks) {
       if (t.subtasks && t.subtasks.length > 0) {
         totalSubtasksCount += t.subtasks.length;
-        completedSubtasksCount += t.subtasks.filter((st) => st.status === "DONE").length;
+        passedSubtasksCount += t.subtasks.filter((st) => st.status === "DONE").length;
+        failedSubtasksCount += t.subtasks.filter((st) => st.status === "CANCELLED").length;
       }
     }
 
+    const testedSubtasksCount = passedSubtasksCount + failedSubtasksCount;
     const overallRate =
-      totalSubtasksCount > 0 ? Math.round((completedSubtasksCount / totalSubtasksCount) * 100) : 0;
+      totalSubtasksCount > 0 ? Math.round((testedSubtasksCount / totalSubtasksCount) * 100) : 0;
 
     return {
       total,
       planned,
       inProgress,
-      done,
+      passedPages,
+      failedPages,
       totalSubtasksCount,
-      completedSubtasksCount,
+      passedSubtasksCount,
+      failedSubtasksCount,
       overallRate,
     };
   }, [qaTasks]);
 
-  // Handle Subtask Toggle directly from the row checklist
-  const handleToggleSubtask = async (subtaskId: string, currentStatus: string, e: React.MouseEvent) => {
+  // Set individual block QA result: Pass (DONE), Failed (CANCELLED), or toggle back to Untested (TODO)
+  const handleSetBlockStatus = async (
+    subtaskId: string,
+    targetStatus: "DONE" | "CANCELLED",
+    currentStatus: string,
+    e: React.MouseEvent
+  ) => {
     e.stopPropagation();
     if (subtaskTogglingId) return;
     setSubtaskTogglingId(subtaskId);
 
-    const newStatus = currentStatus === "DONE" ? "TODO" : "DONE";
+    const newStatus = currentStatus === targetStatus ? "TODO" : targetStatus;
     try {
       await fetch(`/api/subtasks/${subtaskId}`, {
         method: "PATCH",
@@ -196,7 +264,7 @@ export function QualityControlView({
         await onTaskUpdated();
       }
     } catch (err) {
-      console.error("Failed to update subtask status:", err);
+      console.error("Failed to update QA block status:", err);
     } finally {
       setSubtaskTogglingId(null);
     }
@@ -232,35 +300,47 @@ export function QualityControlView({
   };
 
   // Format Condition / Status Label & Colors
-  const getStatusBadge = (status: TaskStatus) => {
+  const getStatusBadge = (
+    status: TaskStatus,
+    failedSubtasks = 0,
+    untestedSubtasks = 0
+  ) => {
+    void untestedSubtasks;
     switch (status) {
       case TaskStatus.DONE:
         return {
-          label: "გამართულია (Passed)",
+          label: "✅ მზადაა — ტესტი ჩაბარდა (Passed)",
           badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300 font-bold",
           dotColor: "bg-emerald-500",
         };
-      case TaskStatus.IN_PROGRESS:
+      case TaskStatus.BLOCKED:
         return {
-          label: "ტესტირებაშია (In Testing)",
+          label: "❌ ტესტი ჩავარდა — დაზიანებაა (Failed)",
+          badgeClass: "bg-rose-50 text-rose-700 border-rose-300 font-bold",
+          dotColor: "bg-rose-500",
+        };
+      case TaskStatus.IN_PROGRESS:
+        if (failedSubtasks > 0) {
+          return {
+            label: `⚠️ ტესტირებაშია (${failedSubtasks} დაზიანება)`,
+            badgeClass: "bg-amber-50 text-rose-700 border-amber-300 font-bold",
+            dotColor: "bg-rose-500",
+          };
+        }
+        return {
+          label: "🔵 ტესტირებაშია (In Testing)",
           badgeClass: "bg-blue-50 text-blue-700 border-blue-300 font-bold",
           dotColor: "bg-blue-500",
         };
       case TaskStatus.PAUSED:
         return {
-          label: "შეჩერებულია (Paused)",
+          label: "⏸️ შეჩერებულია (Paused)",
           badgeClass: "bg-amber-50 text-amber-700 border-amber-300 font-bold",
           dotColor: "bg-amber-500",
         };
-      case TaskStatus.BLOCKED:
-        return {
-          label: "ხარვეზია ნაპოვნი (Issue)",
-          badgeClass: "bg-rose-50 text-rose-700 border-rose-300 font-bold",
-          dotColor: "bg-rose-500",
-        };
       default:
         return {
-          label: "შესამოწმებელია (Planned)",
+          label: "⚪ შესამოწმებელია (Pending)",
           badgeClass: "bg-stone-100 text-stone-700 border-stone-300 font-bold",
           dotColor: "bg-stone-400",
         };
@@ -316,35 +396,41 @@ export function QualityControlView({
       {/* 2. Top Summary KPI Widgets */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
         <div className="bg-white p-3.5 rounded-2xl border border-stone-200/90 shadow-2xs">
-          <span className="text-[11px] font-bold text-stone-500 block mb-1">სულ მოდულები</span>
+          <span className="text-[11px] font-bold text-stone-500 block mb-1">სულ გვერდები</span>
           <div className="flex items-baseline justify-between">
             <span className="text-2xl font-black text-stone-900">{stats.total}</span>
-            <span className="text-[11px] font-bold text-stone-400">გვერდი / ტესტი</span>
+            <span className="text-[11px] font-bold text-stone-400">
+              გვერდი / {stats.totalSubtasksCount} ბლოკი
+            </span>
           </div>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-stone-200/90 shadow-2xs">
-          <span className="text-[11px] font-bold text-blue-600 block mb-1">ტესტირებაშია</span>
+          <span className="text-[11px] font-bold text-blue-600 block mb-1">ტესტირებაშია / რიგში</span>
           <div className="flex items-baseline justify-between">
             <span className="text-2xl font-black text-blue-700">{stats.inProgress}</span>
-            <span className="text-[11px] font-bold text-blue-500">მიმდინარე</span>
+            <span className="text-[11px] font-bold text-amber-600">
+              {stats.planned} შესამოწმებელი
+            </span>
           </div>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-stone-200/90 shadow-2xs">
-          <span className="text-[11px] font-bold text-amber-600 block mb-1">შესამოწმებელია</span>
+        <div className="bg-white p-3.5 rounded-2xl border border-emerald-200/70 shadow-2xs">
+          <span className="text-[11px] font-bold text-emerald-600 block mb-1">მზადაა / ჩაბარდა (Pass)</span>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-amber-700">{stats.planned}</span>
-            <span className="text-[11px] font-bold text-amber-500">რიგში</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-3.5 rounded-2xl border border-stone-200/90 shadow-2xs">
-          <span className="text-[11px] font-bold text-emerald-600 block mb-1">გამართულია (Passed)</span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-emerald-700">{stats.done}</span>
+            <span className="text-2xl font-black text-emerald-700">{stats.passedPages}</span>
             <span className="text-[11px] font-bold text-emerald-600">
-              {stats.completedSubtasksCount}/{stats.totalSubtasksCount} პუნქტი
+              {stats.passedSubtasksCount}/{stats.totalSubtasksCount} ბლოკი გამართულია
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-rose-200/70 shadow-2xs">
+          <span className="text-[11px] font-bold text-rose-600 block mb-1">ჩავარდა / დაზიანებაა (Failed)</span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl font-black text-rose-700">{stats.failedPages}</span>
+            <span className="text-[11px] font-bold text-rose-600">
+              {stats.failedSubtasksCount} დაზიანებული ბლოკი
             </span>
           </div>
         </div>
@@ -420,10 +506,10 @@ export function QualityControlView({
             className="appearance-none bg-stone-50 border border-stone-200 hover:border-stone-300 rounded-xl pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
           >
             <option value="ALL">ყველა მდგომარეობა</option>
-            <option value="IN_PROGRESS">ტესტირებაშია (In Progress)</option>
-            <option value="PLANNED">შესამოწმებელია (Planned)</option>
-            <option value="DONE">გამართულია (Passed)</option>
-            <option value="PAUSED_OR_BLOCKED">შეჩერებული / ხარვეზი</option>
+            <option value="IN_PROGRESS">ტესტირებაშია (In Testing)</option>
+            <option value="PLANNED">შესამოწმებელია (Pending)</option>
+            <option value="DONE">მზადაა / ჩაბარდა (Passed)</option>
+            <option value="PAUSED_OR_BLOCKED">ჩავარდა / დაზიანებაა (Failed / Paused)</option>
           </select>
           <ChevronDown
             size={12}
@@ -442,13 +528,22 @@ export function QualityControlView({
           filteredQATasks.map((task) => {
             const isSelected = selectedTaskId === task.id;
             const taskCode = getTaskCode(task);
-            const statusMeta = getStatusBadge(task.status);
             const isChecklistOpen = Boolean(expandedChecklists[task.id]);
+            const isHistoryOpen = Boolean(expandedHistory[task.id]);
+            const taskHistory = task.auditEvents || [];
+            const latestHistory = taskHistory[0];
 
             const subtasks = task.subtasks || [];
-            const doneSubtasks = subtasks.filter((s) => s.status === "DONE").length;
             const totalSubtasks = subtasks.length;
-            const percent = totalSubtasks > 0 ? Math.round((doneSubtasks / totalSubtasks) * 100) : task.progress;
+            const passedSubtasks = subtasks.filter((s) => s.status === "DONE").length;
+            const failedSubtasks = subtasks.filter((s) => s.status === "CANCELLED").length;
+            const testedSubtasks = passedSubtasks + failedSubtasks;
+            const untestedSubtasks = totalSubtasks - testedSubtasks;
+            const percent =
+              totalSubtasks > 0
+                ? Math.round((testedSubtasks / totalSubtasks) * 100)
+                : task.progress;
+            const statusMeta = getStatusBadge(task.status, failedSubtasks, untestedSubtasks);
 
             const primaryTester = task.assignments?.[0]?.user;
 
@@ -548,31 +643,50 @@ export function QualityControlView({
                       )}
                     </div>
 
-                    {/* 2. Testing Dates (ბოლო ტესტირება / ვადა) */}
-                    <div className="min-w-[125px]">
+                    {/* 2. Testing Dates (ბოლო ტესტირება: თარიღი + ვინ გააკეთა) */}
+                    <div className="min-w-[155px]">
                       <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider mb-1">
                         ბოლო ტესტირება
                       </span>
                       <div className="flex items-center gap-1.5 text-xs font-bold text-stone-700">
                         <Calendar size={13} className="text-emerald-600 shrink-0" />
-                        <span>{formatTestingPeriod(task.startDate, task.deadline)}</span>
+                        {latestHistory ? (
+                          <span className="truncate max-w-[180px]" title={`${formatNumericTbilisiDate(latestHistory.createdAt)} — ${latestHistory.actor.name}`}>
+                            {formatNumericTbilisiDate(latestHistory.createdAt)} • {latestHistory.actor.name}
+                          </span>
+                        ) : (
+                          <span>{formatTestingPeriod(task.startDate, task.deadline)}</span>
+                        )}
                       </div>
                     </div>
 
-                    {/* 3. Progress / Checklist Completion */}
-                    <div className="min-w-[130px]">
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
-                          პროგრესი
-                        </span>
+                    {/* 3. Progress / Block Breakdown Completion */}
+                    <div className="min-w-[165px]">
+                      <div className="flex items-center justify-between text-xs mb-1 gap-2">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                          <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                            ✓ {passedSubtasks}
+                          </span>
+                          <span
+                            className={`px-1.5 py-0.2 rounded border ${
+                              failedSubtasks > 0
+                                ? "text-rose-700 bg-rose-50 border-rose-300 font-black"
+                                : "text-stone-400 bg-stone-50 border-stone-200"
+                            }`}
+                          >
+                            ✕ {failedSubtasks}
+                          </span>
+                        </div>
                         <span className="text-xs font-extrabold text-stone-900">
-                          {totalSubtasks > 0 ? `${doneSubtasks}/${totalSubtasks}` : `${percent}%`}
+                          {totalSubtasks > 0 ? `${testedSubtasks}/${totalSubtasks} ბლოკი` : `${percent}%`}
                         </span>
                       </div>
                       <div className="w-full h-2 bg-stone-100 rounded-full overflow-hidden border border-stone-200/60">
                         <div
                           className={`h-full transition-all duration-300 rounded-full ${
-                            percent === 100
+                            failedSubtasks > 0
+                              ? "bg-rose-500"
+                              : percent === 100
                               ? "bg-emerald-500"
                               : percent > 0
                               ? "bg-blue-600"
@@ -583,7 +697,7 @@ export function QualityControlView({
                       </div>
                     </div>
 
-                    {/* 4. Checklist Dropdown Trigger */}
+                    {/* 4. Checklist & History Triggers */}
                     {totalSubtasks > 0 && (
                       <button
                         type="button"
@@ -593,15 +707,31 @@ export function QualityControlView({
                             ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                             : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
                         }`}
-                        title="სატესტო პუნქტების ნახვა"
+                        title="გვერდის ბლოკების ტესტირება"
                       >
                         <ListCheck size={14} className={isChecklistOpen ? "text-emerald-600" : "text-stone-400"} />
-                        <span>პუნქტები ({totalSubtasks})</span>
+                        <span>ბლოკები ({totalSubtasks})</span>
                         {isChecklistOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                       </button>
                     )}
 
-                    {/* 5. Quick Status Button & Actions */}
+                    {taskHistory.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => toggleHistory(task.id, e)}
+                        className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0 ${
+                          isHistoryOpen
+                            ? "bg-blue-50 border-blue-300 text-blue-800"
+                            : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
+                        }`}
+                        title="ტესტირების ისტორია"
+                      >
+                        <History size={13} className={isHistoryOpen ? "text-blue-600" : "text-stone-400"} />
+                        <span>ისტორია ({taskHistory.length})</span>
+                      </button>
+                    )}
+
+                    {/* 5. Start Test / Complete & Actions */}
                     <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                       {onEditTask && (
                         <button
@@ -617,31 +747,31 @@ export function QualityControlView({
                         </button>
                       )}
 
-                      {task.status !== TaskStatus.DONE ? (
+                      {task.status !== TaskStatus.IN_PROGRESS ? (
                         <button
                           type="button"
-                          onClick={async (e) => {
+                          onClick={(e) => {
                             e.stopPropagation();
-                            await onStatusChange(task.id, TaskStatus.DONE);
+                            setStartConfirmTask(task);
                           }}
-                          className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
-                          title="გამართულად დადასტურება (Pass)"
+                          className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                          title="ტესტირების დაწყება"
                         >
-                          <CheckCircle2 size={13} />
-                          <span className="hidden sm:inline">დადასტურება</span>
+                          <Play size={12} fill="currentColor" />
+                          <span className="hidden sm:inline">ტესტის დაწყება</span>
                         </button>
                       ) : (
                         <button
                           type="button"
                           onClick={async (e) => {
                             e.stopPropagation();
-                            await onStatusChange(task.id, TaskStatus.IN_PROGRESS);
+                            await onStatusChange(task.id, TaskStatus.DONE);
                           }}
-                          className="px-2.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                          title="ხელახლა გახსნა"
+                          className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                          title="ტესტირების დასრულება"
                         >
-                          <RotateCcw size={12} />
-                          <span className="hidden sm:inline">გადამოწმება</span>
+                          <CheckCircle2 size={13} />
+                          <span className="hidden sm:inline">დასრულება</span>
                         </button>
                       )}
 
@@ -664,49 +794,160 @@ export function QualityControlView({
                   </div>
                 </div>
 
-                {/* Inline Expandable Checklist Panel (No stages — pure checklist verification items) */}
+                {/* Inline Expandable Checklist Panel (No stages — Pass / Failed per page block) */}
                 {isChecklistOpen && totalSubtasks > 0 && (
-                  <div className="px-5 pb-4 pt-1 bg-stone-50/70 border-t border-stone-200/80 space-y-2 animate-in fade-in duration-150">
-                    <div className="flex items-center justify-between text-xs font-bold text-stone-600 pt-2">
+                  <div
+                    className="px-5 pb-4 pt-2 bg-stone-50/80 border-t border-stone-200/80 space-y-2.5 animate-in fade-in duration-150"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-stone-600 pt-1">
                       <span className="flex items-center gap-1.5">
                         <ShieldCheck size={14} className="text-emerald-600" />
-                        <span>სატესტო ჩექლისთი ({doneSubtasks}/{totalSubtasks} შესრულებულია)</span>
+                        <span>
+                          გვერდის ბლოკების ტესტირება: ✓ {passedSubtasks} მზადაა • ✕ {failedSubtasks} დაზიანება • ⏳ {untestedSubtasks} დარჩა
+                        </span>
                       </span>
                       <span className="text-[11px] text-stone-400 font-medium">
-                        დააწკაპუნეთ პუნქტზე სტატუსის შესაცვლელად
+                        დაზიანების (Failed) არსებობის შემთხვევაში, დასრულებისას გვერდის ტესტი ჩავარდება
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-                      {subtasks.map((st) => {
-                        const isDone = st.status === "DONE";
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 pt-0.5">
+                      {subtasks.map((st, idx) => {
+                        const isPassed = st.status === "DONE";
+                        const isFailed = st.status === "CANCELLED";
+                        const isBusy = subtaskTogglingId === st.id;
                         return (
                           <div
                             key={st.id}
-                            onClick={(e) => handleToggleSubtask(st.id, st.status, e)}
-                            className={`p-2.5 rounded-xl border flex items-center gap-2.5 text-xs transition-colors cursor-pointer ${
-                              isDone
-                                ? "bg-white border-emerald-200 text-stone-700 shadow-2xs"
+                            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs transition-colors ${
+                              isFailed
+                                ? "bg-rose-50/70 border-rose-300 text-rose-950 shadow-2xs"
+                                : isPassed
+                                ? "bg-emerald-50/60 border-emerald-200 text-stone-800 shadow-2xs"
                                 : "bg-white border-stone-200 text-stone-800 hover:border-stone-300"
                             }`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={isDone}
-                              onChange={() => {}}
-                              className="w-4 h-4 text-emerald-600 rounded border-stone-300 focus:ring-emerald-500 cursor-pointer shrink-0"
-                            />
-                            <span
-                              className={`flex-1 font-medium select-none ${
-                                isDone ? "line-through text-stone-400" : "text-stone-800"
-                              }`}
-                            >
-                              {st.title}
-                            </span>
-                            {isDone && (
-                              <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
-                                შემოწმდა ✓
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="text-[10px] font-black font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200 shrink-0">
+                                #{idx + 1}
                               </span>
+                              <span
+                                className={`font-semibold leading-snug ${
+                                  isFailed
+                                    ? "text-rose-900"
+                                    : isPassed
+                                    ? "text-emerald-900"
+                                    : "text-stone-800"
+                                }`}
+                              >
+                                {st.title}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={(e) => handleSetBlockStatus(st.id, "DONE", st.status, e)}
+                                className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-all cursor-pointer disabled:opacity-50 ${
+                                  isPassed
+                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+                                    : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                                }`}
+                                title="ბლოკი გამართულია (Pass)"
+                              >
+                                <CheckCircle2 size={12} />
+                                <span>მზადაა</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={(e) => handleSetBlockStatus(st.id, "CANCELLED", st.status, e)}
+                                className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-all cursor-pointer disabled:opacity-50 ${
+                                  isFailed
+                                    ? "bg-rose-600 text-white border-rose-600 shadow-2xs"
+                                    : "bg-white text-rose-700 border-rose-200 hover:bg-rose-50"
+                                }`}
+                                title="ბლოკში დაფიქსირდა დაზიანება / ბაგი (Failed)"
+                              >
+                                <XCircle size={12} />
+                                <span>დაზიანებაა</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Inline Expandable Testing History */}
+                {isHistoryOpen && taskHistory.length > 0 && (
+                  <div
+                    className="px-5 pb-4 pt-2.5 bg-blue-50/40 border-t border-blue-200/60 space-y-2 animate-in fade-in duration-150"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="text-xs font-extrabold text-blue-900 flex items-center gap-1.5">
+                      <History size={13} className="text-blue-600" />
+                      <span>ტესტირების ისტორია</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {taskHistory.map((ev) => {
+                        const runVerdict = ev.newValues?.status as string | undefined;
+                        const runBlocks = Array.isArray(ev.newValues?.blocks)
+                          ? (ev.newValues.blocks as Array<{ title?: string; status?: string }>)
+                          : [];
+
+                        return (
+                          <div
+                            key={ev.id}
+                            className="px-3 py-2.5 bg-white border border-stone-200/80 rounded-xl space-y-1.5 text-xs"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/70">
+                                  {formatNumericTbilisiDate(ev.createdAt)}
+                                </span>
+                                {ev.action === "TEST_RUN_RECORDED" && runVerdict && (
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                                      runVerdict === "PASSED"
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                        : "bg-rose-50 text-rose-700 border-rose-200"
+                                    }`}
+                                  >
+                                    {runVerdict === "PASSED" ? "✓ გაიარა" : "✕ ჩავარდა"}
+                                  </span>
+                                )}
+                                <span className="font-extrabold text-stone-900">{ev.actor.name}</span>
+                                <span className="text-stone-600">
+                                  {ev.reason || ev.action}
+                                </span>
+                              </div>
+                              <span className="text-[11px] text-stone-400 font-medium">
+                                {formatTbilisiDateTime(ev.createdAt)}
+                              </span>
+                            </div>
+
+                            {runBlocks.length > 0 && (
+                              <div className="flex flex-wrap gap-1 pt-0.5">
+                                {runBlocks.map((b, bIdx) => (
+                                  <span
+                                    key={bIdx}
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
+                                      b.status === "PASSED"
+                                        ? "bg-emerald-50/70 text-emerald-800 border-emerald-200/80"
+                                        : b.status === "FAILED"
+                                        ? "bg-rose-50/70 text-rose-800 border-rose-200/80"
+                                        : "bg-stone-50 text-stone-600 border-stone-200"
+                                    }`}
+                                  >
+                                    {b.status === "PASSED" ? "✓" : b.status === "FAILED" ? "✕" : "•"} {b.title}
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </div>
                         );
@@ -719,6 +960,79 @@ export function QualityControlView({
           })
         )}
       </div>
+
+      {/* Start Test Confirmation Popup */}
+      {startConfirmTask && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/45 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => !isStartingTest && setStartConfirmTask(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-stone-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Play size={16} fill="currentColor" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-stone-900">ტესტირების დაწყება</h3>
+                  <p className="text-[11px] text-stone-500">
+                    {getTaskCode(startConfirmTask)} • {startConfirmTask.project?.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isStartingTest}
+                onClick={() => setStartConfirmTask(null)}
+                className="p-1 text-stone-400 hover:text-stone-700 rounded-full cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-stone-50 border border-stone-200/80 rounded-2xl text-xs text-stone-800 space-y-2">
+              <p className="font-bold leading-relaxed">
+                <span className="text-emerald-700">{currentUser?.name || "მომხმარებელი"}</span>, ნამდვილად გსურთ{" "}
+                <span className="font-black text-stone-900">„{startConfirmTask.title}“</span>-ის ტესტირების დაწყება?
+              </p>
+              <div className="flex items-center gap-2 text-[11px] font-semibold text-stone-600 pt-1">
+                <Calendar size={13} className="text-emerald-600 shrink-0" />
+                <span>
+                  თარიღი: <strong className="text-stone-900 font-mono">{todayFormatted}</strong> (ავტომატურად არჩეული)
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-500">
+                დაწყების შემდეგ ეს ჩანაწერი შეინახება ტესტირების ისტორიაში თქვენი სახელითა და თარიღით.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isStartingTest}
+                onClick={() => setStartConfirmTask(null)}
+                className="px-4 py-2 border border-stone-200 text-stone-700 rounded-xl text-xs font-bold hover:bg-stone-50 cursor-pointer"
+              >
+                გაუქმება
+              </button>
+              <button
+                type="button"
+                disabled={isStartingTest}
+                onClick={handleConfirmStartTest}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Play size={12} fill="currentColor" />
+                <span>{isStartingTest ? "იწყება..." : "დიახ, ტესტის დაწყება"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

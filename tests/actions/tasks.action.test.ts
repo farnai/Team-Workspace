@@ -1,13 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert'
 import { testPrisma } from '../test-db'
-import { Role, Priority, TaskType, Department, TaskStatus } from '@prisma/client'
+import { Role, Priority, TaskType, Department, TaskStatus, SubtaskStatus } from '@prisma/client'
 import { createTaskAction } from '@/server/actions/tasks/create-task.action'
 import { updateTaskAction } from '@/server/actions/tasks/update-task.action'
 import { deleteTaskAction } from '@/server/actions/tasks/delete-task.action'
 import { createDeadlineRequestAction } from '@/server/actions/deadline-requests/create-deadline-request.action'
 import { getDeadlineRequestAction } from '@/server/actions/deadline-requests/get-deadline-request.action'
 import { reviewDeadlineRequestAction } from '@/server/actions/deadline-requests/review-deadline-request.action'
+import { calculateAndSyncTaskProgress } from '@/lib/workflow'
 import bcrypt from 'bcryptjs'
 
 test('Actions: Tasks Lifecycle, Transactions & Audit Invariants', async (t) => {
@@ -280,6 +281,63 @@ test('Actions: Tasks Lifecycle, Transactions & Audit Invariants', async (t) => {
     })
     assert.ok(deleteAudit, 'TASK_DELETED audit event must be preserved')
     assert.strictEqual(deleteAudit.taskId, null, 'taskId fk must be null after task deletion')
+  })
+
+  await t.test('QA task block Pass/Fail verdict: 1 failed block fails page on completion; all passed blocks pass page', async () => {
+    const qaTask = await createTaskAction(
+      {
+        title: `Home QA ${ts}`,
+        projectId: project.id,
+        type: TaskType.QA,
+        priority: Priority.HIGH,
+        department: Department.QA,
+        status: TaskStatus.PLANNED,
+        assigneeIds: [member.id],
+        links: [],
+      },
+      admin
+    )
+    assert.ok(qaTask)
+
+    const b1 = await testPrisma.subtask.create({
+      data: { taskId: qaTask.id, title: 'Hero ბანერი', position: 0, status: SubtaskStatus.TODO },
+    })
+    const b2 = await testPrisma.subtask.create({
+      data: { taskId: qaTask.id, title: 'მნიშვნელოვანი მოვლენები', position: 1, status: SubtaskStatus.TODO },
+    })
+    const b3 = await testPrisma.subtask.create({
+      data: { taskId: qaTask.id, title: 'rector-quote-new', position: 2, status: SubtaskStatus.TODO },
+    })
+
+    // Mark 2 Pass and 1 Failed
+    await testPrisma.subtask.update({ where: { id: b1.id }, data: { status: SubtaskStatus.DONE } })
+    await testPrisma.subtask.update({ where: { id: b2.id }, data: { status: SubtaskStatus.DONE } })
+    await testPrisma.subtask.update({ where: { id: b3.id }, data: { status: SubtaskStatus.CANCELLED } })
+
+    const progressFailed = await calculateAndSyncTaskProgress(
+      qaTask.id,
+      testPrisma as unknown as Parameters<typeof calculateAndSyncTaskProgress>[1]
+    )
+    assert.strictEqual(progressFailed, 100)
+
+    const failedTaskState = await testPrisma.task.findUniqueOrThrow({ where: { id: qaTask.id } })
+    assert.strictEqual(failedTaskState.status, TaskStatus.BLOCKED, 'Page with >= 1 failed block must become BLOCKED (Failed)')
+    assert.ok(failedTaskState.blockedReason?.includes('1 ბლოკში'))
+
+    // Fix the failed block -> Pass
+    await testPrisma.subtask.update({ where: { id: b3.id }, data: { status: SubtaskStatus.DONE } })
+    const progressPassed = await calculateAndSyncTaskProgress(
+      qaTask.id,
+      testPrisma as unknown as Parameters<typeof calculateAndSyncTaskProgress>[1]
+    )
+    assert.strictEqual(progressPassed, 100)
+
+    const passedTaskState = await testPrisma.task.findUniqueOrThrow({ where: { id: qaTask.id } })
+    assert.strictEqual(passedTaskState.status, TaskStatus.DONE, 'Page with all blocks passed must become DONE (Passed)')
+    assert.strictEqual(passedTaskState.blockedReason, null)
+    assert.ok(passedTaskState.completedAt)
+
+    await testPrisma.task.delete({ where: { id: qaTask.id } })
   })
 
   // Cleanup

@@ -29,6 +29,8 @@ import {
   Sparkles,
   Code2,
   Trash2,
+  ClipboardCheck,
+  XCircle,
 } from "lucide-react";
 import { AuditAction, Role } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
@@ -79,7 +81,7 @@ interface ActivityLogDashboardProps {
 // Action translation to Georgian & category metadata
 interface ActionMeta {
   label: string;
-  category: "task" | "workflow" | "deadline" | "comment" | "pause" | "user" | "system";
+  category: "task" | "workflow" | "testing" | "deadline" | "comment" | "pause" | "user" | "system";
   colorClass: string;
   bgClass: string;
   icon: React.ElementType;
@@ -288,6 +290,34 @@ const ACTION_MAP: Record<AuditAction, ActionMeta> = {
     colorClass: "text-purple-700 border-purple-200",
     bgClass: "bg-purple-50 text-purple-700",
     icon: Calendar,
+  },
+  TEST_CASE_CREATED: {
+    label: "ტესტ-ქეისის დამატება",
+    category: "testing",
+    colorClass: "text-teal-700 border-teal-200",
+    bgClass: "bg-teal-50 text-teal-700",
+    icon: ClipboardCheck,
+  },
+  TEST_CASE_UPDATED: {
+    label: "ტესტ-ქეისის რედაქტირება",
+    category: "testing",
+    colorClass: "text-blue-700 border-blue-200",
+    bgClass: "bg-blue-50 text-blue-700",
+    icon: ClipboardCheck,
+  },
+  TEST_CASE_DELETED: {
+    label: "ტესტ-ქეისის წაშლა",
+    category: "testing",
+    colorClass: "text-rose-700 border-rose-200",
+    bgClass: "bg-rose-50 text-rose-700",
+    icon: XCircle,
+  },
+  TEST_RUN_RECORDED: {
+    label: "ტესტის გაშვება",
+    category: "testing",
+    colorClass: "text-emerald-700 border-emerald-200",
+    bgClass: "bg-emerald-50 text-emerald-700",
+    icon: CheckCircle2,
   },
 };
 
@@ -692,6 +722,7 @@ export function ActivityLogDashboard({
           <option value="ALL">ყველა მოქმედება</option>
           <option value="task">დავალების ცვლილებები</option>
           <option value="workflow">სამუშაო პროცესი (Workflow)</option>
+          <option value="testing">ტესტირება</option>
           <option value="deadline">დედლაინი & გრაფიკი</option>
           <option value="pause">პაუზა & განახლება</option>
           <option value="comment">კომენტარები & ფაილები</option>

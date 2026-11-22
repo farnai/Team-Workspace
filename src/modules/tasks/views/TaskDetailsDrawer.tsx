@@ -30,6 +30,8 @@ import {
   Clock,
   UserPlus,
   Users,
+  XCircle,
+  ClipboardCheck,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus, SubtaskStatus, Department } from "@prisma/client";
 import { formatGeorgianDate, formatGeorgianDateShort, isTaskOverdue } from "@/lib/dateUtils";
@@ -38,6 +40,7 @@ import { TaskCommentsSection } from "../components/TaskCommentsSection";
 import { TaskAttachmentsSection } from "../components/TaskAttachmentsSection";
 import { TaskDailyUpdatesSection } from "../components/TaskDailyUpdatesSection";
 import { TaskActivitySection } from "../components/TaskActivitySection";
+import { TaskTestingSection } from "@/modules/testing";
 import { PasteConfirmModal } from "../components/PasteConfirmModal";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
 import { PauseTaskModal } from "../components/PauseTaskModal";
@@ -169,6 +172,9 @@ export interface FullTaskDetails {
   attachments?: AttachmentItem[];
   dailyUpdates?: DailyUpdateItem[];
   auditEvents: AuditEventItem[];
+  _count?: {
+    testCases?: number;
+  };
 }
 
 interface TaskDetailsDrawerProps {
@@ -199,7 +205,7 @@ export function TaskDetailsDrawer({
 }: TaskDetailsDrawerProps) {
   const [task, setTask] = useState<FullTaskDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  type DrawerTab = "work" | "details" | "comments" | "attachments" | "daily_updates" | "activity";
+  type DrawerTab = "work" | "testing" | "details" | "comments" | "attachments" | "daily_updates" | "activity";
   const [activeTab, setActiveTab] = useState<DrawerTab>("work");
   const [error, setError] = useState<string | null>(null);
 
@@ -517,6 +523,31 @@ export function TaskDetailsDrawer({
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "საბტასკის სტატუსის ცვლილება ვერ მოხერხდა");
+      }
+      await refreshTaskDetails();
+      onTaskUpdated();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
+  };
+
+  // Set QA Block Status (Pass / Failed / Reset to TODO)
+  const handleSetQaBlockStatus = async (
+    subtaskId: string,
+    targetStatus: SubtaskStatus,
+    currentStatus: SubtaskStatus
+  ) => {
+    const nextStatus = currentStatus === targetStatus ? SubtaskStatus.TODO : targetStatus;
+    try {
+      setError(null);
+      const res = await fetch(`/api/subtasks/${subtaskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "ბლოკის სტატუსის შეცვლა ვერ მოხერხდა");
       }
       await refreshTaskDetails();
       onTaskUpdated();
@@ -1183,8 +1214,8 @@ export function TaskDetailsDrawer({
                     : "bg-white border-stone-200 text-stone-800"
                 }`}
               >
-                <option value={TaskStatus.BACKLOG}>Backlog</option>
-                <option value={TaskStatus.PLANNED}>Planned</option>
+                <option value={TaskStatus.BACKLOG}>TBD / განსახილველი</option>
+                <option value={TaskStatus.PLANNED}>To Do (დაგეგმილი)</option>
                 <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
                 <option value={TaskStatus.PAUSED}>Paused (შეჩერებული)</option>
                 <option value={TaskStatus.BLOCKED}>Blocked (დაბლოკილი)</option>
@@ -1491,6 +1522,21 @@ export function TaskDetailsDrawer({
             </button>
             <button
               role="tab"
+              data-testid="task-tab-testing"
+              aria-selected={activeTab === "testing"}
+              ref={(el) => { tabRefs.current["testing"] = el; }}
+              onClick={() => handleTabSelect("testing")}
+              className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === "testing"
+                  ? "border-orange-600 text-orange-600 font-extrabold"
+                  : "border-transparent text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              <ClipboardCheck size={14} />
+              <span>ტესტირება ({task?._count?.testCases ?? 0})</span>
+            </button>
+            <button
+              role="tab"
               aria-selected={activeTab === "details"}
               ref={(el) => { tabRefs.current["details"] = el; }}
               onClick={() => handleTabSelect("details")}
@@ -1689,136 +1735,187 @@ export function TaskDetailsDrawer({
             /* TAB 1: სამუშაო (Ordered Workflow Stages & Subtasks) */
             <div className="space-y-6">
               {task?.department === Department.QA || task?.type === TaskType.QA ? (
-                /* QA Testing Checklist Mode (No workflow stages) */
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xs font-black text-stone-900 uppercase tracking-wider flex items-center gap-1.5">
-                        <ShieldCheck size={16} className="text-emerald-600" />
-                        <span>სატესტო ჩექლისთი / შესამოწმებელი პუნქტები</span>
-                        <span className="text-[11px] font-bold text-stone-500">
-                          ({task?.subtasks?.length || 0})
-                        </span>
-                      </h3>
-                      <p className="text-[11px] text-stone-500 mt-0.5">
-                        მოდულის ვიზუალური და ფუნქციონალური შემოწმების პუნქტები.
-                      </p>
-                    </div>
-                    {(!showAddSubtask || targetStageId !== null) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTargetStageId(null);
-                          setShowAddSubtask(true);
-                          setNewSubtaskAssigneeIds([]);
-                        }}
-                        className="flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-emerald-200"
-                      >
-                        <Plus size={13} strokeWidth={2.5} />
-                        <span>პუნქტის დამატება</span>
-                      </button>
-                    )}
-                  </div>
+                /* QA Testing Checklist Mode (No workflow stages — Pass/Fail per block) */
+                (() => {
+                  const qaBlocks = task?.subtasks || [];
+                  const passedCount = qaBlocks.filter((s) => s.status === SubtaskStatus.DONE).length;
+                  const failedCount = qaBlocks.filter((s) => s.status === SubtaskStatus.CANCELLED).length;
+                  const untestedCount = qaBlocks.length - passedCount - failedCount;
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xs font-black text-stone-900 uppercase tracking-wider flex items-center gap-1.5">
+                            <ShieldCheck size={16} className="text-emerald-600" />
+                            <span>გვერდის ბლოკების ტესტირება (Pass / Failed)</span>
+                            <span className="text-[11px] font-bold text-stone-500">
+                              ({qaBlocks.length})
+                            </span>
+                          </h3>
+                          <p className="text-[11px] text-stone-500 mt-0.5">
+                            თითოეული ბლოკი შეამოწმეთ ვიზუალურად და ფუნქციონალურად.
+                          </p>
+                        </div>
+                        {(!showAddSubtask || targetStageId !== null) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTargetStageId(null);
+                              setShowAddSubtask(true);
+                              setNewSubtaskAssigneeIds([]);
+                            }}
+                            className="flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-emerald-200"
+                          >
+                            <Plus size={13} strokeWidth={2.5} />
+                            <span>ბლოკის დამატება</span>
+                          </button>
+                        )}
+                      </div>
 
-                  {/* Subtask Form */}
-                  {showAddSubtask && targetStageId === null && renderSubtaskForm(false)}
-
-                  {/* Subtasks List */}
-                  {task?.subtasks && task.subtasks.length > 0 ? (
-                    <div className="space-y-2">
-                      {task.subtasks.map((st) => (
-                        <div
-                          key={st.id}
-                          className={`flex items-start justify-between gap-2 p-2.5 rounded-xl border text-xs transition-colors ${
-                            st.status === SubtaskStatus.DONE
-                              ? "bg-emerald-50/40 border-emerald-200/60"
-                              : st.status === SubtaskStatus.CANCELLED
-                              ? "bg-stone-50 border-stone-200 opacity-50 line-through"
-                              : "bg-white border-stone-200/80 hover:border-stone-300"
-                          }`}
-                        >
-                          <div className="flex items-start gap-2 flex-1">
-                            <button
-                              onClick={() => handleToggleSubtask(st)}
-                              className="mt-0.5 text-stone-400 hover:text-emerald-600 transition-colors cursor-pointer"
+                      {/* QA Page Verdict Summary Bar */}
+                      <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/90 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <div className="flex flex-wrap items-center gap-2 font-bold">
+                            <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              ✓ {passedCount} მზადაა (Pass)
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-lg border ${
+                                failedCount > 0
+                                  ? "bg-rose-50 text-rose-700 border-rose-300"
+                                  : "bg-white text-stone-500 border-stone-200"
+                              }`}
                             >
-                              {st.status === SubtaskStatus.DONE ? (
-                                <CheckCircle2
-                                  size={16}
-                                  className="text-emerald-600 fill-emerald-100"
-                                />
-                              ) : (
-                                <Circle size={16} />
-                              )}
-                            </button>
+                              ✕ {failedCount} დაზიანება (Failed)
+                            </span>
+                            <span className="px-2 py-0.5 rounded-lg bg-white text-stone-600 border border-stone-200">
+                              ⏳ {untestedCount} შესამოწმებელი
+                            </span>
+                          </div>
+                          {qaBlocks.length > 0 && untestedCount === 0 && (
+                            <span
+                              className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                                failedCount > 0
+                                  ? "bg-rose-100 text-rose-800 border-rose-300"
+                                  : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              }`}
+                            >
+                              {failedCount > 0 ? "❌ გვერდის ტესტი ჩავარდა" : "✅ გვერდი მზადაა (Passed)"}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-stone-500">
+                          თუ 1 ბლოკზე მაინც დაფიქსირდა დაზიანება, გვერდის ტესტირების დასრულებისას გვერდს ენიჭება &quot;ტესტი ჩავარდა&quot;.
+                        </p>
+                      </div>
 
-                            <div className="flex-1">
+                      {/* Subtask Form */}
+                      {showAddSubtask && targetStageId === null && renderSubtaskForm(false)}
+
+                      {/* QA Blocks List */}
+                      {qaBlocks.length > 0 ? (
+                        <div className="space-y-2">
+                          {qaBlocks.map((st, idx) => {
+                            const isPassed = st.status === SubtaskStatus.DONE;
+                            const isFailed = st.status === SubtaskStatus.CANCELLED;
+                            return (
                               <div
-                                className={`font-semibold ${
-                                  st.status === SubtaskStatus.DONE
-                                    ? "text-stone-500 line-through"
-                                    : "text-stone-900"
+                                key={st.id}
+                                className={`flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 p-3 rounded-xl border text-xs transition-colors ${
+                                  isFailed
+                                    ? "bg-rose-50/70 border-rose-300"
+                                    : isPassed
+                                    ? "bg-emerald-50/50 border-emerald-200/80"
+                                    : "bg-white border-stone-200/80 hover:border-stone-300"
                                 }`}
                               >
-                                {st.title}
-                              </div>
+                                <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                  <span className="mt-0.5 shrink-0">
+                                    {isPassed ? (
+                                      <CheckCircle2 size={16} className="text-emerald-600 fill-emerald-100" />
+                                    ) : isFailed ? (
+                                      <XCircle size={16} className="text-rose-600 fill-rose-100" />
+                                    ) : (
+                                      <Circle size={16} className="text-stone-400" />
+                                    )}
+                                  </span>
 
-                              <div className="flex items-center gap-2 text-[10px] text-stone-500 mt-1 flex-wrap">
-                                <div className="flex items-center -space-x-1">
-                                  {(st.assignments || []).map((a) => (
-                                    <div
-                                      key={a.user?.id || Math.random()}
-                                      className="w-4 h-4 rounded-full bg-stone-200 text-stone-700 font-bold text-[9px] flex items-center justify-center border border-white"
-                                      title={a.user?.name}
-                                    >
-                                      {a.user?.name ? a.user.name.charAt(0) : "?"}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[10px] font-black font-mono px-1.5 py-0.2 rounded bg-stone-100 text-stone-600 border border-stone-200">
+                                        #{idx + 1}
+                                      </span>
+                                      <span
+                                        className={`font-semibold ${
+                                          isFailed
+                                            ? "text-rose-900"
+                                            : isPassed
+                                            ? "text-emerald-950"
+                                            : "text-stone-900"
+                                        }`}
+                                      >
+                                        {st.title}
+                                      </span>
                                     </div>
-                                  ))}
+
+                                    {isPassed && st.completedBy && (
+                                      <div className="text-[10px] text-emerald-700 font-medium mt-1">
+                                        შეამოწმა: {st.completedBy.name}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
 
-                                {st.deadline && (
-                                  <span className="flex items-center gap-0.5 text-stone-600 font-medium">
-                                    <Calendar size={10} className="text-stone-400" />
-                                    <span>{formatGeorgianDateShort(st.deadline)}</span>
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetQaBlockStatus(st.id, SubtaskStatus.DONE, st.status)}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+                                      isPassed
+                                        ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+                                        : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                                    }`}
+                                    title="ბლოკი გამართულია (Pass)"
+                                  >
+                                    <CheckCircle2 size={12} />
+                                    <span>მზადაა</span>
+                                  </button>
 
-                                {st.status === SubtaskStatus.DONE && st.completedBy && (
-                                  <span className="text-emerald-700 font-medium">
-                                    შესრულდა: {st.completedBy.name}
-                                  </span>
-                                )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetQaBlockStatus(st.id, SubtaskStatus.CANCELLED, st.status)}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+                                      isFailed
+                                        ? "bg-rose-600 text-white border-rose-600 shadow-2xs"
+                                        : "bg-white text-rose-700 border-rose-200 hover:bg-rose-50"
+                                    }`}
+                                    title="ბლოკში დაფიქსირდა დაზიანება / ბაგი (Failed)"
+                                  >
+                                    <XCircle size={12} />
+                                    <span>დაზიანებაა</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSubtask(st.id)}
+                                    className="p-1.5 text-stone-400 hover:text-rose-600 rounded-lg hover:bg-stone-100 transition-colors cursor-pointer"
+                                    title="წაშლა"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            {st.status !== SubtaskStatus.CANCELLED && (
-                              <button
-                                onClick={() => handleCancelSubtask(st.id)}
-                                className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100 transition-colors cursor-pointer"
-                                title="გაუქმება"
-                              >
-                                <Ban size={12} />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleDeleteSubtask(st.id)}
-                              className="p-1 text-stone-400 hover:text-rose-600 rounded hover:bg-stone-100 transition-colors cursor-pointer"
-                              title="წაშლა"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
+                            );
+                          })}
                         </div>
-                      ))}
+                      ) : (
+                        <div className="p-6 bg-stone-50 rounded-2xl border border-dashed border-stone-200 text-center text-xs text-stone-500">
+                          სატესტო ბლოკები ჯერ არ არის დამატებული. დაამატეთ გვერდის შესამოწმებელი ბლოკები.
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="p-6 bg-stone-50 rounded-2xl border border-dashed border-stone-200 text-center text-xs text-stone-500">
-                      სატესტო ჩექლისთი ცარიელია. დაამატეთ შესამოწმებელი პუნქტები.
-                    </div>
-                  )}
-                </div>
+                  );
+                })()
               ) : (
                 <>
                   {/* Ordered Stages List */}
@@ -2451,6 +2548,20 @@ export function TaskDetailsDrawer({
             </>
           )}
         </div>
+          ) : activeTab === "testing" && task ? (
+            /* TAB: ტესტირება (Jira-style Manual Test Cases & Execution History) */
+            <TaskTestingSection
+              key={task.id}
+              taskId={task.id}
+              taskStatus={task.status}
+              attachments={task.attachments || []}
+              currentUser={currentUser}
+              onPreviewImage={(url: string, title?: string) => {
+                setPreviewImageUrl(url);
+                setPreviewImageTitle(title || null);
+              }}
+              onDataMutated={refreshTaskDetails}
+            />
           ) : activeTab === "details" ? (
             /* TAB 2: დეტალები (Task Description & Metadata) */
             <div className="space-y-5 text-xs">

@@ -21,9 +21,11 @@ import {
   Layers,
   CheckSquare,
   Trash2,
+  Lightbulb,
 } from "lucide-react";
 import { Priority, TaskStatus, Department, TaskType } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
+import { TASK_STATUS_LABELS } from "@/lib/labels";
 import { BacklogTask } from "@/components/SharedBacklog";
 import { DepartmentBadge } from "@/lib/departments";
 
@@ -55,8 +57,8 @@ interface KanbanBoardProps {
   isQAView?: boolean;
 }
 
-type KanbanColumnId = "TODO" | "IN_PROGRESS" | "DONE";
-type StatusTabFilter = "ALL" | "TODO" | "IN_PROGRESS" | "DONE";
+type KanbanColumnId = "TBD" | "TODO" | "IN_PROGRESS" | "DONE";
+type StatusTabFilter = "ALL" | "TBD" | "TODO" | "IN_PROGRESS" | "DONE";
 
 type SortField =
   | "title"
@@ -172,9 +174,8 @@ export function KanbanBoard({
 
   // Status Counts for Tabs
   const counts = useMemo(() => {
-    const todo = baseFilteredTasks.filter(
-      (t) => t.status === TaskStatus.BACKLOG || t.status === TaskStatus.PLANNED
-    ).length;
+    const tbd = baseFilteredTasks.filter((t) => t.status === TaskStatus.BACKLOG).length;
+    const todo = baseFilteredTasks.filter((t) => t.status === TaskStatus.PLANNED).length;
     const inProgress = baseFilteredTasks.filter(
       (t) =>
         t.status === TaskStatus.IN_PROGRESS ||
@@ -185,6 +186,7 @@ export function KanbanBoard({
 
     return {
       total: baseFilteredTasks.length,
+      tbd,
       todo,
       inProgress,
       completed,
@@ -194,10 +196,11 @@ export function KanbanBoard({
   // Tasks filtered by Active Status Tab
   const statusFilteredTasks = useMemo(() => {
     if (activeStatusTab === "ALL") return baseFilteredTasks;
+    if (activeStatusTab === "TBD") {
+      return baseFilteredTasks.filter((t) => t.status === TaskStatus.BACKLOG);
+    }
     if (activeStatusTab === "TODO") {
-      return baseFilteredTasks.filter(
-        (t) => t.status === TaskStatus.BACKLOG || t.status === TaskStatus.PLANNED
-      );
+      return baseFilteredTasks.filter((t) => t.status === TaskStatus.PLANNED);
     }
     if (activeStatusTab === "IN_PROGRESS") {
       return baseFilteredTasks.filter(
@@ -295,9 +298,8 @@ export function KanbanBoard({
 
   // Group tasks into columns for Board view
   const columnsData = useMemo(() => {
-    const todo = baseFilteredTasks.filter(
-      (t) => t.status === TaskStatus.BACKLOG || t.status === TaskStatus.PLANNED
-    );
+    const tbd = baseFilteredTasks.filter((t) => t.status === TaskStatus.BACKLOG);
+    const todo = baseFilteredTasks.filter((t) => t.status === TaskStatus.PLANNED);
     const inProgress = baseFilteredTasks.filter(
       (t) =>
         t.status === TaskStatus.IN_PROGRESS ||
@@ -307,6 +309,7 @@ export function KanbanBoard({
     const done = baseFilteredTasks.filter((t) => t.status === TaskStatus.DONE);
 
     return {
+      TBD: tbd,
       TODO: todo,
       IN_PROGRESS: inProgress,
       DONE: done,
@@ -351,8 +354,10 @@ export function KanbanBoard({
     if (!task) return;
 
     let targetStatus: TaskStatus = TaskStatus.IN_PROGRESS;
-    if (targetCol === "TODO") {
+    if (targetCol === "TBD") {
       targetStatus = TaskStatus.BACKLOG;
+    } else if (targetCol === "TODO") {
+      targetStatus = TaskStatus.PLANNED;
     } else if (targetCol === "IN_PROGRESS") {
       // If task is already active/paused/blocked in the in-progress column, don't overwrite silently
       if (
@@ -507,6 +512,27 @@ export function KanbanBoard({
             }`}
           >
             {counts.total}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveStatusTab("TBD")}
+          className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
+            activeStatusTab === "TBD"
+              ? "bg-amber-600 text-white shadow-2xs"
+              : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
+          }`}
+        >
+          <Lightbulb size={13} className={activeStatusTab === "TBD" ? "text-white" : "text-amber-500"} />
+          <span>TBD / Planning</span>
+          <span
+            className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              activeStatusTab === "TBD"
+                ? "bg-white/20 text-white"
+                : "bg-amber-50 text-amber-800 font-bold"
+            }`}
+          >
+            {counts.tbd}
           </span>
         </button>
 
@@ -756,8 +782,14 @@ export function KanbanBoard({
                         </span>
                       </td>
                       <td className="py-3 px-4">
-                        <span className="text-[11px] font-medium text-stone-600">
-                          {task.status}
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            TASK_STATUS_LABELS[task.status]?.bg ?? "bg-stone-100"
+                          } ${TASK_STATUS_LABELS[task.status]?.color ?? "text-stone-700"} ${
+                            TASK_STATUS_LABELS[task.status]?.border ?? "border-stone-200"
+                          }`}
+                        >
+                          {TASK_STATUS_LABELS[task.status]?.label ?? task.status}
                         </span>
                       </td>
                       <td className="py-3 px-4">
@@ -832,11 +864,67 @@ export function KanbanBoard({
           <div
             className={`grid gap-4 h-full ${
               activeStatusTab === "ALL"
-                ? "grid-cols-1 md:grid-cols-3 min-w-[860px]"
+                ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-4 min-w-[1040px]"
                 : "grid-cols-1 max-w-xl mx-auto"
             }`}
           >
-            {/* COLUMN 1: TO DO */}
+            {/* COLUMN 1: TBD / PLANNING (For future ideas, notes & to be discussed) */}
+            {(activeStatusTab === "ALL" || activeStatusTab === "TBD") && (
+              <div
+                onDragOver={(e) => handleDragOver(e, "TBD")}
+                onDragLeave={() => handleDragLeave("TBD")}
+                onDrop={(e) => handleDrop(e, "TBD")}
+                className={`flex flex-col h-full rounded-2xl border transition-all duration-150 overflow-hidden ${
+                  dragOverColumn === "TBD"
+                    ? "bg-amber-50/50 border-amber-400 ring-2 ring-amber-300/40"
+                    : "bg-[#FAF8F5] border-amber-200/70 shadow-2xs"
+                }`}
+              >
+                {/* Column Header: "TBD / Planning  {count}" */}
+                <div className="p-3.5 pb-2 flex items-center justify-between shrink-0">
+                  <h3 className="text-sm font-semibold text-stone-800 tracking-tight flex items-center gap-2">
+                    <Lightbulb size={14} className="text-amber-600 shrink-0" />
+                    <span>TBD / Planning</span>
+                    <span className="text-stone-500 font-normal text-sm">
+                      {columnsData.TBD.length}
+                    </span>
+                  </h3>
+                  <span className="text-[10px] font-semibold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-full">
+                    განსახილველი
+                  </span>
+                </div>
+
+                {/* Column Card List */}
+                <div className="flex-1 overflow-y-auto px-3 py-1 space-y-2.5 min-h-0">
+                  {columnsData.TBD.map((task) => (
+                    <KanbanTaskBox
+                      key={task.id}
+                      task={task}
+                      isSelected={selectedTaskId === task.id}
+                      onSelect={() => onSelectTask(task.id)}
+                      onDragStart={(e) => handleDragStart(e, task.id)}
+                      onDragEnd={handleDragEnd}
+                    />
+                  ))}
+
+                  {columnsData.TBD.length === 0 && (
+                    <div className="py-8 text-center text-xs text-stone-400">
+                      განსახილველი ჩანაწერები არ არის
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => onOpenNewTask()}
+                    className="w-full py-2 border border-dashed border-amber-300/80 hover:border-amber-400 rounded-xl flex items-center justify-center text-amber-600/70 hover:text-amber-800 hover:bg-white/60 transition-all cursor-pointer mt-1"
+                    title="ახალი იდეის / ჩანაწერის დამატება (TBD)"
+                  >
+                    <Plus size={16} strokeWidth={2} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* COLUMN 2: TO DO */}
             {(activeStatusTab === "ALL" || activeStatusTab === "TODO") && (
               <div
                 onDragOver={(e) => handleDragOver(e, "TODO")}

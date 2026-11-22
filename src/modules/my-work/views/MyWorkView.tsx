@@ -87,7 +87,7 @@ export function MyWorkDashboard({
   refreshKey = 0,
 }: MyWorkDashboardProps) {
   const [data, setData] = useState<MyWorkData | null>(null);
-  const [activeTab, setActiveTab] = useState<WorkTab>("inProgress");
+  const [activeTab, setActiveTab] = useState<WorkTab>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [localCounter, setLocalCounter] = useState(0);

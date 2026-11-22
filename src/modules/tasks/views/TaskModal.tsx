@@ -1253,8 +1253,8 @@ function TaskModalForm({
                     onChange={(e) => setStatus(e.target.value as TaskStatus)}
                     className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-800 focus:outline-none cursor-pointer"
                   >
-                    <option value={TaskStatus.BACKLOG}>To Do / Backlog</option>
-                    <option value={TaskStatus.PLANNED}>Planned</option>
+                    <option value={TaskStatus.BACKLOG}>TBD / განსახილველი (Backlog)</option>
+                    <option value={TaskStatus.PLANNED}>To Do (დაგეგმილი)</option>
                     <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
                     {mode === "edit" && (
                       <>

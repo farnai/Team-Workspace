@@ -53,6 +53,18 @@ export interface BacklogTask {
     completedAt?: string | null;
     position?: number;
   }[];
+  auditEvents?: {
+    id: string;
+    action: string;
+    reason?: string | null;
+    createdAt: string;
+    newValues?: Record<string, unknown> | null;
+    actor: {
+      id: string;
+      name: string;
+      avatarUrl?: string | null;
+    };
+  }[];
   stages?: {
     id: string;
     title: string;
@@ -64,6 +76,18 @@ export interface BacklogTask {
     deadline?: string | null;
     completedAt?: string | null;
     position?: number;
+  }[];
+  auditEvents?: {
+    id: string;
+    action: string;
+    reason?: string | null;
+    createdAt: string;
+    newValues?: Record<string, unknown> | null;
+    actor: {
+      id: string;
+      name: string;
+      avatarUrl?: string | null;
+    };
   }[];
   }[];
 }

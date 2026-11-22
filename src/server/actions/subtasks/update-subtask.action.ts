@@ -129,7 +129,7 @@ export async function updateSubtaskAction(subtaskId: string, input: unknown) {
     return updated;
   });
 
-  const newProgress = await calculateAndSyncTaskProgress(existing.taskId);
+  const newProgress = await calculateAndSyncTaskProgress(existing.taskId, undefined, user.id);
 
   return { subtask: updatedSubtask, progress: newProgress };
 }

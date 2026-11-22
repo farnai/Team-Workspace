@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { formatGeorgianDate } from "@/lib/dateUtils";
+import { formatTbilisiDateTime } from "@/lib/date";
+import { TEST_RUN_STATUS_LABELS, type TestRunVerdict } from "@/lib/labels";
 import { AuditEventItem } from "@/components/TaskDetailsDrawer";
 
 interface TaskActivitySectionProps {
@@ -12,7 +13,8 @@ export function TaskActivitySection({ auditEvents }: TaskActivitySectionProps) {
   const formatAuditAction = (
     action: string,
     entityType?: string,
-    reason?: string | null
+    reason?: string | null,
+    newValues?: Record<string, unknown> | null
   ): string => {
     switch (action) {
       case "TASK_CREATED":
@@ -56,6 +58,25 @@ export function TaskActivitySection({ auditEvents }: TaskActivitySectionProps) {
         return "სამუშაო შეჩერდა";
       case "WORK_RESUMED":
         return "სამუშაო განახლდა";
+      case "TEST_CASE_CREATED":
+        return newValues?.title
+          ? `ტესტ-ქეისი დაემატა: "${String(newValues.title)}"`
+          : "ტესტ-ქეისი დაემატა";
+      case "TEST_CASE_UPDATED":
+        return newValues?.title
+          ? `ტესტ-ქეისი განახლდა: "${String(newValues.title)}"`
+          : "ტესტ-ქეისი განახლდა";
+      case "TEST_CASE_DELETED":
+        return "ტესტ-ქეისი წაიშალა";
+      case "TEST_RUN_RECORDED": {
+        const title = newValues?.testCaseTitle ? `"${String(newValues.testCaseTitle)}"` : "";
+        const runNo = newValues?.runNumber ? ` #${String(newValues.runNumber)}` : "";
+        const statusKey = newValues?.status as TestRunVerdict | undefined;
+        const verdict = statusKey && TEST_RUN_STATUS_LABELS[statusKey]?.label
+          ? ` — ${TEST_RUN_STATUS_LABELS[statusKey].label}`
+          : "";
+        return `ტესტი გაეშვა ${title}${runNo}${verdict}`.trim();
+      }
       default:
         return action;
     }
@@ -78,19 +99,31 @@ export function TaskActivitySection({ auditEvents }: TaskActivitySectionProps) {
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="font-bold text-stone-900">{event.actor.name}</span>
                   <span className="text-stone-400">
-                    {formatGeorgianDate(event.createdAt)}
+                    {formatTbilisiDateTime(event.createdAt)}
                   </span>
                 </div>
 
                 <div className="font-semibold text-stone-800">
-                  {formatAuditAction(event.action, event.entityType, event.reason)}
+                  {formatAuditAction(
+                    event.action,
+                    event.entityType,
+                    event.reason,
+                    event.newValues ?? null
+                  )}
                 </div>
 
-                {event.reason && (
-                  <div className="text-[11px] text-stone-600 bg-white/80 p-1.5 rounded-lg border border-stone-100 italic">
-                    მიზეზი: {event.reason}
-                  </div>
-                )}
+                {event.reason &&
+                  event.action !== "TEST_CASE_CREATED" &&
+                  event.action !== "TEST_CASE_UPDATED" &&
+                  event.action !== "TEST_CASE_DELETED" &&
+                  !(
+                    event.action === "TEST_RUN_RECORDED" &&
+                    event.newValues?.status === "PASSED"
+                  ) && (
+                    <div className="text-[11px] text-stone-600 bg-white/80 p-1.5 rounded-lg border border-stone-100 italic">
+                      მიზეზი: {event.reason}
+                    </div>
+                  )}
               </div>
             </div>
           ))}

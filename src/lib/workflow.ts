@@ -1,37 +1,149 @@
 import { prisma } from "./prisma";
-import { SubtaskStatus, TaskStatus, Prisma } from "@prisma/client";
+import { Department, SubtaskStatus, TaskStatus, TaskType, Prisma } from "@prisma/client";
 import { logAuditEvent } from "./audit";
 
 /**
  * Calculates progress from subtasks according to the core rule:
- * Progress = (Completed Subtasks / Total Active Subtasks) * 100
- * Subtasks with multiple assignees are counted once.
- * Cancelled subtasks are excluded from the denominator.
+ * - Standard tasks: Progress = (Completed Subtasks / Total Active Subtasks) * 100
+ *   (multi-assignee subtasks counted once; CANCELLED subtasks excluded).
+ * - QA tasks: Each subtask represents a page block tested as Pass (DONE) or Failed (CANCELLED).
+ *   Progress reflects tested blocks %. When all blocks are tested, even 1 Failed block
+ *   automatically sets the QA page task status to BLOCKED (Failed); otherwise DONE (Passed).
  */
 export async function calculateAndSyncTaskProgress(
   taskId: string,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
+  actorId?: string
 ): Promise<number> {
   const client = tx || prisma;
 
-  const subtasks = await client.subtask.findMany({
-    where: { taskId },
-    select: { status: true },
-  });
+  const [task, subtasks] = await Promise.all([
+    client.task.findUnique({
+      where: { id: taskId },
+      select: { status: true, department: true, type: true },
+    }),
+    client.subtask.findMany({
+      where: { taskId },
+      orderBy: { position: "asc" },
+      select: { title: true, status: true },
+    }),
+  ]);
 
-  const activeSubtasks = subtasks.filter((s) => s.status !== SubtaskStatus.CANCELLED);
-  const completedSubtasks = activeSubtasks.filter((s) => s.status === SubtaskStatus.DONE);
+  const isQaTask =
+    task?.department === Department.QA || task?.type === TaskType.QA;
+
+  if (isQaTask) {
+    const totalBlocks = subtasks.length;
+    const passedBlocks = subtasks.filter(
+      (s) => s.status === SubtaskStatus.DONE
+    ).length;
+    const failedBlocks = subtasks.filter(
+      (s) => s.status === SubtaskStatus.CANCELLED
+    ).length;
+    const testedBlocks = passedBlocks + failedBlocks;
+    const untestedBlocks = totalBlocks - testedBlocks;
+
+    const calculatedProgress =
+      totalBlocks > 0
+        ? Math.round((testedBlocks / totalBlocks) * 100)
+        : task?.status === TaskStatus.DONE
+        ? 100
+        : 0;
+
+    const updateData: Prisma.TaskUpdateInput = {
+      progress: calculatedProgress,
+    };
+
+    if (totalBlocks > 0 && task?.status !== TaskStatus.CANCELLED) {
+      if (untestedBlocks === 0) {
+        if (failedBlocks > 0) {
+          updateData.status = TaskStatus.BLOCKED;
+          updateData.blockedReason = `ტესტი ჩავარდა: დაზიანება დაფიქსირდა ${failedBlocks} ბლოკში`;
+          updateData.completedAt = null;
+        } else {
+          updateData.status = TaskStatus.DONE;
+          updateData.blockedReason = null;
+          updateData.completedAt = new Date();
+        }
+      } else if (testedBlocks > 0) {
+        if (
+          task?.status === TaskStatus.BACKLOG ||
+          task?.status === TaskStatus.PLANNED ||
+          task?.status === TaskStatus.DONE ||
+          task?.status === TaskStatus.BLOCKED
+        ) {
+          updateData.status = TaskStatus.IN_PROGRESS;
+          updateData.completedAt = null;
+          updateData.blockedReason =
+            failedBlocks > 0
+              ? `დაფიქსირებულია ${failedBlocks} დაზიანება (ტესტირება გრძელდება)`
+              : null;
+        }
+      } else if (
+        task?.status === TaskStatus.DONE ||
+        task?.status === TaskStatus.BLOCKED
+      ) {
+        updateData.status = TaskStatus.PLANNED;
+        updateData.completedAt = null;
+        updateData.blockedReason = null;
+      }
+    }
+
+    await client.task.update({
+      where: { id: taskId },
+      data: updateData,
+    });
+
+    const transitionedToVerdict =
+      untestedBlocks === 0 &&
+      totalBlocks > 0 &&
+      task?.status !== TaskStatus.CANCELLED &&
+      ((failedBlocks > 0 && task?.status !== TaskStatus.BLOCKED) ||
+        (failedBlocks === 0 && task?.status !== TaskStatus.DONE));
+
+    if (actorId && transitionedToVerdict) {
+      await logAuditEvent({
+        taskId,
+        actorId,
+        action: "TEST_RUN_RECORDED",
+        entityType: "QA_PAGE_RUN",
+        entityId: taskId,
+        newValues: {
+          status: failedBlocks > 0 ? "FAILED" : "PASSED",
+          passedCount: passedBlocks,
+          failedCount: failedBlocks,
+          totalCount: totalBlocks,
+          blocks: subtasks.map((s) => ({
+            title: s.title,
+            status: s.status === SubtaskStatus.DONE ? "PASSED" : "FAILED",
+          })),
+        },
+        reason:
+          failedBlocks > 0
+            ? `ტესტი ჩავარდა — ${passedBlocks}/${totalBlocks} გამართული, ${failedBlocks} დაზიანება`
+            : `ტესტი წარმატებულია — ${passedBlocks}/${totalBlocks} ბლოკი გამართულია`,
+        tx: tx,
+      });
+    }
+
+    return calculatedProgress;
+  }
+
+  const activeSubtasks = subtasks.filter(
+    (s) => s.status !== SubtaskStatus.CANCELLED
+  );
+  const completedSubtasks = activeSubtasks.filter(
+    (s) => s.status === SubtaskStatus.DONE
+  );
 
   let calculatedProgress = 0;
 
   if (activeSubtasks.length > 0) {
-    calculatedProgress = Math.round((completedSubtasks.length / activeSubtasks.length) * 100);
+    calculatedProgress = Math.round(
+      (completedSubtasks.length / activeSubtasks.length) * 100
+    );
   } else {
     // If no active subtasks exist, progress is either 0 or 100 depending on task completion
-    const task = await client.task.findUnique({
-      where: { id: taskId },
-      select: { status: true },
-    });
     calculatedProgress = task?.status === TaskStatus.DONE ? 100 : 0;
   }
 
