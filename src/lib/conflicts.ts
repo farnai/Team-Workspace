@@ -427,7 +427,7 @@ export function detectTeamWorkloadConflicts(
         conflicts.push({
           type: "USER_OVERLOAD",
           severity: isCriticalCondition ? "critical" : "warning",
-          title: `${uName} (პარალელური დატვირთვა)`,
+          title: `${uName} (პარალელური დავალებები)`,
           message: `${uName}-ს ამ დღეს (${dateFormatted}) ერთდროულად აქვს ${assignedList.length} აქტიური დავალება: ${assignedList
             .map((a) => `[SSP-${a.taskNumber}] ${a.taskTitle}`)
             .join(", ")}.`,

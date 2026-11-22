@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   Lock,
-  Calendar,
   AlertCircle,
   Loader2,
   Folder,
@@ -20,7 +19,8 @@ import {
   ChevronUp,
   Code2,
   PenTool,
-  CheckSquare,
+  Image as ImageIcon,
+  UploadCloud,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus, Department } from "@prisma/client";
 import { DatePicker } from "@/components/ui/DatePicker";
@@ -207,9 +207,7 @@ function TaskModalForm({
   );
 
   // 4. Independent Links & Files
-  const [links, setLinks] = useState<LinkEntry[]>([]);
-  const [newLinkName, setNewLinkName] = useState("");
-  const [newLinkUrl, setNewLinkUrl] = useState("");
+  const [linkUrls, setLinkUrls] = useState<string[]>([""]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   // 5. Description
@@ -289,21 +287,24 @@ function TaskModalForm({
     });
   };
 
-  // Links Management
-  const handleAddLink = () => {
-    if (!newLinkUrl.trim()) return;
-    let url = newLinkUrl.trim();
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      url = "https://" + url;
-    }
-    const name = newLinkName.trim();
-    setLinks((prev) => [...prev, { name: name || undefined, url }]);
-    setNewLinkName("");
-    setNewLinkUrl("");
+  // Links Management (Multiple URLs without link name)
+  const handleAddLinkRow = () => {
+    setLinkUrls((prev) => [...prev, ""]);
   };
 
-  const handleRemoveLink = (index: number) => {
-    setLinks((prev) => prev.filter((_, i) => i !== index));
+  const handleLinkUrlChange = (index: number, value: string) => {
+    setLinkUrls((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const handleRemoveLinkRow = (index: number) => {
+    setLinkUrls((prev) => {
+      if (prev.length <= 1) return [""];
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   // Files Management
@@ -316,6 +317,44 @@ function TaskModalForm({
   const handleRemoveFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
+
+  // Support Ctrl+V screenshot paste anywhere in the modal (matching TaskDetailsDrawer)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+
+      const hasText = e.clipboardData?.types.includes("text/plain");
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      let imageItem: DataTransferItem | null = null;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          imageItem = items[i];
+          break;
+        }
+      }
+
+      if (imageItem) {
+        if (isInput && hasText) return;
+        const file = imageItem.getAsFile();
+        if (file) {
+          e.preventDefault();
+          const namedFile = new File([file], `screenshot-${Date.now()}.png`, {
+            type: file.type,
+          });
+          setSelectedFiles((prev) => [...prev, namedFile]);
+        }
+      }
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, []);
 
   // Reordering conflict detection
   const sequenceConflict = (() => {
@@ -455,6 +494,13 @@ function TaskModalForm({
 
         const cleanProjectId = typeof projectId === "string" && projectId.trim() ? projectId.trim() : undefined;
 
+        const formattedLinks = linkUrls
+          .map((raw) => raw.trim())
+          .filter(Boolean)
+          .map((raw) => ({
+            url: raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`,
+          }));
+
         const payload = {
           title: title.trim(),
           description: description.trim() || undefined,
@@ -467,7 +513,7 @@ function TaskModalForm({
           assigneeIds: assigneeList.map((a) => a.userId),
           startDate: startDate ? new Date(startDate).toISOString() : null,
           deadline: deadline ? new Date(deadline).toISOString() : null,
-          links: links.length > 0 ? links : undefined,
+          links: formattedLinks.length > 0 ? formattedLinks : undefined,
         };
 
         const res = await fetch("/api/tasks", {
@@ -554,7 +600,15 @@ function TaskModalForm({
           startDate: startDate ? new Date(startDate).toISOString() : null,
           pauseReason: status === TaskStatus.PAUSED ? pauseReason : null,
           blockedReason: status === TaskStatus.BLOCKED ? blockedReason : null,
-          links: links.length > 0 ? links : undefined,
+          links: (() => {
+            const formatted = linkUrls
+              .map((raw) => raw.trim())
+              .filter(Boolean)
+              .map((raw) => ({
+                url: raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`,
+              }));
+            return formatted.length > 0 ? formatted : undefined;
+          })(),
         };
 
         if (!isDeadlineReadOnly) {
@@ -619,7 +673,7 @@ function TaskModalForm({
       {/* Header */}
       <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between shrink-0 bg-stone-50/50">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-xs">
+          <div className="w-8 h-8 rounded-xl bg-orange-600 flex items-center justify-center text-white font-black text-sm shadow-xs">
             {mode === "create" ? "+" : "#"}
           </div>
           <div>
@@ -771,7 +825,7 @@ function TaskModalForm({
             <label className="block font-bold text-stone-700 mb-1.5 text-xs">
               გუნდი / მიმართულება <span className="text-rose-500">*</span>
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -800,26 +854,165 @@ function TaskModalForm({
                 <PenTool size={13} className={department === Department.CONTENT ? "text-white" : "text-purple-600"} />
                 <span>კონტენტი</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDepartment(Department.QA);
-                  setType(TaskType.QA);
-                }}
-                className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${department === Department.QA
-                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20"
-                    : "bg-white text-stone-700 border-stone-200 hover:bg-emerald-50/50"
-                  }`}
-              >
-                <CheckSquare size={13} className={department === Department.QA ? "text-white" : "text-emerald-600"} />
-                <span>ხარისხის კონტროლი</span>
-              </button>
             </div>
           </div>
         </div>
 
         {/* ========================================================= */}
-        {/* SECTION 2: ASSIGNEES & ORDER (SEQUENTIAL WORKFLOW)        */}
+        {/* SECTION 2: DESCRIPTION & DETAILS                          */}
+        {/* ========================================================= */}
+        <div className="p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80">
+          <label className="block font-bold text-stone-800 mb-1 text-xs">
+            აღწერა და დეტალები
+          </label>
+          <textarea
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="დავალების მოკლე აღწერა, მოთხოვნები და ჩაბარების კრიტერიუმები..."
+            className="w-full px-3.5 py-2.5 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-stone-900 placeholder:text-stone-400 font-medium text-xs resize-none"
+          />
+        </div>
+
+        {/* ========================================================= */}
+        {/* SECTION 3: INDEPENDENT LINKS & FILES                      */}
+        {/* ========================================================= */}
+        <div className="p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80 space-y-3">
+          <label className="font-extrabold text-stone-900 text-xs block">
+            დამოუკიდებელი ბმულები და ფაილები
+          </label>
+
+          {/* Links Sub-block (Multiple URLs only, no name field) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-bold text-stone-600 flex items-center gap-1">
+                <LinkIcon size={12} className="text-stone-400" />
+                <span>გარე ბმულები (Links, GitLab, Figma, Docs...)</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddLinkRow}
+                className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 cursor-pointer"
+              >
+                <Plus size={12} />
+                <span>ბმულის დამატება</span>
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {linkUrls.map((urlValue, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <LinkIcon
+                      size={12}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                    />
+                    <input
+                      type="text"
+                      value={urlValue}
+                      onChange={(e) => handleLinkUrlChange(idx, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (urlValue.trim() && idx === linkUrls.length - 1) {
+                            handleAddLinkRow();
+                          }
+                        }
+                      }}
+                      placeholder="https://..."
+                      className="w-full pl-8 pr-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                    />
+                  </div>
+                  {(linkUrls.length > 1 || urlValue.trim().length > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLinkRow(idx)}
+                      className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                      title="ბმულის წაშლა"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Files Sub-block (Matching TaskDetailsDrawer Dropzone Design) */}
+          <div
+            className="space-y-2.5 pt-2 border-t border-stone-200/60"
+            onDragOver={(e) => {
+              e.preventDefault();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                setSelectedFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files)]);
+              }
+            }}
+          >
+            <div className="text-xs font-extrabold text-stone-900 flex items-center gap-1.5">
+              <Paperclip size={13} className="text-orange-600" />
+              <span>მიმაგრებული ფაილები ({selectedFiles.length})</span>
+            </div>
+
+            <label className="block w-full p-5 bg-white hover:bg-orange-50/20 border-2 border-dashed border-stone-200 hover:border-orange-300 rounded-2xl cursor-pointer transition-all text-center group">
+              <input
+                type="file"
+                multiple
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <div className="flex flex-col items-center justify-center gap-2">
+                <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <UploadCloud size={19} />
+                </div>
+                <div className="text-xs font-bold text-stone-800">
+                  დააჭირეთ ფაილის ასარჩევად ან ჩააგდეთ აქ
+                </div>
+                <div className="text-[11px] text-stone-400 font-medium">
+                  PNG, JPG, WebP, PDF, TXT, DOCX • Ctrl+V სქრინშოტის ჩასასმელად (მაქს. 15MB)
+                </div>
+              </div>
+            </label>
+
+            {/* List of Selected Files */}
+            {selectedFiles.length > 0 && (
+              <div className="space-y-1.5">
+                {selectedFiles.map((file, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 bg-white rounded-xl border border-stone-200 flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      {file.type.startsWith("image/") ? (
+                        <ImageIcon size={13} className="text-orange-600 shrink-0" />
+                      ) : (
+                        <Paperclip size={12} className="text-stone-400 shrink-0" />
+                      )}
+                      <span className="font-semibold text-stone-800 truncate">
+                        {file.name}
+                      </span>
+                      <span className="text-[10px] text-stone-400 shrink-0">
+                        ({Math.round(file.size / 1024)} KB)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(idx)}
+                      className="p-1 text-stone-400 hover:text-rose-600 rounded cursor-pointer"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ========================================================= */}
+        {/* SECTION 4: ASSIGNEES & ORDER (SEQUENTIAL WORKFLOW)        */}
         {/* ========================================================= */}
         <div className="p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80 space-y-3">
           <div className="flex items-center justify-between">
@@ -976,223 +1169,7 @@ function TaskModalForm({
         </div>
 
         {/* ========================================================= */}
-        {/* SECTION 3: OVERALL TASK DEADLINE (OPTIONAL)               */}
-        {/* ========================================================= */}
-        <div className="p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80 space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="font-extrabold text-stone-900 flex items-center gap-1.5 text-xs">
-              <Calendar size={14} className="text-stone-500" />
-              <span>დავალების საერთო დედლაინი</span>
-              <span className="text-stone-400 font-normal">(არასავალდებულო)</span>
-            </label>
-
-            {isDeadlineLocked && (
-              <span className="flex items-center gap-1 text-[10px] text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full font-bold">
-                <Lock size={10} />
-                <span>დაფიქსირებულია</span>
-              </span>
-            )}
-          </div>
-
-          <p className="text-[11px] text-stone-500">
-            {assigneeList.length === 1
-              ? "ერთი შემსრულებლის შემთხვევაში დავალება იყენებს ამ ვადას."
-              : "თუ მითითებულია, შემსრულებლების ინდივიდუალური ვადები არ უნდა აღემატებოდეს მას."}
-          </p>
-
-          <DatePicker
-            value={deadline}
-            disabled={isDeadlineReadOnly}
-            onChange={(val) => setDeadline(val)}
-            placeholder="დავალების საერთო დედლაინი (არასავალდებულო)"
-            size="md"
-          />
-
-          {isDeadlineReadOnly ? (
-            <div className="p-2.5 bg-stone-100 border border-stone-200 rounded-xl flex items-center gap-2 text-stone-600 text-xs">
-              <Lock size={13} className="text-stone-500 shrink-0" />
-              <span>დედლაინი დაფიქსირებულია. მის შეცვლა შეუძლია მხოლოდ ადმინისტრატორს.</span>
-            </div>
-          ) : isDeadlineLocked && isAdmin ? (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
-              <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs">
-                <AlertTriangle size={13} className="text-amber-600" />
-                <span>ადმინისტრატორის მიერ დედლაინის ცვლილების მიზეზი</span>
-              </div>
-              <input
-                type="text"
-                value={rescheduleReason}
-                onChange={(e) => setRescheduleReason(e.target.value)}
-                placeholder="მაგ. კლიენტის მოთხოვნით ვადის გაგრძელება"
-                className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs text-stone-900 focus:outline-none"
-              />
-            </div>
-          ) : null}
-        </div>
-
-        {/* ========================================================= */}
-        {/* SECTION 4: INDEPENDENT LINKS & FILES                      */}
-        {/* ========================================================= */}
-        <div className="p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80 space-y-3">
-          <label className="font-extrabold text-stone-900 text-xs block">
-            დამოუკიდებელი ბმულები და ფაილები
-          </label>
-
-          {/* Links Sub-block */}
-          <div className="space-y-2">
-            <div className="text-[11px] font-bold text-stone-600 flex items-center gap-1">
-              <LinkIcon size={12} className="text-stone-400" />
-              <span>გარე ბმულები (Links, GitLab, Figma, Docs...)</span>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                value={newLinkName}
-                onChange={(e) => setNewLinkName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddLink();
-                  }
-                }}
-                placeholder="ბმულის სახელი (არასავალდებულო)"
-                className="flex-1 px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium focus:outline-none"
-              />
-              <input
-                type="text"
-                value={newLinkUrl}
-                onChange={(e) => setNewLinkUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddLink();
-                  }
-                }}
-                placeholder="URL (https://...)"
-                className="flex-1 px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs font-medium focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleAddLink}
-                disabled={!newLinkUrl.trim()}
-                className="px-3 py-1.5 bg-stone-800 hover:bg-stone-900 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 disabled:opacity-40 cursor-pointer"
-              >
-                <Plus size={13} />
-                <span>დამატება</span>
-              </button>
-            </div>
-
-            {/* List of Added Links */}
-            {links.length > 0 && (
-              <div className="space-y-1.5 pt-1">
-                {links.map((link, idx) => (
-                  <div
-                    key={idx}
-                    className="p-2 bg-white rounded-xl border border-stone-200 flex items-center justify-between text-xs"
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <LinkIcon size={12} className="text-blue-600 shrink-0" />
-                      {link.name ? (
-                        <>
-                          <span className="font-bold text-stone-800 truncate">
-                            {link.name}:
-                          </span>
-                          <span className="text-stone-500 truncate text-[11px]">
-                            {link.url}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="font-medium text-stone-800 truncate">
-                          {link.url}
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveLink(idx)}
-                      className="p-1 text-stone-400 hover:text-rose-600 rounded cursor-pointer"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Files Sub-block */}
-          <div className="space-y-2 pt-2 border-t border-stone-200/60">
-            <div className="text-[11px] font-bold text-stone-600 flex items-center gap-1">
-              <Paperclip size={12} className="text-stone-400" />
-              <span>ფაილების მიმაგრება</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="px-3 py-2 bg-white border border-stone-300 hover:border-stone-400 rounded-xl text-xs font-bold text-stone-700 cursor-pointer flex items-center gap-1.5 shadow-2xs transition-colors">
-                <Paperclip size={13} />
-                <span>ფაილის არჩევა</span>
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-              </label>
-              <span className="text-[11px] text-stone-400">
-                მაქს. 15MB თითო ფაილზე
-              </span>
-            </div>
-
-            {/* List of Selected Files */}
-            {selectedFiles.length > 0 && (
-              <div className="space-y-1.5">
-                {selectedFiles.map((file, idx) => (
-                  <div
-                    key={idx}
-                    className="p-2 bg-white rounded-xl border border-stone-200 flex items-center justify-between text-xs"
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <Paperclip size={12} className="text-stone-400 shrink-0" />
-                      <span className="font-semibold text-stone-800 truncate">
-                        {file.name}
-                      </span>
-                      <span className="text-[10px] text-stone-400 shrink-0">
-                        ({Math.round(file.size / 1024)} KB)
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFile(idx)}
-                      className="p-1 text-stone-400 hover:text-rose-600 rounded cursor-pointer"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ========================================================= */}
-        {/* SECTION 5: DESCRIPTION                                   */}
-        {/* ========================================================= */}
-        <div className="p-4 bg-stone-50/60 rounded-2xl border border-stone-200/80">
-          <label className="block font-bold text-stone-800 mb-1 text-xs">
-            აღწერა და დეტალები
-          </label>
-          <textarea
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="დავალების მოკლე აღწერა, მოთხოვნები და ჩაბარების კრიტერიუმები..."
-            className="w-full px-3.5 py-2.5 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-stone-900 placeholder:text-stone-400 font-medium text-xs resize-none"
-          />
-        </div>
-
-        {/* ========================================================= */}
-        {/* SECTION 6: ADDITIONAL OPTIONS (COLLAPSIBLE)              */}
+        {/* SECTION 5: ADDITIONAL OPTIONS (COLLAPSIBLE)              */}
         {/* ========================================================= */}
         <div className="border border-stone-200/80 rounded-2xl overflow-hidden bg-stone-50/40">
           <button
@@ -1202,7 +1179,7 @@ function TaskModalForm({
           >
             <div className="flex items-center gap-2">
               <Tag size={14} className="text-stone-400" />
-              <span>დამატებითი პარამეტრები (პრიორიტეტი, ტიპი, სტატუსი, დაწყება)</span>
+              <span>დამატებითი პარამეტრები (პრიორიტეტი, ტიპი, სტატუსი)</span>
             </div>
             {showAdditionalParams ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
@@ -1243,41 +1220,27 @@ function TaskModalForm({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    სტატუსი
-                  </label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-800 focus:outline-none cursor-pointer"
-                  >
-                    <option value={TaskStatus.BACKLOG}>TBD / განსახილველი (Backlog)</option>
-                    <option value={TaskStatus.PLANNED}>To Do (დაგეგმილი)</option>
-                    <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
-                    {mode === "edit" && (
-                      <>
-                        <option value={TaskStatus.PAUSED}>Paused</option>
-                        <option value={TaskStatus.BLOCKED}>Blocked</option>
-                        <option value={TaskStatus.DONE}>Completed</option>
-                        <option value={TaskStatus.CANCELLED}>Cancelled</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    დაწყების თარიღი
-                  </label>
-                  <DatePicker
-                    value={startDate}
-                    onChange={(val) => setStartDate(val)}
-                    placeholder="დაწყების თარიღი"
-                    size="md"
-                  />
-                </div>
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  სტატუსი
+                </label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                  className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-800 focus:outline-none cursor-pointer"
+                >
+                  <option value={TaskStatus.BACKLOG}>TBD / განსახილველი (Backlog)</option>
+                  <option value={TaskStatus.PLANNED}>To Do (დაგეგმილი)</option>
+                  <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
+                  {mode === "edit" && (
+                    <>
+                      <option value={TaskStatus.PAUSED}>Paused</option>
+                      <option value={TaskStatus.BLOCKED}>Blocked</option>
+                      <option value={TaskStatus.DONE}>Completed</option>
+                      <option value={TaskStatus.CANCELLED}>Cancelled</option>
+                    </>
+                  )}
+                </select>
               </div>
 
               {/* Conditional Reasons for Paused / Blocked */}

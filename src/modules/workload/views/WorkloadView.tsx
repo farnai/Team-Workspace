@@ -195,7 +195,7 @@ export function WorkloadDashboard({
 
     fetch(url)
       .then((res) => {
-        if (!res.ok) throw new Error("დატვირთვის მონაცემების ჩატვირთვა ვერ მოხერხდა");
+        if (!res.ok) throw new Error("სამუშაო განრიგის მონაცემების ჩატვირთვა ვერ მოხერხდა");
         return res.json();
       })
       .then((data) => {
@@ -307,7 +307,7 @@ export function WorkloadDashboard({
               <Users size={16} />
             </div>
             <h1 className="text-base sm:text-lg font-black tracking-tight text-stone-900">
-              გუნდის დატვირთვა & განრიგი
+              სამუშაო განრიგი
             </h1>
           </div>
           <p className="text-xs text-stone-500 mt-1 font-medium">
@@ -573,7 +573,7 @@ export function WorkloadDashboard({
                     : "bg-white text-stone-700 hover:bg-stone-100 border border-amber-200/70"
                 }`}
               >
-                <span>გადატვირთვა</span>
+                <span>პარალელური დავალებები</span>
                 <span
                   className={`px-1.5 py-0.2 rounded-full text-[10px] ${
                     conflictTab === "OVERLOAD"
@@ -651,7 +651,7 @@ export function WorkloadDashboard({
                       {c.type === "TASK_OVERDUE" || c.type === "STAGE_OVERDUE"
                         ? "ვადაგადაცილება"
                         : c.type === "USER_OVERLOAD"
-                        ? "გადატვირთვა"
+                        ? "პარალელური დავალებები"
                         : c.type === "PAUSED_WHILE_SCHEDULED"
                         ? "შეჩერებული"
                         : c.type === "HOLIDAY_DEADLINE"
@@ -749,7 +749,7 @@ export function WorkloadDashboard({
           <div className="flex items-center gap-2">
             <CalendarIcon size={16} className="text-orange-600" />
             <h3 className="font-extrabold text-stone-900 text-xs uppercase tracking-wider">
-              დატვირთვის კალენდარული მატრიცა ({daysPeriod} დღე)
+              სამუშაო განრიგის კალენდარული მატრიცა ({daysPeriod} დღე)
             </h3>
           </div>
           <div className="flex items-center gap-3 text-[11px] font-semibold text-stone-500">
@@ -819,7 +819,7 @@ export function WorkloadDashboard({
                     colSpan={dateHeaders.length + 1}
                     className="p-12 text-center text-xs text-stone-400"
                   >
-                    იტვირთება დატვირთვის მონაცემები...
+                    იტვირთება სამუშაო განრიგის მონაცემები...
                   </td>
                 </tr>
               ) : workloads.length === 0 ? (
@@ -936,7 +936,7 @@ export function WorkloadDashboard({
       <div className="lg:hidden space-y-4">
         <h3 className="font-extrabold text-stone-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
           <Users size={14} className="text-orange-600" />
-          <span>გუნდის წევრების დატვირთვის ბარათები</span>
+          <span>გუნდის წევრების სამუშაო განრიგი</span>
         </h3>
 
         {workloads.map((item) => (
