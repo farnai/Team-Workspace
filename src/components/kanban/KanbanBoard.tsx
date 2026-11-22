@@ -22,6 +22,7 @@ import {
   CheckSquare,
   Trash2,
   Lightbulb,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Priority, TaskStatus, Department, TaskType } from "@prisma/client";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
@@ -81,12 +82,14 @@ export function KanbanBoard({
   onDeleteTask,
   projects,
   users,
-  onNavigateToTimeline,
   externalSearchQuery,
   isQAView = false,
 }: KanbanBoardProps) {
   // View mode switcher: Board (დაფა) vs Table (ცხრილი) — default to board
   const [viewMode, setViewMode] = useState<"board" | "table">("board");
+
+  // Collapsible search & filter bar state
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   // Status Tab Filter (like My Work navigation tabs)
   const [activeStatusTab, setActiveStatusTab] = useState<StatusTabFilter>("ALL");
@@ -423,42 +426,143 @@ export function KanbanBoard({
     );
   };
 
+  const activeFilterCount =
+    (searchQuery.trim() ? 1 : 0) +
+    (selectedProject !== "ALL" ? 1 : 0) +
+    (selectedUser !== "ALL" ? 1 : 0) +
+    (!isQAView && selectedDepartment !== "ALL" ? 1 : 0) +
+    (selectedPriority !== "ALL" ? 1 : 0);
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#F8F7F4] overflow-hidden p-3 sm:p-5 lg:p-6 space-y-3.5">
-      {/* 1. Header Banner (Matching "My Work" Style Banner) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200/90 shadow-2xs shrink-0">
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-xs shrink-0 ${
-              isQAView ? "bg-emerald-600" : "bg-blue-600"
+    <div className="flex-1 flex flex-col h-full bg-[#F8F7F4] overflow-hidden p-3 sm:p-4 lg:p-5 space-y-3">
+      {/* 1. Compact Top Bar: Status Tabs (Left) + Filter Toggle, View Switcher, New Task (Right) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
+        {/* Status Navigation Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-xs font-bold select-none">
+          <button
+            onClick={() => setActiveStatusTab("ALL")}
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
+              activeStatusTab === "ALL"
+                ? "bg-blue-600 text-white shadow-2xs"
+                : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
             }`}
           >
-            {isQAView ? <CheckSquare size={18} /> : <Layers size={18} />}
-          </div>
-          <div>
-            <h1 className="text-sm sm:text-base font-black text-stone-900 tracking-tight leading-tight">
-              {isQAView ? "ხარისხის კონტროლი (QA & Testing)" : "ბექლოგი (Backlog)"}
-            </h1>
-            <p className="text-[11px] text-stone-500 font-medium">
-              {isQAView
-                ? "პლატფორმის გვერდებისა და მოდულების ხარისხის კონტროლი, ვიზუალური და ფუნქციონალური შემოწმება."
-                : "პროექტის დავალებები, სამუშაო ეტაპები და მიმდინარე სტატუსები."}
-            </p>
-          </div>
+            <Layers size={13} />
+            <span>ყველა ტასკი</span>
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                activeStatusTab === "ALL"
+                  ? "bg-white/20 text-white"
+                  : "bg-stone-100 text-stone-700 font-bold"
+              }`}
+            >
+              {counts.total}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveStatusTab("TBD")}
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
+              activeStatusTab === "TBD"
+                ? "bg-amber-600 text-white shadow-2xs"
+                : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
+            }`}
+          >
+            <Lightbulb size={13} className={activeStatusTab === "TBD" ? "text-white" : "text-amber-500"} />
+            <span>TBD / Planning</span>
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                activeStatusTab === "TBD"
+                  ? "bg-white/20 text-white"
+                  : "bg-amber-50 text-amber-800 font-bold"
+              }`}
+            >
+              {counts.tbd}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveStatusTab("TODO")}
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
+              activeStatusTab === "TODO"
+                ? "bg-stone-800 text-white shadow-2xs"
+                : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
+            }`}
+          >
+            <Circle size={13} className="text-stone-400" />
+            <span>To Do</span>
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                activeStatusTab === "TODO"
+                  ? "bg-white/20 text-white"
+                  : "bg-stone-100 text-stone-700 font-bold"
+              }`}
+            >
+              {counts.todo}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveStatusTab("IN_PROGRESS")}
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
+              activeStatusTab === "IN_PROGRESS"
+                ? "bg-blue-600 text-white shadow-2xs"
+                : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
+            }`}
+          >
+            <Clock size={13} className="text-blue-500" />
+            <span>In Progress</span>
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                activeStatusTab === "IN_PROGRESS"
+                  ? "bg-white/20 text-white"
+                  : "bg-stone-100 text-stone-700 font-bold"
+              }`}
+            >
+              {counts.inProgress}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveStatusTab("DONE")}
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
+              activeStatusTab === "DONE"
+                ? "bg-emerald-600 text-white shadow-2xs"
+                : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
+            }`}
+          >
+            <CheckCircle2 size={13} className="text-emerald-500" />
+            <span>Completed</span>
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                activeStatusTab === "DONE"
+                  ? "bg-white/20 text-white"
+                  : "bg-stone-100 text-stone-700 font-bold"
+              }`}
+            >
+              {counts.completed}
+            </span>
+          </button>
         </div>
 
-        {/* Action Buttons: + New Task, View Switcher (Board vs Table), Calendar */}
-        <div className="flex items-center gap-2">
+        {/* Right Controls: Collapsible Filter/Search Toggle, View Switcher, + New Task */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
           <button
-            onClick={() => onOpenNewTask()}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer ${
-              isQAView
-                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                : "bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => setIsFilterOpen((prev) => !prev)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs border ${
+              isFilterOpen || activeFilterCount > 0
+                ? "bg-blue-50 border-blue-300 text-blue-700"
+                : "bg-white hover:bg-stone-50 border-stone-200 text-stone-700"
             }`}
+            title="ძებნა და ფილტრები"
           >
-            <Plus size={14} strokeWidth={2.5} />
-            <span>{isQAView ? "ახალი QA შემოწმება" : "ახალი ტასკი"}</span>
+            <SlidersHorizontal size={13} />
+            <span>ძებნა / ფილტრი</span>
+            {activeFilterCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-600 text-white font-bold">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -479,129 +583,21 @@ export function KanbanBoard({
             )}
           </button>
 
-          {onNavigateToTimeline && (
+          {isQAView && (
             <button
-              onClick={onNavigateToTimeline}
-              className="px-3 py-1.5 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-              title="Calendar / თაიმლაინი"
+              onClick={() => onOpenNewTask()}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              <Calendar size={13} className="text-stone-500" />
-              <span className="hidden sm:inline">კალენდარი</span>
+              <Plus size={14} strokeWidth={2.5} />
+              <span>ახალი QA შემოწმება</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. Status Navigation Tabs (Matching My Work Tab Style) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-xs font-bold select-none shrink-0">
-        <button
-          onClick={() => setActiveStatusTab("ALL")}
-          className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
-            activeStatusTab === "ALL"
-              ? "bg-blue-600 text-white shadow-2xs"
-              : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
-          }`}
-        >
-          <Layers size={13} />
-          <span>ყველა ტასკი</span>
-          <span
-            className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-              activeStatusTab === "ALL"
-                ? "bg-white/20 text-white"
-                : "bg-stone-100 text-stone-700 font-bold"
-            }`}
-          >
-            {counts.total}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveStatusTab("TBD")}
-          className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
-            activeStatusTab === "TBD"
-              ? "bg-amber-600 text-white shadow-2xs"
-              : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
-          }`}
-        >
-          <Lightbulb size={13} className={activeStatusTab === "TBD" ? "text-white" : "text-amber-500"} />
-          <span>TBD / Planning</span>
-          <span
-            className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-              activeStatusTab === "TBD"
-                ? "bg-white/20 text-white"
-                : "bg-amber-50 text-amber-800 font-bold"
-            }`}
-          >
-            {counts.tbd}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveStatusTab("TODO")}
-          className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
-            activeStatusTab === "TODO"
-              ? "bg-stone-800 text-white shadow-2xs"
-              : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
-          }`}
-        >
-          <Circle size={13} className="text-stone-400" />
-          <span>To Do</span>
-          <span
-            className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-              activeStatusTab === "TODO"
-                ? "bg-white/20 text-white"
-                : "bg-stone-100 text-stone-700 font-bold"
-            }`}
-          >
-            {counts.todo}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveStatusTab("IN_PROGRESS")}
-          className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
-            activeStatusTab === "IN_PROGRESS"
-              ? "bg-blue-600 text-white shadow-2xs"
-              : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
-          }`}
-        >
-          <Clock size={13} className="text-blue-500" />
-          <span>In Progress</span>
-          <span
-            className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-              activeStatusTab === "IN_PROGRESS"
-                ? "bg-white/20 text-white"
-                : "bg-stone-100 text-stone-700 font-bold"
-            }`}
-          >
-            {counts.inProgress}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveStatusTab("DONE")}
-          className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap text-xs font-bold ${
-            activeStatusTab === "DONE"
-              ? "bg-emerald-600 text-white shadow-2xs"
-              : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/90"
-          }`}
-        >
-          <CheckCircle2 size={13} className="text-emerald-500" />
-          <span>Completed</span>
-          <span
-            className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-              activeStatusTab === "DONE"
-                ? "bg-white/20 text-white"
-                : "bg-stone-100 text-stone-700 font-bold"
-            }`}
-          >
-            {counts.completed}
-          </span>
-        </button>
-      </div>
-
-      {/* 3. Comprehensive Filter Bar (Filter by Everything) */}
-      <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-stone-200/90 shadow-2xs shrink-0 flex items-center gap-2 flex-wrap">
+      {/* 2. Collapsible Search & Filter Bar (Opens on click) */}
+      {isFilterOpen && (
+        <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-stone-200/90 shadow-2xs shrink-0 flex items-center gap-2 flex-wrap animate-in fade-in duration-150">
         {/* Search Input */}
         <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
@@ -724,7 +720,8 @@ export function KanbanBoard({
             <span>გასუფთავება</span>
           </button>
         )}
-      </div>
+        </div>
+      )}
 
       {/* 4. Main Content Area: Board View (With Clean Box Design) or Table View */}
       {viewMode === "table" ? (

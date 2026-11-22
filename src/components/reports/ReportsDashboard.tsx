@@ -8,10 +8,13 @@ import {
   Folder,
   Users,
   ShieldCheck,
+  Pause,
+  Ban,
 } from "lucide-react";
 import { TaskType, Priority, TaskStatus } from "@prisma/client";
 import { BacklogTask } from "@/components/SharedBacklog";
 import { isTaskOverdue } from "@/lib/dateUtils";
+import { isTbilisiToday, getTbilisiTodayDate } from "@/lib/date";
 
 interface ProjectOption {
   id: string;
@@ -203,7 +206,6 @@ export function ReportsDashboard({
   // Aggregate Metrics (scoped to monthly interval if selected)
   const metrics = useMemo(() => {
     const total = filteredTasks.length;
-    const now = new Date();
 
     // Completed: in monthly view, only tasks completed in this month
     const completed = filteredTasks.filter((t) => {
@@ -219,10 +221,29 @@ export function ReportsDashboard({
     const inProgress = filteredTasks.filter(
       (t) => t.status === TaskStatus.IN_PROGRESS || t.status === TaskStatus.PAUSED
     ).length;
+    const activeOnly = filteredTasks.filter((t) => t.status === TaskStatus.IN_PROGRESS).length;
+    const paused = filteredTasks.filter((t) => t.status === TaskStatus.PAUSED).length;
     const blocked = filteredTasks.filter((t) => t.status === TaskStatus.BLOCKED).length;
     const todo = filteredTasks.filter(
       (t) => t.status === TaskStatus.BACKLOG || t.status === TaskStatus.PLANNED
     ).length;
+
+    const completedToday = filteredTasks.filter(
+      (t) => t.status === TaskStatus.DONE && t.completedAt && isTbilisiToday(t.completedAt)
+    ).length;
+
+    const todayStart = getTbilisiTodayDate();
+    const sevenDaysLater = new Date(todayStart);
+    sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+    sevenDaysLater.setHours(23, 59, 59, 999);
+
+    const dueSoon = filteredTasks.filter((t) => {
+      if (t.status === TaskStatus.DONE || t.status === TaskStatus.CANCELLED || !t.deadline) {
+        return false;
+      }
+      const d = new Date(t.deadline);
+      return d >= todayStart && d <= sevenDaysLater;
+    }).length;
 
     // Overdue tasks: non-completed tasks whose deadline has arrived/passed
     const overdueTasks = filteredTasks.filter((t) => isTaskOverdue(t.deadline, t.status));
@@ -257,9 +278,13 @@ export function ReportsDashboard({
     return {
       total,
       completed,
+      completedToday,
       inProgress,
+      activeOnly,
+      paused,
       blocked,
       todo,
+      dueSoon,
       overdue,
       completedWithDeadline: completedTasksWithDeadline.length,
       onTimeCompleted,
@@ -537,6 +562,83 @@ export function ReportsDashboard({
               <span className="text-emerald-600 font-semibold">ყველა დავალება გრაფიკშია</span>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Operational Status Strip (moved from Overview) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pb-6">
+        <div className="p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+              აქტიური
+            </div>
+            <div className="text-lg font-black text-stone-900 mt-0.5">{metrics.activeOnly}</div>
+          </div>
+          <CheckCircle2 size={15} className="text-blue-500 shrink-0" />
+        </div>
+
+        <div className="p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+              დღეს დასრულდა
+            </div>
+            <div className="text-lg font-black text-emerald-700 mt-0.5">
+              {metrics.completedToday}
+            </div>
+          </div>
+          <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+        </div>
+
+        <div
+          className={`p-3 rounded-xl border shadow-2xs flex items-center justify-between gap-2 ${
+            metrics.overdue > 0
+              ? "bg-rose-50/30 border-rose-200"
+              : "bg-white border-stone-200/90"
+          }`}
+        >
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-rose-800">
+              გადაცილებული
+            </div>
+            <div
+              className={`text-lg font-black mt-0.5 ${
+                metrics.overdue > 0 ? "text-rose-600" : "text-stone-900"
+              }`}
+            >
+              {metrics.overdue}
+            </div>
+          </div>
+          <AlertCircle size={15} className="text-rose-600 shrink-0" />
+        </div>
+
+        <div className="p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-blue-800">
+              უახლოესი ვადა (7 დღე)
+            </div>
+            <div className="text-lg font-black text-blue-900 mt-0.5">{metrics.dueSoon}</div>
+          </div>
+          <Clock size={15} className="text-blue-600 shrink-0" />
+        </div>
+
+        <div className="p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-800">
+              შეჩერებული
+            </div>
+            <div className="text-lg font-black text-amber-700 mt-0.5">{metrics.paused}</div>
+          </div>
+          <Pause size={15} className="text-amber-600 shrink-0" />
+        </div>
+
+        <div className="p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-rose-900">
+              დაბლოკილი
+            </div>
+            <div className="text-lg font-black text-rose-700 mt-0.5">{metrics.blocked}</div>
+          </div>
+          <Ban size={15} className="text-rose-600 shrink-0" />
         </div>
       </div>
 

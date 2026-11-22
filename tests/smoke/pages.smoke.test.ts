@@ -64,7 +64,6 @@ describe('GTU Team Workspace: Automated Browser Smoke Tests', () => {
 
       // Verify core overview content & metrics
       await waitForDomText(page, 'საერთო მიმოხილვა (Overview)', 8000)
-      await waitForDomText(page, 'აქტიური გუნდი', 8000)
       await waitForDomText(page, 'ვინ რაზე მუშაობს?', 8000)
 
       // Verify logged-in admin identity appears in header

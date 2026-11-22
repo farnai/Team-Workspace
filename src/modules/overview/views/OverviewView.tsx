@@ -3,11 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import {
-  CheckCircle2,
-  Clock,
   AlertCircle,
-  Pause,
-  Ban,
   Users,
   Activity,
   Layers,
@@ -154,20 +150,8 @@ function formatAuditActionGeorgian(action: string): string {
 
 export function OverviewDashboard({
   onSelectTask,
-  onNavigateToView,
   refreshKey = 0,
 }: OverviewDashboardProps) {
-  const [metrics, setMetrics] = useState<OverviewMetrics>({
-    activeCount: 0,
-    completedTodayCount: 0,
-    overdueCount: 0,
-    completedLast7Days: 0,
-    pausedCount: 0,
-    blockedCount: 0,
-    dueSoonCount: 0,
-    activeMembersCount: 0,
-  });
-
   const [teamActivity, setTeamActivity] = useState<TeamMemberActivity[]>([]);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [recentActivities, setRecentActivities] = useState<RecentActivityItem[]>([]);
@@ -189,7 +173,6 @@ export function OverviewDashboard({
       })
       .then((data) => {
         if (active) {
-          if (data.metrics) setMetrics(data.metrics);
           if (data.teamActivity) setTeamActivity(data.teamActivity);
           if (data.projects) setProjects(data.projects);
           if (data.recentActivities) setRecentActivities(data.recentActivities);
@@ -273,164 +256,7 @@ export function OverviewDashboard({
         </div>
       )}
 
-      {/* 2. Key Operational Metrics Grid (Organized, Compact 7-Column Layout) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
-        {/* 1. Active Tasks */}
-        <div
-          onClick={() => onNavigateToView && onNavigateToView("backlog")}
-          className="p-2.5 sm:p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs hover:shadow-xs hover:border-blue-400 transition-all cursor-pointer group flex flex-col justify-between"
-          title="ბექლოგზე გადასვლა"
-        >
-          <div className="flex items-center justify-between text-stone-400 group-hover:text-blue-600 transition-colors">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 truncate">
-              აქტიური
-            </span>
-            <CheckCircle2 size={13} className="text-blue-500 shrink-0" />
-          </div>
-          <div className="mt-1 flex items-baseline justify-between gap-1">
-            <span className="text-lg sm:text-xl font-black text-stone-900 leading-tight">
-              {metrics.activeCount}
-            </span>
-            <span className="text-[9px] text-stone-400 font-semibold truncate">
-              {metrics.monthName || "თვე"}
-            </span>
-          </div>
-        </div>
-
-        {/* 2. Completed Today */}
-        <div
-          onClick={() => onNavigateToView && onNavigateToView("timeline")}
-          className="p-2.5 sm:p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs hover:shadow-xs hover:border-emerald-400 transition-all cursor-pointer group flex flex-col justify-between"
-          title="თაიმლაინზე გადასვლა"
-        >
-          <div className="flex items-center justify-between text-stone-400 group-hover:text-emerald-600 transition-colors">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 truncate">
-              დღეს დასრულდა
-            </span>
-            <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
-          </div>
-          <div className="mt-1 flex items-baseline justify-between gap-1">
-            <span className="text-lg sm:text-xl font-black text-emerald-700 leading-tight">
-              {metrics.completedTodayCount}
-            </span>
-            <span className="text-[9px] text-emerald-600/80 font-semibold">დღეს</span>
-          </div>
-        </div>
-
-        {/* 3. Overdue Tasks */}
-        <div
-          onClick={() => onNavigateToView && onNavigateToView("workload")}
-          className={`p-2.5 sm:p-3 bg-white rounded-xl border shadow-2xs hover:shadow-xs transition-all cursor-pointer group flex flex-col justify-between ${
-            metrics.overdueCount > 0
-              ? "border-rose-200 bg-rose-50/20 hover:border-rose-400"
-              : "border-stone-200/90 hover:border-rose-300"
-          }`}
-          title="დატვირთვაზე გადასვლა"
-        >
-          <div className="flex items-center justify-between text-stone-400 group-hover:text-rose-600 transition-colors">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 truncate">
-              გადაცილებული
-            </span>
-            <AlertCircle size={13} className="text-rose-600 shrink-0" />
-          </div>
-          <div className="mt-1 flex items-baseline justify-between gap-1">
-            <span
-              className={`text-lg sm:text-xl font-black leading-tight ${
-                metrics.overdueCount > 0 ? "text-rose-600" : "text-stone-900"
-              }`}
-            >
-              {metrics.overdueCount}
-            </span>
-            <span className="text-[9px] text-rose-500 font-semibold truncate">
-              {metrics.overdueThisMonthCount !== undefined && metrics.overdueThisMonthCount !== metrics.overdueCount
-                ? `თვეში: ${metrics.overdueThisMonthCount}`
-                : "სულ"}
-            </span>
-          </div>
-        </div>
-
-        {/* 4. Due Soon (7 Days) */}
-        <div
-          onClick={() => onNavigateToView && onNavigateToView("timeline")}
-          className="p-2.5 sm:p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs hover:shadow-xs hover:border-blue-300 transition-all cursor-pointer group flex flex-col justify-between"
-          title="თაიმლაინზე გადასვლა"
-        >
-          <div className="flex items-center justify-between text-stone-400 group-hover:text-blue-600 transition-colors">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 truncate">
-              უახლოესი ვადა
-            </span>
-            <Clock size={13} className="text-blue-600 shrink-0" />
-          </div>
-          <div className="mt-1 flex items-baseline justify-between gap-1">
-            <span className="text-lg sm:text-xl font-black text-blue-900 leading-tight">
-              {metrics.dueSoonCount}
-            </span>
-            <span className="text-[9px] text-blue-600/80 font-semibold">7 დღე</span>
-          </div>
-        </div>
-
-        {/* 5. Paused Tasks */}
-        <div
-          onClick={() => onNavigateToView && onNavigateToView("workload")}
-          className="p-2.5 sm:p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs hover:shadow-xs hover:border-amber-300 transition-all cursor-pointer group flex flex-col justify-between"
-          title="დატვირთვაზე გადასვლა"
-        >
-          <div className="flex items-center justify-between text-stone-400 group-hover:text-amber-600 transition-colors">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 truncate">
-              შეჩერებული
-            </span>
-            <Pause size={13} className="text-amber-600 shrink-0" />
-          </div>
-          <div className="mt-1 flex items-baseline justify-between gap-1">
-            <span className="text-lg sm:text-xl font-black text-amber-700 leading-tight">
-              {metrics.pausedCount}
-            </span>
-            <span className="text-[9px] text-amber-600/80 font-semibold">პაუზა</span>
-          </div>
-        </div>
-
-        {/* 6. Blocked Tasks */}
-        <div
-          onClick={() => onNavigateToView && onNavigateToView("workload")}
-          className="p-2.5 sm:p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs hover:shadow-xs hover:border-rose-300 transition-all cursor-pointer group flex flex-col justify-between"
-          title="დატვირთვაზე გადასვლა"
-        >
-          <div className="flex items-center justify-between text-stone-400 group-hover:text-rose-600 transition-colors">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-900 truncate">
-              დაბლოკილი
-            </span>
-            <Ban size={13} className="text-rose-600 shrink-0" />
-          </div>
-          <div className="mt-1 flex items-baseline justify-between gap-1">
-            <span className="text-lg sm:text-xl font-black text-rose-700 leading-tight">
-              {metrics.blockedCount}
-            </span>
-            <span className="text-[9px] text-rose-500 font-semibold">ბარიერით</span>
-          </div>
-        </div>
-
-        {/* 7. Active Team Members */}
-        <div
-          onClick={() => onNavigateToView && onNavigateToView("workload")}
-          className="p-2.5 sm:p-3 bg-white rounded-xl border border-stone-200/90 shadow-2xs hover:shadow-xs hover:border-orange-300 transition-all cursor-pointer group flex flex-col justify-between col-span-2 sm:col-span-2 lg:col-span-1"
-          title="დატვირთვაზე გადასვლა"
-        >
-          <div className="flex items-center justify-between text-stone-400 group-hover:text-orange-600 transition-colors">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-700 truncate">
-              აქტიური გუნდი
-            </span>
-            <Users size={13} className="text-orange-600 shrink-0" />
-          </div>
-          <div className="mt-1 flex items-baseline justify-between gap-1">
-            <span className="text-lg sm:text-xl font-black text-stone-900 leading-tight">
-              {metrics.activeMembersCount}/{teamActivity.length}
-            </span>
-            <span className="text-[9px] text-stone-400 font-semibold">მუშაობს</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Team Activity Section: "ვინ რაზე მუშაობს?" (Redesigned & Space-Efficient) */}
+      {/* 2. Team Activity Section: "ვინ რაზე მუშაობს?" (Redesigned & Space-Efficient) */}
       <div className="bg-white rounded-xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
         {/* Header Toolbar: Filters & View Switcher */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-stone-100 pb-3">
