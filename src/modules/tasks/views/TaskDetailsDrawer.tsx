@@ -205,7 +205,7 @@ export function TaskDetailsDrawer({
 }: TaskDetailsDrawerProps) {
   const [task, setTask] = useState<FullTaskDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  type DrawerTab = "work" | "testing" | "details" | "comments" | "attachments" | "daily_updates" | "activity";
+  type DrawerTab = "work" | "comments" | "daily_updates" | "activity";
   const [activeTab, setActiveTab] = useState<DrawerTab>("work");
   const [error, setError] = useState<string | null>(null);
 
@@ -859,21 +859,36 @@ export function TaskDetailsDrawer({
     }
   };
 
-  // Admin Reschedule Handler
+  // Admin / Initial Deadline Reschedule Handler
   const handleReschedule = async (
     newStartDate: string | null,
     newDeadline: string | null,
     reason: string
   ) => {
     if (!task) return;
+    const effectiveStartDate = newStartDate
+      ? new Date(newStartDate).toISOString()
+      : !task.startDate && newDeadline
+      ? new Date().toISOString()
+      : task.startDate || null;
+
+    const payload: Record<string, unknown> = {
+      startDate: effectiveStartDate,
+      deadline: newDeadline ? new Date(newDeadline).toISOString() : null,
+      rescheduleReason: reason,
+    };
+
+    if (
+      newDeadline &&
+      (task.status === TaskStatus.BACKLOG || task.status === TaskStatus.PLANNED)
+    ) {
+      payload.status = TaskStatus.IN_PROGRESS;
+    }
+
     const res = await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        startDate: newStartDate ? new Date(newStartDate).toISOString() : null,
-        deadline: newDeadline ? new Date(newDeadline).toISOString() : null,
-        rescheduleReason: reason,
-      }),
+      body: JSON.stringify(payload),
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(d.error || "განრიგის განახლება ვერ მოხერხდა");
@@ -1056,14 +1071,16 @@ export function TaskDetailsDrawer({
   const renderSubtaskForm = (isStage: boolean) => (
     <form
       onSubmit={handleCreateSubtask}
-      className="p-3.5 bg-orange-50/70 border border-orange-200 rounded-2xl space-y-3 text-xs animate-in slide-in-from-top-2 mt-2"
+      className="p-3.5 bg-orange-50/60 border border-orange-200/90 rounded-2xl space-y-3 text-xs animate-in slide-in-from-top-2 mt-2"
     >
-      <div className="font-bold text-stone-800">
-        ახალი საბტასკის შექმნა {isStage ? "(ეტაპისთვის)" : "(დამოუკიდებელი)"}
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-stone-900">
+          {isStage ? "ეტაპის ქვე-დავალება" : "ახალი ქვე-დავალება (ჩეკლისტი)"}
+        </span>
       </div>
       <input
         type="text"
-        placeholder="საბტასკის სათაური..."
+        placeholder="რა არის გასაკეთებელი? (მაგ. ფორმის ვალიდაცია)..."
         value={newSubtaskTitle}
         onChange={(e) => setNewSubtaskTitle(e.target.value)}
         className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-stone-900 font-medium"
@@ -1071,39 +1088,47 @@ export function TaskDetailsDrawer({
         autoFocus
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="space-y-2.5">
         <div>
+          <label className="text-[10px] font-bold text-stone-500 block mb-1.5">
+            შემსრულებელი (აირჩიეთ კლიკით — არასავალდებულო)
+          </label>
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-white border border-stone-200 rounded-xl">
+            {users.map((u) => {
+              const selected = newSubtaskAssigneeIds.includes(u.id);
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() =>
+                    setNewSubtaskAssigneeIds((prev) =>
+                      selected ? prev.filter((id) => id !== u.id) : [...prev, u.id]
+                    )
+                  }
+                  className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1 border ${
+                    selected
+                      ? "bg-orange-600 text-white border-orange-600 shadow-2xs"
+                      : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                  }`}
+                >
+                  <span>{u.name}</span>
+                  {selected && <Check size={10} strokeWidth={3} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="max-w-xs">
           <label className="text-[10px] font-bold text-stone-500 block mb-1">
-            დედლაინი (სავალდებულოა თუ მინიჭებულია)
+            ვადა (არასავალდებულო)
           </label>
           <DatePicker
             value={newSubtaskDeadline}
             onChange={(val) => setNewSubtaskDeadline(val)}
-            placeholder="დედლაინი"
+            placeholder="აირჩიეთ ვადა"
             size="sm"
           />
-        </div>
-
-        <div>
-          <label className="text-[10px] font-bold text-stone-500 block mb-1">
-            შემსრულებლები (მრავალარჩევითი)
-          </label>
-          <select
-            multiple
-            value={newSubtaskAssigneeIds}
-            onChange={(e) =>
-              setNewSubtaskAssigneeIds(
-                Array.from(e.target.selectedOptions, (o) => o.value)
-              )
-            }
-            className="w-full px-2 py-1 bg-white border border-stone-200 rounded-xl text-xs font-medium h-16"
-          >
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
 
@@ -1126,7 +1151,7 @@ export function TaskDetailsDrawer({
           disabled={isSubmittingSubtask}
           className="px-4 py-1.5 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50 cursor-pointer"
         >
-          {isSubmittingSubtask ? "ემატება..." : "საბტასკის დამატება"}
+          {isSubmittingSubtask ? "ემატება..." : "დამატება"}
         </button>
       </div>
     </form>
@@ -1250,7 +1275,7 @@ export function TaskDetailsDrawer({
             {task?.title || "იტვირთება..."}
           </h2>
 
-          {/* Action Row: Pause, Block, Reschedule */}
+          {/* Action Row: Reopen / Legacy Resume-Unblock / Reschedule */}
           <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar">
             {task?.status === TaskStatus.DONE && (
               <button
@@ -1263,7 +1288,7 @@ export function TaskDetailsDrawer({
               </button>
             )}
 
-            {task?.status === TaskStatus.PAUSED ? (
+            {task?.status === TaskStatus.PAUSED && (
               <button
                 onClick={handleResumeTask}
                 className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
@@ -1271,18 +1296,9 @@ export function TaskDetailsDrawer({
                 <Play size={12} fill="currentColor" />
                 <span>განახლება</span>
               </button>
-            ) : task?.status !== TaskStatus.DONE && task?.status !== TaskStatus.CANCELLED ? (
-              <button
-                onClick={() => setIsPauseModalOpen(true)}
-                className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="დავალების დროებით შეჩერება"
-              >
-                <Pause size={12} />
-                <span>შეჩერება</span>
-              </button>
-            ) : null}
+            )}
 
-            {task?.status === TaskStatus.BLOCKED ? (
+            {task?.status === TaskStatus.BLOCKED && (
               <button
                 onClick={handleUnblockTask}
                 className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
@@ -1290,48 +1306,23 @@ export function TaskDetailsDrawer({
                 <Check size={12} strokeWidth={2.5} />
                 <span>განბლოკვა</span>
               </button>
-            ) : task?.status !== TaskStatus.DONE && task?.status !== TaskStatus.CANCELLED ? (
-              <button
-                onClick={() => setIsBlockModalOpen(true)}
-                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="დავალების დაბლოკვა"
-              >
-                <Ban size={12} />
-                <span>დაბლოკვა</span>
-              </button>
-            ) : null}
+            )}
 
             <div className="flex items-center gap-1.5 ml-auto shrink-0">
-              {onEditTask && task && (
-                <button
-                  onClick={() => onEditTask(task)}
-                  className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="დავალების რედაქტირება"
-                >
-                  <Edit3 size={12} />
-                  <span>რედაქტირება</span>
-                </button>
-              )}
-
               {(isAdmin || !task?.deadlineLocked) && (
                 <button
                   onClick={() => setIsRescheduleModalOpen(true)}
                   className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="განრიგის შეცვლა"
+                  title={task?.deadline ? "დედლაინის შეცვლა" : "დედლაინის დაყენება"}
                 >
                   <Calendar size={12} />
-                  <span>განრიგის შეცვლა</span>
+                  <span>
+                    {task?.deadline
+                      ? `დედლაინი: ${formatGeorgianDateShort(task.deadline)}`
+                      : "დედლაინი"}
+                  </span>
                 </button>
               )}
-
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="px-2.5 py-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="ტასკის წაშლა"
-              >
-                <Trash2 size={12} />
-                <span>წაშლა</span>
-              </button>
             </div>
           </div>
 
@@ -1381,26 +1372,11 @@ export function TaskDetailsDrawer({
             </div>
           )}
 
-          {/* Progress Banner & Responsible Users */}
-          <div className="flex items-center justify-between gap-3 pt-1 text-xs">
-            <div className="flex-1 max-w-xs space-y-1">
-              <div className="flex items-center justify-between text-[11px] font-bold text-stone-600">
-                <span>საერთო პროგრესი</span>
-                <span className="text-emerald-600 font-extrabold">
-                  {task?.progress || 0}%
-                </span>
-              </div>
-              <div className="w-full h-2 bg-stone-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                  style={{ width: `${task?.progress || 0}%` }}
-                />
-              </div>
-            </div>
-
+          {/* Responsible Users */}
+          <div className="flex items-center justify-end gap-3 pt-1 text-xs">
             {/* Current Responsible Participants */}
             <div className="relative flex items-center gap-1.5 flex-wrap justify-end">
-              <span className="text-[10px] text-stone-400 font-semibold hidden sm:inline">
+              <span className="text-[10px] text-stone-400 font-semibold">
                 პასუხისმგებელი:
               </span>
               <div className="flex items-center -space-x-1">
@@ -1419,21 +1395,6 @@ export function TaskDetailsDrawer({
                 )}
               </div>
 
-              {task && !(task.assignments || []).some((a) => a.user.id === currentUser.id) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const currentIds = (task.assignments || []).map((a) => a.user.id);
-                    handleUpdateTaskAssignees([...currentIds, currentUser.id]);
-                  }}
-                  className="px-2 py-0.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                  title="დავალების საკუთარ თავზე მინიჭება"
-                >
-                  <UserPlus size={11} />
-                  <span>ჩემზე მინიჭება</span>
-                </button>
-              )}
-
               {task && (
                 <button
                   type="button"
@@ -1446,59 +1407,109 @@ export function TaskDetailsDrawer({
                 </button>
               )}
 
-              {showAssigneePicker && task && (
-                <div className="absolute right-0 top-full mt-1.5 z-30 w-60 bg-white border border-stone-200 rounded-2xl shadow-xl p-2.5 space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between pb-1.5 border-b border-stone-100">
-                    <span className="text-[10px] font-extrabold text-stone-500 uppercase tracking-wider">
-                      შემსრულებლების მინიჭება
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowAssigneePicker(false)}
-                      className="text-stone-400 hover:text-stone-600 cursor-pointer"
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-                  <div className="max-h-48 overflow-y-auto space-y-1">
-                    {users.map((u) => {
-                      const taskAssigneeIds = (task.assignments || []).map((a) => a.user.id);
-                      const isChecked = taskAssigneeIds.includes(u.id);
-                      return (
-                        <label
-                          key={u.id}
-                          className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-stone-50 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {
-                              const nextIds = isChecked
-                                ? taskAssigneeIds.filter((id) => id !== u.id)
-                                : [...taskAssigneeIds, u.id];
-                              handleUpdateTaskAssignees(nextIds);
-                            }}
-                            className="rounded border-stone-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
-                          />
-                          <span className="font-semibold text-stone-800 truncate flex-1">
-                            {u.name}
-                          </span>
-                          {u.id === currentUser.id && (
-                            <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">
-                              ჩემზე
+              {showAssigneePicker && task && (() => {
+                const taskAssigneeIds = (task.assignments || []).map((a) => a.user.id);
+                const selectedUsers = taskAssigneeIds
+                  .map((id) => users.find((u) => u.id === id))
+                  .filter((u): u is NonNullable<typeof u> => Boolean(u));
+                const unselectedUsers = users.filter((u) => !taskAssigneeIds.includes(u.id));
+
+                const moveOrder = (idx: number, dir: "up" | "down") => {
+                  const next = [...taskAssigneeIds];
+                  const target = dir === "up" ? idx - 1 : idx + 1;
+                  if (target < 0 || target >= next.length) return;
+                  [next[idx], next[target]] = [next[target], next[idx]];
+                  handleUpdateTaskAssignees(next);
+                };
+
+                return (
+                  <div className="absolute right-0 top-full mt-1.5 z-30 w-68 bg-white border border-stone-200 rounded-2xl shadow-xl p-2.5 space-y-2 text-xs">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-stone-100">
+                      <span className="text-[10px] font-extrabold text-stone-500 uppercase tracking-wider">
+                        შემსრულებლები და რიგითობა
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAssigneePicker(false)}
+                        className="text-stone-400 hover:text-stone-600 cursor-pointer"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+
+                    {selectedUsers.length > 0 && (
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {selectedUsers.map((u, idx) => (
+                          <div
+                            key={u.id}
+                            className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-orange-50/70 border border-orange-200/70"
+                          >
+                            <span className="w-4 h-4 rounded bg-orange-600 text-white text-[9px] font-black flex items-center justify-center shrink-0">
+                              {idx + 1}
                             </span>
-                          )}
-                        </label>
-                      );
-                    })}
+                            <span className="font-semibold text-stone-900 truncate flex-1">
+                              {u.name}
+                            </span>
+                            {selectedUsers.length > 1 && (
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={idx === 0}
+                                  onClick={() => moveOrder(idx, "up")}
+                                  className="px-1 text-[10px] text-stone-500 hover:text-stone-900 disabled:opacity-25 cursor-pointer"
+                                  title="წინ გადაწევა"
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={idx === selectedUsers.length - 1}
+                                  onClick={() => moveOrder(idx, "down")}
+                                  className="px-1 text-[10px] text-stone-500 hover:text-stone-900 disabled:opacity-25 cursor-pointer"
+                                  title="უკან გადაწევა"
+                                >
+                                  ↓
+                                </button>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateTaskAssignees(taskAssigneeIds.filter((id) => id !== u.id))
+                              }
+                              className="p-0.5 text-stone-400 hover:text-rose-600 cursor-pointer"
+                              title="ამოშლა"
+                            >
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {unselectedUsers.length > 0 && (
+                      <div className="pt-1 border-t border-stone-100 max-h-36 overflow-y-auto space-y-1">
+                        {unselectedUsers.map((u) => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => handleUpdateTaskAssignees([...taskAssigneeIds, u.id])}
+                            className="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg hover:bg-stone-50 text-left cursor-pointer"
+                          >
+                            <span className="font-medium text-stone-700 truncate">{u.name}</span>
+                            <span className="text-[10px] font-bold text-orange-600 shrink-0">+ დამატება</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         </div>
 
-        {/* Navigation Tabs: სამუშაო | დეტალები | კომენტარები | ფაილები | დღიური | აქტივობა */}
+        {/* Navigation Tabs: სამუშაო | კომენტარები | დღიური | აქტივობა */}
         <div className="relative border-b border-stone-200 bg-white shrink-0 select-none">
           <div
             ref={tabsContainerRef}
@@ -1522,35 +1533,6 @@ export function TaskDetailsDrawer({
             </button>
             <button
               role="tab"
-              data-testid="task-tab-testing"
-              aria-selected={activeTab === "testing"}
-              ref={(el) => { tabRefs.current["testing"] = el; }}
-              onClick={() => handleTabSelect("testing")}
-              className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === "testing"
-                  ? "border-orange-600 text-orange-600 font-extrabold"
-                  : "border-transparent text-stone-500 hover:text-stone-900"
-              }`}
-            >
-              <ClipboardCheck size={14} />
-              <span>ტესტირება ({task?._count?.testCases ?? 0})</span>
-            </button>
-            <button
-              role="tab"
-              aria-selected={activeTab === "details"}
-              ref={(el) => { tabRefs.current["details"] = el; }}
-              onClick={() => handleTabSelect("details")}
-              className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === "details"
-                  ? "border-orange-600 text-orange-600 font-extrabold"
-                  : "border-transparent text-stone-500 hover:text-stone-900"
-              }`}
-            >
-              <Info size={14} />
-              <span>დეტალები</span>
-            </button>
-            <button
-              role="tab"
               aria-selected={activeTab === "comments"}
               ref={(el) => { tabRefs.current["comments"] = el; }}
               onClick={() => handleTabSelect("comments")}
@@ -1562,20 +1544,6 @@ export function TaskDetailsDrawer({
             >
               <MessageSquare size={14} />
               <span>კომენტარები ({task?.comments?.length || 0})</span>
-            </button>
-            <button
-              role="tab"
-              aria-selected={activeTab === "attachments"}
-              ref={(el) => { tabRefs.current["attachments"] = el; }}
-              onClick={() => handleTabSelect("attachments")}
-              className={`py-3 px-2 flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === "attachments"
-                  ? "border-orange-600 text-orange-600 font-extrabold"
-                  : "border-transparent text-stone-500 hover:text-stone-900"
-              }`}
-            >
-              <Paperclip size={14} />
-              <span>ფაილები ({task?.attachments?.length || 0})</span>
             </button>
             <button
               role="tab"
@@ -1732,8 +1700,82 @@ export function TaskDetailsDrawer({
               </span>
             </div>
           ) : activeTab === "work" ? (
-            /* TAB 1: სამუშაო (Ordered Workflow Stages & Subtasks) */
-            <div className="space-y-6">
+            /* TAB 1: სამუშაო (Unified Workspace: Description, Stages, Subtasks & Scrollable Files/Links) */
+            <div className="space-y-5">
+              {/* Compact Inline Editable Description */}
+              <div className="p-3.5 bg-stone-50/70 rounded-2xl border border-stone-200/80 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-stone-800 uppercase tracking-wider text-[11px]">
+                    აღწერა
+                  </span>
+                  {!isEditingDesc && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingDesc(true)}
+                      className="flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:text-orange-700 cursor-pointer"
+                    >
+                      <Edit3 size={11} />
+                      <span>{task?.description ? "რედაქტირება" : "აღწერის დამატება"}</span>
+                    </button>
+                  )}
+                </div>
+                {isEditingDesc ? (
+                  <div className="space-y-2">
+                    <textarea
+                      rows={3}
+                      value={descValue}
+                      onChange={(e) => setDescValue(e.target.value)}
+                      placeholder="დავალების აღწერა..."
+                      className="w-full p-2.5 bg-white border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-stone-900 font-medium resize-none"
+                    />
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingDesc(false);
+                          setDescValue(task?.description || "");
+                        }}
+                        className="px-2.5 py-1 border border-stone-200 bg-white rounded-lg font-semibold text-stone-600 hover:bg-stone-50 cursor-pointer"
+                      >
+                        გაუქმება
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveDescription}
+                        className="px-3 py-1 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 cursor-pointer"
+                      >
+                        შენახვა
+                      </button>
+                    </div>
+                  </div>
+                ) : task?.description ? (
+                  <div className="text-stone-700 leading-relaxed whitespace-pre-wrap">
+                    {task.description}
+                  </div>
+                ) : (
+                  <div className="text-stone-400 italic text-[11px]">
+                    აღწერა მითითებული არ არის
+                  </div>
+                )}
+              </div>
+
+              {/* Unified Files & Links Section */}
+              <div className="rounded-2xl border border-stone-200/80 bg-stone-50/40 p-3.5">
+                <TaskAttachmentsSection
+                  taskId={task?.id || ""}
+                  attachments={task?.attachments || []}
+                  currentUser={currentUser}
+                  onRefresh={refreshTaskDetails}
+                  onError={setError}
+                  isUploadingFile={isUploadingFile}
+                  onUploadFile={handleFileUpload}
+                  onPreviewImage={(url: string, title?: string) => {
+                    setPreviewImageUrl(url);
+                    setPreviewImageTitle(title || null);
+                  }}
+                />
+              </div>
+
               {task?.department === Department.QA || task?.type === TaskType.QA ? (
                 /* QA Testing Checklist Mode (No workflow stages — Pass/Fail per block) */
                 (() => {
@@ -1936,56 +1978,70 @@ export function TaskDetailsDrawer({
                   </button>
                 </div>
 
-                {/* Add Stage Form Drawer */}
+                {/* Add Stage Form Drawer (Simplified for regular users) */}
                 {showAddStage && (
                   <form
                     onSubmit={handleCreateStage}
                     className="p-4 bg-orange-50/60 border border-orange-200/80 rounded-2xl space-y-3 text-xs animate-in slide-in-from-top-2"
                   >
-                    <div className="font-bold text-stone-800">
-                      ახალი სამუშაო ეტაპის დამატება
+                    <div>
+                      <div className="font-bold text-stone-900">
+                        ახალი სამუშაო ეტაპის დამატება
+                      </div>
+                      <p className="text-[11px] text-stone-500 mt-0.5">
+                        ეტაპები გამოიყენება მაშინ, როცა დავალება რიგრიგობით გადადის ერთი ადამიანიდან მეორეზე (მაგ. დიზაინი → დეველოპმენტი).
+                      </p>
                     </div>
                     <input
                       type="text"
-                      placeholder="ეტაპის სათაური (მაგ. UI/UX დიზაინი, QA ტესტირება)..."
+                      placeholder="ეტაპის სახელი (მაგ. UI/UX დიზაინი, ფუნქციონალის დაწერა)..."
                       value={newStageTitle}
                       onChange={(e) => setNewStageTitle(e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-stone-900 font-medium"
                       required
                     />
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2.5">
                       <div>
+                        <label className="text-[10px] font-bold text-stone-500 block mb-1.5">
+                          პასუხისმგებელი პირი (აირჩიეთ კლიკით)
+                        </label>
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-white border border-stone-200 rounded-xl">
+                          {users.map((u) => {
+                            const selected = newStageAssigneeIds.includes(u.id);
+                            return (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onClick={() =>
+                                  setNewStageAssigneeIds((prev) =>
+                                    selected ? prev.filter((id) => id !== u.id) : [...prev, u.id]
+                                  )
+                                }
+                                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1 border ${
+                                  selected
+                                    ? "bg-orange-600 text-white border-orange-600 shadow-2xs"
+                                    : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                                }`}
+                              >
+                                <span>{u.name}</span>
+                                {selected && <Check size={10} strokeWidth={3} />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="max-w-xs">
                         <label className="text-[10px] font-bold text-stone-500 block mb-1">
-                          დედლაინი
+                          ვადა (არასავალდებულო)
                         </label>
                         <DatePicker
                           value={newStageDeadline}
                           onChange={(val) => setNewStageDeadline(val)}
-                          placeholder="დედლაინი"
+                          placeholder="აირჩიეთ ვადა"
                           size="sm"
                         />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-stone-500 block mb-1">
-                          პასუხისმგებლები
-                        </label>
-                        <select
-                          multiple
-                          value={newStageAssigneeIds}
-                          onChange={(e) =>
-                            setNewStageAssigneeIds(
-                              Array.from(e.target.selectedOptions, (o) => o.value)
-                            )
-                          }
-                          className="w-full px-2 py-1 bg-white border border-stone-200 rounded-xl text-xs font-medium h-16"
-                        >
-                          {users.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.name}
-                            </option>
-                          ))}
-                        </select>
                       </div>
                     </div>
 
@@ -1993,14 +2049,14 @@ export function TaskDetailsDrawer({
                       <button
                         type="button"
                         onClick={() => setShowAddStage(false)}
-                        className="px-3 py-1.5 border border-stone-200 text-stone-600 rounded-lg font-semibold hover:bg-white"
+                        className="px-3 py-1.5 border border-stone-200 text-stone-600 rounded-lg font-semibold hover:bg-white cursor-pointer"
                       >
                         გაუქმება
                       </button>
                       <button
                         type="submit"
                         disabled={isSubmittingStage}
-                        className="px-4 py-1.5 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50"
+                        className="px-4 py-1.5 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50 cursor-pointer"
                       >
                         {isSubmittingStage ? "ემატება..." : "ეტაპის დამატება"}
                       </button>
@@ -2410,23 +2466,23 @@ export function TaskDetailsDrawer({
                       );
                     })}
                   </div>
-                ) : (
-                  <div className="p-4 bg-stone-50 rounded-2xl border border-dashed border-stone-200 text-center text-xs text-stone-500">
-                    სამუშაო ეტაპები არ არის შექმნილი. დაამატეთ ეტაპები (მაგ. დიზაინი,
-                    Development, QA).
-                  </div>
-                )}
+                ) : null}
               </div>
 
-              {/* Direct Subtasks Section (stageId: null) */}
+              {/* Direct Subtasks Checklist Section (stageId: null) */}
               <div className="pt-4 border-t border-stone-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>დამოუკიდებელი საბტასკები</span>
-                    <span className="text-[11px] font-bold text-stone-400">
-                      ({task?.subtasks?.length || 0})
-                    </span>
-                  </h3>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-black text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>ქვე-დავალებები (ჩეკლისტი)</span>
+                      <span className="text-[11px] font-bold text-stone-400">
+                        ({task?.subtasks?.length || 0})
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-stone-400 mt-0.5">
+                      მცირე ნაბიჯები, რომელთა მონიშვნაც შესაძლებელია შესრულებისას
+                    </p>
+                  </div>
                   {(!showAddSubtask || targetStageId !== null) && (
                     <button
                       type="button"
@@ -2435,10 +2491,10 @@ export function TaskDetailsDrawer({
                         setShowAddSubtask(true);
                         setNewSubtaskAssigneeIds([]);
                       }}
-                      className="flex items-center gap-1 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                      className="flex items-center gap-1 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-full transition-colors cursor-pointer shrink-0"
                     >
                       <Plus size={13} strokeWidth={2.5} />
-                      <span>საბტასკის დამატება</span>
+                      <span>დამატება</span>
                     </button>
                   )}
                 </div>
@@ -2548,236 +2604,6 @@ export function TaskDetailsDrawer({
             </>
           )}
         </div>
-          ) : activeTab === "testing" && task ? (
-            /* TAB: ტესტირება (Jira-style Manual Test Cases & Execution History) */
-            <TaskTestingSection
-              key={task.id}
-              taskId={task.id}
-              taskStatus={task.status}
-              attachments={task.attachments || []}
-              currentUser={currentUser}
-              onPreviewImage={(url: string, title?: string) => {
-                setPreviewImageUrl(url);
-                setPreviewImageTitle(title || null);
-              }}
-              onDataMutated={refreshTaskDetails}
-            />
-          ) : activeTab === "details" ? (
-            /* TAB 2: დეტალები (Task Description & Metadata) */
-            <div className="space-y-5 text-xs">
-              {/* Description Section */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-stone-800">აღწერა</h4>
-                  {!isEditingDesc && (
-                    <button
-                      onClick={() => setIsEditingDesc(true)}
-                      className="flex items-center gap-1 text-[11px] font-semibold text-orange-600 hover:text-orange-700 cursor-pointer"
-                    >
-                      <Edit3 size={12} />
-                      <span>რედაქტირება</span>
-                    </button>
-                  )}
-                </div>
-
-                {isEditingDesc ? (
-                  <div className="space-y-2">
-                    <textarea
-                      rows={4}
-                      value={descValue}
-                      onChange={(e) => setDescValue(e.target.value)}
-                      className="w-full p-3 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-stone-900 font-medium resize-none"
-                    />
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => {
-                          setIsEditingDesc(false);
-                          setDescValue(task?.description || "");
-                        }}
-                        className="px-3 py-1 border border-stone-200 rounded-lg font-semibold text-stone-600 hover:bg-stone-50"
-                      >
-                        გაუქმება
-                      </button>
-                      <button
-                        onClick={handleSaveDescription}
-                        className="px-3 py-1 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700"
-                      >
-                        შენახვა
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-stone-50 rounded-xl border border-stone-200/80 text-stone-700 leading-relaxed min-h-[60px] whitespace-pre-wrap">
-                    {task?.description || "აღწერა არ არის მითითებული."}
-                  </div>
-                )}
-              </div>
-
-              {/* Metadata Grid */}
-              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-stone-200">
-                <div className="col-span-2 p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-2">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
-                      პასუხისმგებელი შემსრულებლები
-                    </span>
-                    {task && !(task.assignments || []).some((a) => a.user.id === currentUser.id) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const currentIds = (task.assignments || []).map((a) => a.user.id);
-                          handleUpdateTaskAssignees([...currentIds, currentUser.id]);
-                        }}
-                        className="px-2 py-0.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                      >
-                        <UserPlus size={11} />
-                        <span>ჩემზე მინიჭება</span>
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                    {users.map((u) => {
-                      const taskAssigneeIds = (task?.assignments || []).map((a) => a.user.id);
-                      const isChecked = taskAssigneeIds.includes(u.id);
-                      return (
-                        <label
-                          key={u.id}
-                          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
-                            isChecked
-                              ? "bg-orange-50/70 border-orange-200 text-stone-900"
-                              : "bg-white border-stone-200/80 text-stone-700 hover:bg-stone-50"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {
-                              const nextIds = isChecked
-                                ? taskAssigneeIds.filter((id) => id !== u.id)
-                                : [...taskAssigneeIds, u.id];
-                              handleUpdateTaskAssignees(nextIds);
-                            }}
-                            className="rounded border-stone-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
-                          />
-                          <span className="font-semibold truncate flex-1">{u.name}</span>
-                          {u.id === currentUser.id && (
-                            <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full shrink-0">
-                              ჩემზე
-                            </span>
-                          )}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">
-                    პროექტი
-                  </span>
-                  {projects && projects.length > 0 ? (
-                    <select
-                      value={task?.projectId}
-                      onChange={(e) => handleUpdateProject(e.target.value)}
-                      className="w-full text-xs font-bold text-stone-900 bg-white border border-stone-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                    >
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="font-extrabold text-stone-900 block">
-                      {task?.project.name}
-                    </span>
-                  )}
-                </div>
-
-                <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">
-                    გუნდი / მიმართულება
-                  </span>
-                  <select
-                    value={task?.department || "DEVELOPMENT"}
-                    onChange={(e) => handleUpdateDepartment(e.target.value as Department)}
-                    className="w-full text-xs font-bold text-stone-900 bg-white border border-stone-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
-                  >
-                    <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
-                    <option value="CONTENT">✍️ კონტენტი</option>
-                    <option value="QA">🛡️ ხარისხის კონტროლი (QA)</option>
-                  </select>
-                </div>
-
-                <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">
-                    პრიორიტეტი
-                  </span>
-                  <span className="font-extrabold text-stone-900 block">
-                    {task?.priority}
-                  </span>
-                </div>
-
-                <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">
-                    დაწყების თარიღი
-                  </span>
-                  <span className="font-bold text-stone-700 block">
-                    {formatGeorgianDate(task?.startDate)}
-                  </span>
-                </div>
-
-                <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-stone-400 flex items-center justify-between uppercase tracking-wider">
-                    <span className="flex items-center gap-1">
-                      <span>დედლაინი</span>
-                      {task?.deadlineLocked && <Lock size={10} />}
-                    </span>
-                    {task?.deadlineLocked && (
-                      <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
-                        {isAdmin ? "ადმინის მართვა" : "დაბლოკილი"}
-                      </span>
-                    )}
-                  </span>
-                  <span className="font-bold text-stone-700 block">
-                    {formatGeorgianDate(task?.deadline)}
-                  </span>
-                </div>
-
-                <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">
-                    შემქმნელი
-                  </span>
-                  <span className="font-bold text-stone-800 block">
-                    {task?.creator.name}
-                  </span>
-                </div>
-
-                <div className="p-3 bg-stone-50/60 rounded-xl border border-stone-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider">
-                    შექმნის დრო
-                  </span>
-                  <span className="font-medium text-stone-600 block">
-                    {formatGeorgianDate(task?.createdAt)}
-                  </span>
-                </div>
-
-                {(isAdmin || !task?.deadlineLocked) && (
-                  <div className="col-span-2 pt-2">
-                    <button
-                      onClick={() => setIsRescheduleModalOpen(true)}
-                      className="w-full py-2.5 px-3 bg-stone-100 hover:bg-stone-200/80 text-stone-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer border border-stone-200 shadow-2xs"
-                    >
-                      <Calendar size={14} className="text-stone-600" />
-                      <span>
-                        {isAdmin
-                          ? "განრიგისა და დედლაინის შეცვლა (Admin)"
-                          : "განრიგისა და დედლაინის შეცვლა"}
-                      </span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
           ) : activeTab === "comments" ? (
             /* TAB: კომენტარები (Modular Component) */
             <TaskCommentsSection
@@ -2787,21 +2613,6 @@ export function TaskDetailsDrawer({
               users={users}
               onRefresh={refreshTaskDetails}
               onError={setError}
-            />
-          ) : activeTab === "attachments" ? (
-            /* TAB: ფაილები & ბმულები (Modular Component) */
-            <TaskAttachmentsSection
-              taskId={task?.id || ""}
-              attachments={task?.attachments || []}
-              currentUser={currentUser}
-              onRefresh={refreshTaskDetails}
-              onError={setError}
-              isUploadingFile={isUploadingFile}
-              onUploadFile={handleFileUpload}
-              onPreviewImage={(url: string, title?: string) => {
-                setPreviewImageUrl(url);
-                setPreviewImageTitle(title || null);
-              }}
             />
           ) : activeTab === "daily_updates" ? (
             /* TAB: დღიური ჩანაწერები (Modular Component) */

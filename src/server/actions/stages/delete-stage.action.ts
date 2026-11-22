@@ -15,17 +15,10 @@ export async function deleteStageAction(stageId: string) {
   }
 
   const allStages = existing.task.stages;
+  const remainingStages = allStages.filter((s: (typeof allStages)[number]) => s.id !== stageId);
 
-  // Founder Decision 1: Do not allow deletion of the only remaining workflow stage
-  if (allStages.length <= 1) {
-    throw new ValidationError(
-      'დავალების ერთადერთი სამუშაო ეტაპის წაშლა დაუშვებელია. ეტაპებზე დაფუძნებული დავალება არ შეიძლება დარჩეს ეტაპის გარეშე.'
-    );
-  }
-
-  // Founder Decision 1 & 2: If deleting an active stage, verify valid active successor and assignee
-  if (existing.isActive) {
-    const remainingStages = allStages.filter((s: (typeof allStages)[number]) => s.id !== stageId);
+  // If deleting an active stage when other stages remain, verify valid active successor and assignee
+  if (existing.isActive && remainingStages.length > 0) {
     const nextActiveStage = remainingStages.find((s: (typeof allStages)[number]) => !s.isCompleted);
 
     if (!nextActiveStage) {

@@ -614,11 +614,14 @@ export function OverviewDashboard({
                         </button>
                       )}
                     </div>
-                    {act.reason && (
-                      <div className="text-[9.5px] text-stone-500 mt-0.5 italic bg-white/70 p-1 rounded">
-                        მიზეზი: {act.reason}
-                      </div>
-                    )}
+                    {act.reason &&
+                      act.reason.trim() !== formatAuditActionGeorgian(act.action).trim() && (
+                        <div className="text-[9.5px] text-stone-500 mt-0.5 italic bg-white/70 p-1 rounded">
+                          {["WORK_PAUSED", "STATUS_CHANGED", "DEADLINE_CHANGED", "SCHEDULE_CHANGED", "TASK_DELETED"].includes(act.action)
+                            ? `მიზეზი: ${act.reason}`
+                            : act.reason}
+                        </div>
+                      )}
                   </div>
                 </div>
               ))

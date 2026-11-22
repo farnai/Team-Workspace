@@ -702,7 +702,7 @@ export function VerticalTimeline({
                                 {activeResponsibles &&
                                   activeResponsibles.length > 0 && (
                                     <div className="flex -space-x-1">
-                                      {activeResponsibles.slice(0, 2).map((u) => (
+                                      {activeResponsibles.map((u) => (
                                         <div
                                           key={u.id}
                                           className="w-4 h-4 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[7px] font-bold text-stone-700"
@@ -783,7 +783,7 @@ export function VerticalTimeline({
                               {activeResponsibles &&
                                 activeResponsibles.length > 0 && (
                                   <div className="flex -space-x-1 overflow-hidden">
-                                    {activeResponsibles.slice(0, 2).map((u) => (
+                                    {activeResponsibles.map((u) => (
                                       <div
                                         key={u.id}
                                         className="w-4 h-4 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[7px] font-bold text-stone-700 shrink-0"

@@ -119,9 +119,20 @@ export function TaskActivitySection({ auditEvents }: TaskActivitySectionProps) {
                   !(
                     event.action === "TEST_RUN_RECORDED" &&
                     event.newValues?.status === "PASSED"
-                  ) && (
+                  ) &&
+                  event.reason.trim() !==
+                    formatAuditAction(
+                      event.action,
+                      event.entityType,
+                      event.reason,
+                      event.newValues ?? null
+                    ).trim() && (
                     <div className="text-[11px] text-stone-600 bg-white/80 p-1.5 rounded-lg border border-stone-100 italic">
-                      მიზეზი: {event.reason}
+                      {["WORK_PAUSED", "STATUS_CHANGED", "DEADLINE_CHANGED", "SCHEDULE_CHANGED", "TASK_DELETED", "TEST_RUN_RECORDED"].includes(
+                        event.action
+                      )
+                        ? `მიზეზი: ${event.reason}`
+                        : event.reason}
                     </div>
                   )}
               </div>

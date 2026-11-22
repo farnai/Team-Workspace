@@ -154,7 +154,7 @@ export function TaskAttachmentsSection({
           </h4>
         </div>
 
-        {/* Upload Drag & Drop Zone */}
+        {/* Compact Upload Drag & Drop Bar */}
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -169,10 +169,10 @@ export function TaskAttachmentsSection({
               onUploadFile(droppedFiles[0]);
             }
           }}
-          className={`p-5 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center gap-2 cursor-pointer ${
+          className={`px-3 py-2 rounded-xl border border-dashed transition-all flex items-center justify-between gap-2 cursor-pointer ${
             isDragging
               ? "border-orange-500 bg-orange-50/80"
-              : "border-stone-200 hover:border-orange-400 bg-stone-50/60"
+              : "border-stone-300 hover:border-orange-400 bg-white"
           }`}
           onClick={() => {
             const el = document.getElementById("task-file-input");
@@ -189,21 +189,21 @@ export function TaskAttachmentsSection({
               e.target.value = "";
             }}
           />
-          <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
-            {isUploadingFile ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <UploadCloud size={18} />
-            )}
-          </div>
-          <div>
-            <div className="font-bold text-stone-800">
-              {isUploadingFile ? "იტვირთება..." : "დააჭირეთ ფაილის ასარჩევად ან ჩააგდეთ აქ"}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+              {isUploadingFile ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <UploadCloud size={14} />
+              )}
             </div>
-            <div className="text-[10px] text-stone-400 mt-0.5">
-              PNG, JPG, WebP, PDF, TXT, DOCX • Ctrl+V სქრინშოტის ჩასასმელად (მაქს. 25MB)
-            </div>
+            <span className="font-bold text-stone-700 text-[11px] truncate">
+              {isUploadingFile ? "იტვირთება..." : "ფაილის ატვირთვა / ჩაგდება"}
+            </span>
           </div>
+          <span className="text-[10px] text-stone-400 shrink-0 hidden sm:inline">
+            Ctrl+V სქრინშოტი • მაქს. 25MB
+          </span>
         </div>
 
         {/* Uploaded Files List */}
@@ -288,14 +288,10 @@ export function TaskAttachmentsSection({
         )}
       </div>
 
-      {/* Section 2: გარე ბმულები */}
+      {/* Section 2: Links */}
       <div className="space-y-3 pt-3 border-t border-stone-200">
-        <div className="flex items-center justify-between">
-          <h4 className="font-extrabold text-stone-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
-            <Globe size={13} className="text-orange-600" />
-            <span>გარე ბმულები (Figma, GitHub, Docs) ({links.length})</span>
-          </h4>
-          {!showAddLink && (
+        {!showAddLink && (
+          <div className="flex items-center justify-end">
             <button
               onClick={() => setShowAddLink(true)}
               className="flex items-center gap-1 px-2.5 py-1 bg-orange-600 text-white rounded-lg font-bold text-[11px] hover:bg-orange-700 transition-colors cursor-pointer shadow-2xs"
@@ -303,8 +299,8 @@ export function TaskAttachmentsSection({
               <Plus size={12} />
               <span>ბმულის დამატება</span>
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Add Link Form */}
         {showAddLink && (

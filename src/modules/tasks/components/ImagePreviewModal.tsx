@@ -25,7 +25,7 @@ export function ImagePreviewModal({
       }}
     >
       <div
-        className="bg-white rounded-2xl max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-stone-200 animate-in zoom-in-95 duration-150"
+        className="bg-white max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-stone-200 animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-3 border-b border-stone-200 flex items-center justify-between gap-4 bg-stone-50">
@@ -59,7 +59,7 @@ export function ImagePreviewModal({
           <img
             src={imageUrl}
             alt={imageTitle || "Preview"}
-            className="max-h-[80vh] max-w-full object-contain rounded-lg"
+            className="max-h-[80vh] max-w-full object-contain"
           />
         </div>
       </div>

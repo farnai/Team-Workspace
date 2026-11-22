@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   X,
   Lock,
@@ -209,6 +209,7 @@ function TaskModalForm({
   // 4. Independent Links & Files
   const [linkUrls, setLinkUrls] = useState<string[]>([""]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
 
   // 5. Description
   const [description, setDescription] = useState(() =>
@@ -976,36 +977,53 @@ function TaskModalForm({
               </div>
             </label>
 
-            {/* List of Selected Files */}
+            {/* Visual Preview of Selected Images & Files */}
             {selectedFiles.length > 0 && (
-              <div className="space-y-1.5">
-                {selectedFiles.map((file, idx) => (
-                  <div
-                    key={idx}
-                    className="p-2 bg-white rounded-xl border border-stone-200 flex items-center justify-between text-xs"
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      {file.type.startsWith("image/") ? (
-                        <ImageIcon size={13} className="text-orange-600 shrink-0" />
-                      ) : (
-                        <Paperclip size={12} className="text-stone-400 shrink-0" />
-                      )}
-                      <span className="font-semibold text-stone-800 truncate">
-                        {file.name}
-                      </span>
-                      <span className="text-[10px] text-stone-400 shrink-0">
-                        ({Math.round(file.size / 1024)} KB)
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFile(idx)}
-                      className="p-1 text-stone-400 hover:text-rose-600 rounded cursor-pointer"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+              <div className="space-y-2">
+                {selectedFiles.some((f) => f.type.startsWith("image/")) && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {selectedFiles.map((file, idx) =>
+                      file.type.startsWith("image/") ? (
+                        <SelectedImageThumb
+                          key={`${file.name}-${file.size}-${idx}`}
+                          file={file}
+                          onPreview={(url, name) => setPreviewImage({ url, name })}
+                          onRemove={() => handleRemoveFile(idx)}
+                        />
+                      ) : null
+                    )}
                   </div>
-                ))}
+                )}
+
+                {selectedFiles.some((f) => !f.type.startsWith("image/")) && (
+                  <div className="space-y-1.5">
+                    {selectedFiles.map((file, idx) =>
+                      !file.type.startsWith("image/") ? (
+                        <div
+                          key={`${file.name}-${file.size}-${idx}`}
+                          className="p-2 bg-white rounded-xl border border-stone-200 flex items-center justify-between text-xs"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Paperclip size={12} className="text-stone-400 shrink-0" />
+                            <span className="font-semibold text-stone-800 truncate">
+                              {file.name}
+                            </span>
+                            <span className="text-[10px] text-stone-400 shrink-0">
+                              ({Math.round(file.size / 1024)} KB)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile(idx)}
+                            className="p-1 text-stone-400 hover:text-rose-600 rounded cursor-pointer"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ) : null
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1309,6 +1327,102 @@ function TaskModalForm({
           </button>
         </div>
       </form>
+
+      {/* Lightbox Image Preview Modal */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[70] bg-stone-950/80 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-white rounded-2xl overflow-hidden shadow-2xl border border-stone-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-2.5 border-b border-stone-100 flex items-center justify-between gap-3 bg-stone-50">
+              <span className="text-xs font-bold text-stone-800 truncate">
+                {previewImage.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="p-1 text-stone-400 hover:text-stone-700 rounded-full hover:bg-stone-200/60 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-2 bg-stone-900/5 flex items-center justify-center max-h-[80vh] overflow-auto">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewImage.url}
+                alt={previewImage.name}
+                className="max-w-full max-h-[75vh] object-contain rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SelectedImageThumb({
+  file,
+  onPreview,
+  onRemove,
+}: {
+  file: File;
+  onPreview: (url: string, name: string) => void;
+  onRemove: () => void;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (active && typeof reader.result === "string") {
+        setUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+    return () => {
+      active = false;
+    };
+  }, [file]);
+
+  return (
+    <div className="relative group bg-white rounded-xl border border-stone-200 overflow-hidden shadow-2xs">
+      {url ? (
+        <button
+          type="button"
+          onClick={() => onPreview(url, file.name)}
+          className="block w-full h-24 bg-stone-100 cursor-zoom-in overflow-hidden"
+          title="სურათის გადიდება"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={file.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+          />
+        </button>
+      ) : (
+        <div className="w-full h-24 bg-stone-100 flex items-center justify-center">
+          <ImageIcon size={20} className="text-stone-400" />
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="absolute top-1.5 right-1.5 p-1 bg-white/90 hover:bg-rose-50 text-stone-500 hover:text-rose-600 rounded-lg border border-stone-200 shadow-xs cursor-pointer transition-colors"
+        title="წაშლა"
+      >
+        <Trash2 size={12} />
+      </button>
+      <div className="px-2 py-1.5 border-t border-stone-100 flex items-center justify-between gap-1 text-[10.5px]">
+        <span className="font-semibold text-stone-700 truncate">{file.name}</span>
+        <span className="text-stone-400 shrink-0">{Math.round(file.size / 1024)} KB</span>
+      </div>
     </div>
   );
 }

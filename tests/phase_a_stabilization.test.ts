@@ -32,17 +32,10 @@ async function deleteStageWithPolicy(stageId: string) {
   }
 
   const allStages = existing.task.stages;
+  const remainingStages = allStages.filter((s) => s.id !== stageId);
 
-  // Founder Decision 1: Do not allow deletion of the only remaining workflow stage
-  if (allStages.length <= 1) {
-    throw new Error(
-      "დავალების ერთადერთი სამუშაო ეტაპის წაშლა დაუშვებელია. ეტაპებზე დაფუძნებული დავალება არ შეიძლება დარჩეს ეტაპის გარეშე."
-    );
-  }
-
-  // Founder Decision 1 & 2: If deleting an active stage, verify valid active successor and assignee
-  if (existing.isActive) {
-    const remainingStages = allStages.filter((s) => s.id !== stageId);
+  // If deleting an active stage when other stages remain, verify valid active successor and assignee
+  if (existing.isActive && remainingStages.length > 0) {
     const nextActiveStage = remainingStages.find((s) => !s.isCompleted);
 
     // Stage deletion must NEVER imply completion
@@ -198,18 +191,10 @@ test("Phase A: Stabilization & Reliability Verification", async (t) => {
       include: { stages: true },
     });
 
-    await assert.rejects(
-      async () => {
-        await deleteStageWithPolicy(task.stages[0].id);
-      },
-      (err: Error) => {
-        assert.ok(err.message.includes("დავალების ერთადერთი სამუშაო ეტაპის წაშლა დაუშვებელია"));
-        return true;
-      }
-    );
+    await deleteStageWithPolicy(task.stages[0].id);
 
     const reloaded = await prisma.workflowStage.findMany({ where: { taskId: task.id } });
-    assert.equal(reloaded.length, 1, "Only stage must not be deleted");
+    assert.equal(reloaded.length, 0, "Only stage can be deleted so task returns to stage-less mode");
   });
 
   // Decision 1: Test deletion of active stage when next incomplete stage has NO assignee
