@@ -682,9 +682,6 @@ export function VerticalTimeline({
                               }`}
                             >
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                <span className="text-[8px] font-bold px-1 py-0.2 rounded bg-stone-200/80 text-stone-600 uppercase shrink-0">
-                                  გაგრძელება
-                                </span>
                                 <span
                                   className={`text-[8px] font-black px-1.5 py-0.2 rounded border uppercase tracking-wider shrink-0 ${typeBadge.class}`}
                                 >

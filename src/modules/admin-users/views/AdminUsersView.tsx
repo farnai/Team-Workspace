@@ -6,7 +6,6 @@ import {
   Users,
   UserPlus,
   Shield,
-  Key,
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -16,9 +15,11 @@ import {
   PenTool,
   ShieldCheck,
   Trash2,
+  Edit3,
+  UserX,
+  UserCheck,
 } from "lucide-react";
 import { Department } from "@prisma/client";
-import { DepartmentBadge } from "@/lib/departments";
 
 export interface ManagedUser {
   id: string;
@@ -43,8 +44,17 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
 
   // Modals state
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
-  const [selectedUserForReset, setSelectedUserForReset] = useState<ManagedUser | null>(null);
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<ManagedUser | null>(null);
+
+  // Edit User Form State
+  const [editUserName, setEditUserName] = useState("");
+  const [editUserEmail, setEditUserEmail] = useState("");
+  const [editUserPassword, setEditUserPassword] = useState("");
+  const [editUserRole, setEditUserRole] = useState<"USER" | "ADMIN">("USER");
+  const [editUserDepartment, setEditUserDepartment] = useState<Department>(Department.DEVELOPMENT);
+  const [isSubmittingEditUser, setIsSubmittingEditUser] = useState(false);
+  const [editFormError, setEditFormError] = useState<string | null>(null);
 
   // Add User Form State
   const [newUserName, setNewUserName] = useState("");
@@ -54,11 +64,6 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
   const [newUserDepartment, setNewUserDepartment] = useState<Department>(Department.DEVELOPMENT);
   const [isSubmittingNewUser, setIsSubmittingNewUser] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  // Reset Password Form State
-  const [newPassword, setNewPassword] = useState("");
-  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
-  const [resetError, setResetError] = useState<string | null>(null);
 
   const refreshUsers = useCallback(async () => {
     try {
@@ -241,38 +246,81 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
     }
   };
 
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedUserForReset) return;
-    setResetError(null);
+  const openEditUserModal = (user: ManagedUser) => {
+    setSelectedUserForEdit(user);
+    setEditUserName(user.name);
+    setEditUserEmail(user.email);
+    setEditUserPassword("");
+    setEditUserRole(user.role);
+    setEditUserDepartment(user.department || Department.DEVELOPMENT);
+    setEditFormError(null);
+    setIsEditUserOpen(true);
+  };
 
-    if (!newPassword || newPassword.length < 6) {
-      setResetError("პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო");
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserForEdit) return;
+    setEditFormError(null);
+
+    if (!editUserName.trim() || editUserName.trim().length < 2) {
+      setEditFormError("სახელი უნდა შედგებოდეს მინიმუმ 2 სიმბოლოსგან");
+      return;
+    }
+    if (!editUserEmail.trim()) {
+      setEditFormError("ელ.ფოსტა სავალდებულოა");
+      return;
+    }
+    if (editUserPassword && editUserPassword.length < 6) {
+      setEditFormError("პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო");
       return;
     }
 
     try {
-      setIsSubmittingPassword(true);
-      const res = await fetch(`/api/admin/users/${selectedUserForReset.id}`, {
+      setIsSubmittingEditUser(true);
+      const payload: Record<string, unknown> = {
+        name: editUserName.trim(),
+        email: editUserEmail.trim(),
+        department: editUserDepartment,
+      };
+      if (selectedUserForEdit.id !== currentAdminId) {
+        payload.role = editUserRole;
+      }
+      if (editUserPassword) {
+        payload.password = editUserPassword;
+      }
+
+      const res = await fetch(`/api/admin/users/${selectedUserForEdit.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: newPassword }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "პაროლის შეცვლა ვერ მოხერხდა");
+        throw new Error(data.error || "მომხმარებლის განახლება ვერ მოხერხდა");
       }
 
-      setIsResetPasswordOpen(false);
-      setSelectedUserForReset(null);
-      setNewPassword("");
-      setSuccessMessage("პაროლი წარმატებით შეიცვალა");
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === selectedUserForEdit.id
+            ? {
+                ...u,
+                name: data.user.name,
+                email: data.user.email,
+                role: data.user.role,
+                department: data.user.department,
+              }
+            : u
+        )
+      );
+      setIsEditUserOpen(false);
+      setSelectedUserForEdit(null);
+      setSuccessMessage(`მომხმარებლის (${data.user.name}) მონაცემები წარმატებით განახლდა`);
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err: unknown) {
-      setResetError(err instanceof Error ? err.message : "შეცდომა პაროლის შეცვლისას");
+      setEditFormError(err instanceof Error ? err.message : "შეცდომა განახლებისას");
     } finally {
-      setIsSubmittingPassword(false);
+      setIsSubmittingEditUser(false);
     }
   };
 
@@ -365,13 +413,13 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
             <table className="w-full text-left text-xs">
               <thead className="bg-stone-50/80 border-b border-stone-200/80 text-[11px] font-bold text-stone-500 uppercase tracking-wider">
                 <tr>
-                  <th className="py-3 px-5">მომხმარებელი</th>
-                  <th className="py-3 px-5">ელ.ფოსტა</th>
-                  <th className="py-3 px-5">გუნდი</th>
-                  <th className="py-3 px-5">როლი</th>
-                  <th className="py-3 px-5">სტატუსი</th>
-                  <th className="py-3 px-5">რეგისტრაციის თარიღი</th>
-                  <th className="py-3 px-5 text-right">მოქმედებები</th>
+                  <th className="py-3 px-3">მომხმარებელი</th>
+                  <th className="py-3 px-3">ელ.ფოსტა</th>
+                  <th className="py-3 px-3">გუნდი</th>
+                  <th className="py-3 px-3">როლი</th>
+                  <th className="py-3 px-3">სტატუსი</th>
+                  <th className="py-3 px-3 whitespace-nowrap">რეგისტრაცია</th>
+                  <th className="py-3 px-3 text-right">მოქმედებები</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -383,15 +431,15 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                     }`}
                   >
                     {/* User info & avatar */}
-                    <td className="py-3.5 px-5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-orange-100 flex items-center justify-center text-orange-700 font-bold text-xs ring-1 ring-stone-200">
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full overflow-hidden bg-orange-100 flex items-center justify-center text-orange-700 font-bold text-xs ring-1 ring-stone-200 shrink-0">
                           {user.avatarUrl ? (
                             <Image
                               src={user.avatarUrl}
                               alt={user.name}
-                              width={32}
-                              height={32}
+                              width={28}
+                              height={28}
                               className="w-full h-full object-cover"
                               unoptimized
                             />
@@ -399,11 +447,11 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                             user.name.charAt(0)
                           )}
                         </div>
-                        <div>
-                          <div className="font-bold text-stone-900 flex items-center gap-1.5">
-                            <span>{user.name}</span>
+                        <div className="min-w-0">
+                          <div className="font-bold text-stone-900 flex items-center gap-1 truncate">
+                            <span className="truncate">{user.name}</span>
                             {user.id === currentAdminId && (
-                              <span className="text-[10px] text-stone-400 font-normal">
+                              <span className="text-[10px] text-stone-400 font-normal shrink-0">
                                 (თქვენ)
                               </span>
                             )}
@@ -413,27 +461,54 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                     </td>
 
                     {/* Email */}
-                    <td className="py-3.5 px-5 text-stone-600 font-medium">
+                    <td className="py-3 px-3 text-stone-600 font-medium truncate max-w-[190px]" title={user.email}>
                       {user.email}
                     </td>
 
-                    {/* Department */}
-                    <td className="py-3.5 px-5">
-                      <select
-                        value={user.department || "DEVELOPMENT"}
-                        onChange={(e) =>
-                          handleChangeDepartment(user, e.target.value as Department)
-                        }
-                        className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-2 py-1 font-semibold text-stone-700 cursor-pointer shadow-2xs"
-                      >
-                        <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
-                        <option value="CONTENT">✍️ კონტენტი</option>
-                        <option value="QA">🛡️ ხარისხის კონტროლი</option>
-                      </select>
+                    {/* Department (Icon Selector) */}
+                    <td className="py-3 px-3">
+                      <div className="inline-flex items-center gap-1 bg-stone-100/80 p-0.5 rounded-lg border border-stone-200/80">
+                        <button
+                          type="button"
+                          onClick={() => handleChangeDepartment(user, Department.DEVELOPMENT)}
+                          title="დეველოპმენტი"
+                          className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                            (user.department || Department.DEVELOPMENT) === Department.DEVELOPMENT
+                              ? "bg-blue-600 text-white shadow-2xs"
+                              : "text-stone-400 hover:text-blue-600 hover:bg-white"
+                          }`}
+                        >
+                          <Code2 size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleChangeDepartment(user, Department.CONTENT)}
+                          title="კონტენტი"
+                          className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                            user.department === Department.CONTENT
+                              ? "bg-purple-600 text-white shadow-2xs"
+                              : "text-stone-400 hover:text-purple-600 hover:bg-white"
+                          }`}
+                        >
+                          <PenTool size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleChangeDepartment(user, Department.QA)}
+                          title="ხარისხის კონტროლი (QA)"
+                          className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                            user.department === Department.QA
+                              ? "bg-emerald-600 text-white shadow-2xs"
+                              : "text-stone-400 hover:text-emerald-600 hover:bg-white"
+                          }`}
+                        >
+                          <ShieldCheck size={13} />
+                        </button>
+                      </div>
                     </td>
 
                     {/* Role */}
-                    <td className="py-3.5 px-5">
+                    <td className="py-3 px-3">
                       <select
                         value={user.role}
                         onChange={(e) =>
@@ -442,28 +517,28 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                         disabled={user.id === currentAdminId}
                         className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-2 py-1 font-semibold text-stone-700 cursor-pointer disabled:opacity-60"
                       >
-                        <option value="USER">USER (თანამშრომელი)</option>
-                        <option value="ADMIN">ADMIN (ადმინისტრატორი)</option>
+                        <option value="USER">USER</option>
+                        <option value="ADMIN">ADMIN</option>
                       </select>
                     </td>
 
                     {/* Status badge */}
-                    <td className="py-3.5 px-5">
+                    <td className="py-3 px-3 whitespace-nowrap">
                       {user.isActive ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                          <CheckCircle size={12} className="text-emerald-600" />
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                          <CheckCircle size={11} className="text-emerald-600" />
                           <span>აქტიური</span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/60">
-                          <XCircle size={12} className="text-rose-600" />
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/60">
+                          <XCircle size={11} className="text-rose-600" />
                           <span>დეაქტივირებული</span>
                         </span>
                       )}
                     </td>
 
                     {/* Created Date */}
-                    <td className="py-3.5 px-5 text-stone-500">
+                    <td className="py-3 px-3 text-stone-500 whitespace-nowrap">
                       {new Date(user.createdAt).toLocaleDateString("ka-GE", {
                         year: "numeric",
                         month: "short",
@@ -472,44 +547,44 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3.5 px-5 text-right space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedUserForReset(user);
-                          setNewPassword("");
-                          setResetError(null);
-                          setIsResetPasswordOpen(true);
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg font-medium transition-colors cursor-pointer"
-                        title="პაროლის შეცვლა"
-                      >
-                        <Key size={13} />
-                        <span>პაროლი</span>
-                      </button>
+                    <td className="py-3 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                        <button
+                          onClick={() => openEditUserModal(user)}
+                          className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/60 rounded-lg transition-colors cursor-pointer"
+                          title="რედაქტირება"
+                        >
+                          <Edit3 size={14} />
+                        </button>
 
-                      {user.id !== currentAdminId && (
-                        <>
-                          <button
-                            onClick={() => handleToggleStatus(user)}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
-                              user.isActive
-                                ? "bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/50"
-                                : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/50"
-                            }`}
-                          >
-                            {user.isActive ? "დეაქტივაცია" : "გააქტიურება"}
-                          </button>
+                        {user.id !== currentAdminId && (
+                          <>
+                            <button
+                              onClick={() => handleToggleStatus(user)}
+                              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                user.isActive
+                                  ? "bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/50"
+                                  : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/50"
+                              }`}
+                              title={
+                                user.isActive
+                                  ? "მომხმარებლის დეაქტივაცია (აქტიური დავალებებიდან ამოშლა)"
+                                  : "მომხმარებლის გააქტიურება"
+                              }
+                            >
+                              {user.isActive ? <UserX size={14} /> : <UserCheck size={14} />}
+                            </button>
 
-                          <button
-                            onClick={() => handleDeleteUser(user)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/50 rounded-lg font-semibold transition-colors cursor-pointer"
-                            title="მომხმარებლის წაშლა"
-                          >
-                            <Trash2 size={12} />
-                            <span>წაშლა</span>
-                          </button>
-                        </>
-                      )}
+                            <button
+                              onClick={() => handleDeleteUser(user)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border border-rose-200/50 rounded-lg transition-colors cursor-pointer"
+                              title="მომხმარებლის წაშლა"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -697,75 +772,175 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
         </div>
       )}
 
-      {/* Reset Password Modal */}
-      {isResetPasswordOpen && selectedUserForReset && (
+      {/* Edit User Modal */}
+      {isEditUserOpen && selectedUserForEdit && (
         <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
-                  <Key size={16} />
+                  <Edit3 size={16} />
                 </div>
                 <h3 className="text-sm font-bold text-stone-900">
-                  პაროლის შეცვლა
+                  მომხმარებლის რედაქტირება
                 </h3>
               </div>
               <button
-                onClick={() => setIsResetPasswordOpen(false)}
-                className="text-stone-400 hover:text-stone-600 p-1 rounded-md"
+                onClick={() => {
+                  setIsEditUserOpen(false);
+                  setSelectedUserForEdit(null);
+                }}
+                className="text-stone-400 hover:text-stone-600 p-1 rounded-md cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleResetPassword} className="p-6 space-y-4">
-              <div className="text-xs text-stone-600">
-                ახალი პაროლი მომხმარებლისთვის:{" "}
-                <span className="font-bold text-stone-900">
-                  {selectedUserForReset.name}
-                </span>{" "}
-                ({selectedUserForReset.email})
-              </div>
-
-              {resetError && (
+            <form onSubmit={handleEditUser} className="p-6 space-y-4">
+              {editFormError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
                   <AlertCircle size={14} className="shrink-0" />
-                  <span>{resetError}</span>
+                  <span>{editFormError}</span>
                 </div>
               )}
 
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1">
-                  ახალი პაროლი * (მინ. 6 სიმბოლო)
+                  სახელი და გვარი *
+                </label>
+                <input
+                  type="text"
+                  required
+                  minLength={2}
+                  value={editUserName}
+                  onChange={(e) => setEditUserName(e.target.value)}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  ელ.ფოსტა *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={editUserEmail}
+                  onChange={(e) => setEditUserEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  ახალი პაროლი (არასავალდებულო, მინ. 6 სიმბოლო)
                 </label>
                 <input
                   type="password"
-                  required
                   minLength={6}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="••••••••"
+                  value={editUserPassword}
+                  onChange={(e) => setEditUserPassword(e.target.value)}
+                  placeholder="დატოვეთ ცარიელი თუ არ ცვლით"
                   className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  გუნდი / მიმართულება *
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditUserDepartment(Department.DEVELOPMENT)}
+                    className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      editUserDepartment === Department.DEVELOPMENT
+                        ? "bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-500/20"
+                        : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+                    }`}
+                  >
+                    <Code2 size={13} className={editUserDepartment === Department.DEVELOPMENT ? "text-white" : "text-blue-600"} />
+                    <span>დეველოპმენტი</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditUserDepartment(Department.CONTENT)}
+                    className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      editUserDepartment === Department.CONTENT
+                        ? "bg-purple-600 text-white border-purple-600 shadow-xs ring-2 ring-purple-500/20"
+                        : "bg-white text-stone-700 border-stone-200 hover:bg-purple-50/50"
+                    }`}
+                  >
+                    <PenTool size={13} className={editUserDepartment === Department.CONTENT ? "text-white" : "text-purple-600"} />
+                    <span>კონტენტი</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditUserDepartment(Department.QA)}
+                    className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      editUserDepartment === Department.QA
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20"
+                        : "bg-white text-stone-700 border-stone-200 hover:bg-emerald-50/50"
+                    }`}
+                  >
+                    <ShieldCheck size={13} className={editUserDepartment === Department.QA ? "text-white" : "text-emerald-600"} />
+                    <span>QA</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  სისტემური როლი
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    disabled={selectedUserForEdit.id === currentAdminId}
+                    onClick={() => setEditUserRole("USER")}
+                    className={`p-3 rounded-xl border text-left text-xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                      editUserRole === "USER"
+                        ? "border-orange-500 bg-orange-50/50 text-orange-900 font-bold"
+                        : "border-stone-200 text-stone-600 hover:bg-stone-50"
+                    }`}
+                  >
+                    USER
+                  </button>
+                  <button
+                    type="button"
+                    disabled={selectedUserForEdit.id === currentAdminId}
+                    onClick={() => setEditUserRole("ADMIN")}
+                    className={`p-3 rounded-xl border text-left text-xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                      editUserRole === "ADMIN"
+                        ? "border-orange-500 bg-orange-50/50 text-orange-900 font-bold"
+                        : "border-stone-200 text-stone-600 hover:bg-stone-50"
+                    }`}
+                  >
+                    ADMIN
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
                 <button
                   type="button"
-                  onClick={() => setIsResetPasswordOpen(false)}
+                  onClick={() => {
+                    setIsEditUserOpen(false);
+                    setSelectedUserForEdit(null);
+                  }}
                   className="px-4 py-2 border border-stone-200 text-stone-600 hover:bg-stone-50 rounded-xl text-xs font-semibold cursor-pointer"
                 >
                   გაუქმება
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingPassword}
+                  disabled={isSubmittingEditUser}
                   className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-semibold shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                 >
-                  {isSubmittingPassword && (
+                  {isSubmittingEditUser && (
                     <Loader2 size={13} className="animate-spin" />
                   )}
-                  <span>განახლება</span>
+                  <span>შენახვა</span>
                 </button>
               </div>
             </form>

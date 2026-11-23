@@ -93,7 +93,18 @@ export function TaskCommentsSection({
   };
 
   const renderCommentContent = (content: string) => {
-    const parts = content.split(/(@[a-zA-Z0-9_\u10D0-\u10FA]+)/g);
+    const escapedNames = [...users]
+      .map((u) => u.name.trim())
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)
+      .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+    const mentionPattern =
+      escapedNames.length > 0
+        ? new RegExp(`(@(?:${escapedNames.join("|")})|@[a-zA-Z0-9_\\u10D0-\\u10FA]+)`, "g")
+        : /(@[a-zA-Z0-9_\u10D0-\u10FA]+)/g;
+
+    const parts = content.split(mentionPattern);
     return (
       <span className="whitespace-pre-wrap break-words">
         {parts.map((part, i) => {

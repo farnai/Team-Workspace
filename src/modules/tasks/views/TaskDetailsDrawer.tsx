@@ -209,16 +209,8 @@ export function TaskDetailsDrawer({
   const [activeTab, setActiveTab] = useState<DrawerTab>("work");
   const [error, setError] = useState<string | null>(null);
 
-  // New Stage form state
-  const [showAddStage, setShowAddStage] = useState(false);
-  const [newStageTitle, setNewStageTitle] = useState("");
-  const [newStageAssigneeIds, setNewStageAssigneeIds] = useState<string[]>([]);
-  const [newStageDeadline, setNewStageDeadline] = useState("");
-  const [isSubmittingStage, setIsSubmittingStage] = useState(false);
-
   // New Subtask form state
   const [showAddSubtask, setShowAddSubtask] = useState(false);
-  const [targetStageId, setTargetStageId] = useState<string | null>(null);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newSubtaskAssigneeIds, setNewSubtaskAssigneeIds] = useState<string[]>([]);
   const [newSubtaskDeadline, setNewSubtaskDeadline] = useState("");
@@ -228,9 +220,8 @@ export function TaskDetailsDrawer({
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   const [descValue, setDescValue] = useState("");
 
-  // Inline Assignee Pickers (Task & Stage)
+  // Inline Assignee Picker
   const [showAssigneePicker, setShowAssigneePicker] = useState(false);
-  const [editingStageAssigneesId, setEditingStageAssigneesId] = useState<string | null>(null);
 
   // Modals & Paste State
   const [isUploadingFile, setIsUploadingFile] = useState(false);
@@ -408,108 +399,6 @@ export function TaskDetailsDrawer({
 
   // --- Handlers ---
 
-  // Complete a stage
-  const handleCompleteStage = async (stageId: string) => {
-    try {
-      setError(null);
-      const res = await fetch(`/api/stages/${stageId}/complete`, {
-        method: "POST",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || "ეტაპის დასრულება ვერ მოხერხდა");
-      }
-      await refreshTaskDetails();
-      onTaskUpdated();
-    } catch (err: unknown) {
-      setError((err as Error).message);
-    }
-  };
-
-  // Reorder stage (Move Up / Down)
-  const handleMoveStage = async (index: number, direction: "up" | "down") => {
-    if (!task) return;
-    const stages = [...task.stages];
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= stages.length) return;
-
-    const currentStage = stages[index];
-    const targetStage = stages[targetIndex];
-
-    try {
-      // Swap positions
-      const [res1, res2] = await Promise.all([
-        fetch(`/api/stages/${currentStage.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ position: targetStage.position }),
-        }),
-        fetch(`/api/stages/${targetStage.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ position: currentStage.position }),
-        }),
-      ]);
-      if (!res1.ok || !res2.ok) {
-        throw new Error("ეტაპების თანამიმდევრობის განახლება ვერ მოხერხდა");
-      }
-      await refreshTaskDetails();
-      onTaskUpdated();
-    } catch (err: unknown) {
-      setError((err as Error).message);
-    }
-  };
-
-  // Create Stage
-  const handleCreateStage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!task || !newStageTitle.trim()) return;
-
-    setIsSubmittingStage(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/tasks/${task.id}/stages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newStageTitle.trim(),
-          assigneeIds: newStageAssigneeIds,
-          deadline: newStageDeadline ? new Date(newStageDeadline).toISOString() : null,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "ეტაპის დამატება ვერ მოხერხდა");
-      }
-      setNewStageTitle("");
-      setNewStageAssigneeIds([]);
-      setNewStageDeadline("");
-      setShowAddStage(false);
-      await refreshTaskDetails();
-      onTaskUpdated();
-    } catch (err: unknown) {
-      setError((err as Error).message);
-    } finally {
-      setIsSubmittingStage(false);
-    }
-  };
-
-  // Delete Stage
-  const handleDeleteStage = async (stageId: string) => {
-    if (!confirm("დარწმუნებული ხართ, რომ გსურთ ეტაპის წაშლა?")) return;
-    try {
-      const res = await fetch(`/api/stages/${stageId}`, { method: "DELETE" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(data?.error || "ეტაპის წაშლა ვერ მოხერხდა");
-      }
-      await refreshTaskDetails();
-      onTaskUpdated();
-    } catch (err: unknown) {
-      setError((err as Error).message);
-    }
-  };
-
   // Toggle Subtask Status
   const handleToggleSubtask = async (subtask: SubtaskItem) => {
     const nextStatus =
@@ -597,7 +486,7 @@ export function TaskDetailsDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newSubtaskTitle.trim(),
-          stageId: targetStageId,
+          stageId: null,
           assigneeIds: newSubtaskAssigneeIds,
           deadline: newSubtaskDeadline ? new Date(newSubtaskDeadline).toISOString() : null,
         }),
@@ -610,7 +499,6 @@ export function TaskDetailsDrawer({
       setNewSubtaskAssigneeIds([]);
       setNewSubtaskDeadline("");
       setShowAddSubtask(false);
-      setTargetStageId(null);
       await refreshTaskDetails();
       onTaskUpdated();
     } catch (err: unknown) {
@@ -696,27 +584,6 @@ export function TaskDetailsDrawer({
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || "შემსრულებლების განახლება ვერ მოხერხდა");
-      }
-      await refreshTaskDetails();
-      onTaskUpdated();
-    } catch (err: unknown) {
-      setError((err as Error).message);
-    }
-  };
-
-  // Update Stage Assignees
-  const handleUpdateStageAssignees = async (stageId: string, newAssigneeIds: string[]) => {
-    if (!task) return;
-    try {
-      setError(null);
-      const res = await fetch(`/api/stages/${stageId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assigneeIds: newAssigneeIds }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || "ეტაპის შემსრულებლების განახლება ვერ მოხერხდა");
       }
       await refreshTaskDetails();
       onTaskUpdated();
@@ -1059,23 +926,20 @@ export function TaskDetailsDrawer({
     return () => window.removeEventListener("paste", handlePaste);
   }, [isOpen, taskId]);
 
-  // Currently responsible participants (from active stage or direct task assignments)
-  const activeStage = task?.stages?.find((s) => s.isActive && !s.isCompleted);
-  const responsibleUsers = (activeStage?.assignments && activeStage.assignments.length > 0)
-    ? activeStage.assignments.map((a) => a.user)
-    : (task?.assignments || []).map((a) => a.user);
+  // Direct task assignees
+  const responsibleUsers = (task?.assignments || []).map((a) => a.user);
 
   // Step 7: Conflicts detection for current task
   const taskConflicts = task ? detectTaskConflicts(task) : [];
 
-  const renderSubtaskForm = (isStage: boolean) => (
+  const renderSubtaskForm = () => (
     <form
       onSubmit={handleCreateSubtask}
       className="p-3.5 bg-orange-50/60 border border-orange-200/90 rounded-2xl space-y-3 text-xs animate-in slide-in-from-top-2 mt-2"
     >
       <div className="flex items-center justify-between">
         <span className="font-bold text-stone-900">
-          {isStage ? "ეტაპის ქვე-დავალება" : "ახალი ქვე-დავალება (ჩეკლისტი)"}
+          ახალი ქვე-დავალება (ჩეკლისტი)
         </span>
       </div>
       <input
@@ -1137,7 +1001,6 @@ export function TaskDetailsDrawer({
           type="button"
           onClick={() => {
             setShowAddSubtask(false);
-            setTargetStageId(null);
             setNewSubtaskTitle("");
             setNewSubtaskDeadline("");
             setNewSubtaskAssigneeIds([]);
@@ -1749,8 +1612,22 @@ export function TaskDetailsDrawer({
                     </div>
                   </div>
                 ) : task?.description ? (
-                  <div className="text-stone-700 leading-relaxed whitespace-pre-wrap">
-                    {task.description}
+                  <div className="text-stone-700 leading-relaxed whitespace-pre-wrap break-words">
+                    {task.description.split(/(https?:\/\/[^\s<>"']+)/g).map((part, idx) =>
+                      /^https?:\/\//.test(part) ? (
+                        <a
+                          key={idx}
+                          href={part}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-orange-600 hover:text-orange-700 underline break-all"
+                        >
+                          {part}
+                        </a>
+                      ) : (
+                        <React.Fragment key={idx}>{part}</React.Fragment>
+                      )
+                    )}
                   </div>
                 ) : (
                   <div className="text-stone-400 italic text-[11px]">
@@ -1798,11 +1675,10 @@ export function TaskDetailsDrawer({
                             თითოეული ბლოკი შეამოწმეთ ვიზუალურად და ფუნქციონალურად.
                           </p>
                         </div>
-                        {(!showAddSubtask || targetStageId !== null) && (
+                        {!showAddSubtask && (
                           <button
                             type="button"
                             onClick={() => {
-                              setTargetStageId(null);
                               setShowAddSubtask(true);
                               setNewSubtaskAssigneeIds([]);
                             }}
@@ -1852,7 +1728,7 @@ export function TaskDetailsDrawer({
                       </div>
 
                       {/* Subtask Form */}
-                      {showAddSubtask && targetStageId === null && renderSubtaskForm(false)}
+                      {showAddSubtask && renderSubtaskForm()}
 
                       {/* QA Blocks List */}
                       {qaBlocks.length > 0 ? (
@@ -1958,651 +1834,137 @@ export function TaskDetailsDrawer({
                     </div>
                   );
                 })()
-              ) : (
-                <>
-                  {/* Ordered Stages List */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>სამუშაო ეტაპები</span>
-                    <span className="text-[11px] font-bold text-stone-400">
-                      ({task?.stages?.length || 0})
-                    </span>
-                  </h3>
-                  <button
-                    onClick={() => setShowAddStage(!showAddStage)}
-                    className="flex items-center gap-1 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
-                  >
-                    <Plus size={13} strokeWidth={2.5} />
-                    <span>ახალი ეტაპი</span>
-                  </button>
-                </div>
-
-                {/* Add Stage Form Drawer (Simplified for regular users) */}
-                {showAddStage && (
-                  <form
-                    onSubmit={handleCreateStage}
-                    className="p-4 bg-orange-50/60 border border-orange-200/80 rounded-2xl space-y-3 text-xs animate-in slide-in-from-top-2"
-                  >
-                    <div>
-                      <div className="font-bold text-stone-900">
-                        ახალი სამუშაო ეტაპის დამატება
-                      </div>
-                      <p className="text-[11px] text-stone-500 mt-0.5">
-                        ეტაპები გამოიყენება მაშინ, როცა დავალება რიგრიგობით გადადის ერთი ადამიანიდან მეორეზე (მაგ. დიზაინი → დეველოპმენტი).
-                      </p>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="ეტაპის სახელი (მაგ. UI/UX დიზაინი, ფუნქციონალის დაწერა)..."
-                      value={newStageTitle}
-                      onChange={(e) => setNewStageTitle(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-stone-900 font-medium"
-                      required
-                    />
-
-                    <div className="space-y-2.5">
-                      <div>
-                        <label className="text-[10px] font-bold text-stone-500 block mb-1.5">
-                          პასუხისმგებელი პირი (აირჩიეთ კლიკით)
-                        </label>
-                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-white border border-stone-200 rounded-xl">
-                          {users.map((u) => {
-                            const selected = newStageAssigneeIds.includes(u.id);
-                            return (
-                              <button
-                                key={u.id}
-                                type="button"
-                                onClick={() =>
-                                  setNewStageAssigneeIds((prev) =>
-                                    selected ? prev.filter((id) => id !== u.id) : [...prev, u.id]
-                                  )
-                                }
-                                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1 border ${
-                                  selected
-                                    ? "bg-orange-600 text-white border-orange-600 shadow-2xs"
-                                    : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
-                                }`}
-                              >
-                                <span>{u.name}</span>
-                                {selected && <Check size={10} strokeWidth={3} />}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="max-w-xs">
-                        <label className="text-[10px] font-bold text-stone-500 block mb-1">
-                          ვადა (არასავალდებულო)
-                        </label>
-                        <DatePicker
-                          value={newStageDeadline}
-                          onChange={(val) => setNewStageDeadline(val)}
-                          placeholder="აირჩიეთ ვადა"
-                          size="sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setShowAddStage(false)}
-                        className="px-3 py-1.5 border border-stone-200 text-stone-600 rounded-lg font-semibold hover:bg-white cursor-pointer"
-                      >
-                        გაუქმება
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmittingStage}
-                        className="px-4 py-1.5 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50 cursor-pointer"
-                      >
-                        {isSubmittingStage ? "ემატება..." : "ეტაპის დამატება"}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* Stages Sequence */}
-                {task?.stages && task.stages.length > 0 ? (
+              ) : (() => {
+                const allSubtasks = [
+                  ...(task?.subtasks || []),
+                  ...(task?.stages?.flatMap((s) => s.subtasks || []) || []),
+                ];
+                return (
                   <div className="space-y-3">
-                    {(task.stages || []).map((stage, sIdx) => {
-                      const totalStageSubtasks = (stage.subtasks || []).filter(
-                        (st) => st.status !== SubtaskStatus.CANCELLED
-                      ).length;
-                      const doneStageSubtasks = (stage.subtasks || []).filter(
-                        (st) => st.status === SubtaskStatus.DONE
-                      ).length;
-                      const canCompleteStage =
-                        !stage.isCompleted &&
-                        stage.isActive &&
-                        stage.subtasks.every(
-                          (st) =>
-                            st.status === SubtaskStatus.DONE ||
-                            st.status === SubtaskStatus.CANCELLED
-                        );
-
-                      const isStageOverdue =
-                        stage.isActive &&
-                        Boolean(stage.deadline) &&
-                        isTaskOverdue(stage.deadline);
-
-                      return (
-                        <div
-                          key={stage.id}
-                          className={`rounded-2xl border transition-all ${
-                            isStageOverdue
-                              ? "bg-rose-50/20 border-rose-300 ring-2 ring-rose-200/40"
-                              : stage.isActive
-                              ? "bg-white border-blue-500/80 shadow-xs ring-2 ring-blue-500/10"
-                              : stage.isCompleted
-                              ? "bg-emerald-50/30 border-emerald-200/80"
-                              : "bg-stone-50/70 border-stone-200/80 opacity-85"
-                          }`}
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-xs font-black text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>ქვე-დავალებები (ჩეკლისტი)</span>
+                        <span className="text-[11px] font-bold text-stone-400">
+                          ({allSubtasks.length})
+                        </span>
+                      </h3>
+                      {!showAddSubtask && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAddSubtask(true);
+                            setNewSubtaskAssigneeIds([]);
+                          }}
+                          className="flex items-center gap-1 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-full transition-colors cursor-pointer shrink-0"
                         >
-                          {/* Stage Header */}
-                          <div className="p-3.5 flex items-center justify-between gap-2 border-b border-stone-100">
-                            <div className="flex items-center gap-2.5">
-                              {/* Stage Step Badge */}
-                              <div
-                                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
-                                  stage.isCompleted
-                                    ? "bg-emerald-500 text-white"
-                                    : isStageOverdue
-                                    ? "bg-rose-600 text-white shadow-2xs"
-                                    : stage.isActive
-                                    ? "bg-blue-600 text-white shadow-2xs"
-                                    : "bg-stone-200 text-stone-600"
-                                }`}
-                              >
-                                {stage.isCompleted ? (
-                                  <Check size={14} strokeWidth={3} />
-                                ) : (
-                                  sIdx + 1
-                                )}
-                              </div>
+                          <Plus size={13} strokeWidth={2.5} />
+                          <span>დამატება</span>
+                        </button>
+                      )}
+                    </div>
 
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h4 className="text-xs font-extrabold text-stone-900">
-                                    {stage.title}
-                                  </h4>
-                                  {totalStageSubtasks > 0 && (
-                                    <span className="text-[10px] font-bold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded-md">
-                                      {doneStageSubtasks}/{totalStageSubtasks} საბტასკი
-                                    </span>
-                                  )}
-                                  {stage.isActive && isStageOverdue && (
-                                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-700 flex items-center gap-0.5">
-                                      <AlertCircle size={10} />
-                                      <span>ვადაგადაცილებული</span>
-                                    </span>
-                                  )}
-                                  {stage.isActive && !isStageOverdue && (
-                                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-blue-100 text-blue-700 uppercase">
-                                      აქტიური
-                                    </span>
-                                  )}
-                                  {stage.isCompleted && (
-                                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-700">
-                                      დასრულებული
-                                    </span>
-                                  )}
-                                  {!stage.isActive && !stage.isCompleted && (
-                                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-stone-200/80 text-stone-600">
-                                      მოლოდინში
-                                    </span>
-                                  )}
+                    {/* Subtasks List */}
+                    {allSubtasks.length > 0 && (
+                      <div className="space-y-2">
+                        {allSubtasks.map((st) => (
+                          <div
+                            key={st.id}
+                            className={`flex items-start justify-between gap-2 p-2.5 rounded-xl border text-xs transition-colors ${
+                              st.status === SubtaskStatus.DONE
+                                ? "bg-emerald-50/40 border-emerald-200/60"
+                                : st.status === SubtaskStatus.CANCELLED
+                                ? "bg-stone-50 border-stone-200 opacity-50 line-through"
+                                : "bg-white border-stone-200/80 hover:border-stone-300"
+                            }`}
+                          >
+                            <div className="flex items-start gap-2 flex-1">
+                              <button
+                                onClick={() => handleToggleSubtask(st)}
+                                className="mt-0.5 text-stone-400 hover:text-emerald-600 transition-colors cursor-pointer"
+                              >
+                                {st.status === SubtaskStatus.DONE ? (
+                                  <CheckCircle2
+                                    size={16}
+                                    className="text-emerald-600 fill-emerald-100"
+                                  />
+                                ) : (
+                                  <Circle size={16} />
+                                )}
+                              </button>
+
+                              <div className="flex-1">
+                                <div
+                                  className={`font-semibold ${
+                                    st.status === SubtaskStatus.DONE
+                                      ? "text-stone-500 line-through"
+                                      : "text-stone-900"
+                                  }`}
+                                >
+                                  {st.title}
                                 </div>
 
-                                {/* Assignees & Dates */}
-                                <div className="flex items-center gap-2 text-[11px] text-stone-500 mt-0.5 flex-wrap">
-                                  <div className="flex items-center gap-1 font-medium">
-                                    {stage.assignments && stage.assignments.length > 0 ? (
-                                      stage.assignments.map((a) => (
+                                <div className="flex items-center gap-2 text-[10px] text-stone-500 mt-1 flex-wrap">
+                                  {(st.assignments || []).length > 0 && (
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      {(st.assignments || []).map((a) => (
                                         <span
                                           key={a.user?.id || Math.random()}
-                                          className="text-stone-700 font-semibold"
+                                          className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-700 font-semibold text-[10px] border border-stone-200/80"
                                         >
-                                          {a.user?.name}
+                                          {a.user?.name || "?"}
                                         </span>
-                                      ))
-                                    ) : (
-                                      <span className="text-stone-400">
-                                        შემსრულებლის გარეშე
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <div className="relative">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setEditingStageAssigneesId(
-                                          editingStageAssigneesId === stage.id ? null : stage.id
-                                        )
-                                      }
-                                      className="px-1.5 py-0.5 bg-stone-100 hover:bg-orange-50 text-stone-600 hover:text-orange-700 border border-stone-200 hover:border-orange-200 rounded text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-                                      title="ეტაპის შემსრულებლის შეცვლა"
-                                    >
-                                      <UserPlus size={10} />
-                                      <span>შემსრულებელი</span>
-                                    </button>
-                                    {editingStageAssigneesId === stage.id && (
-                                      <div className="absolute left-0 top-full mt-1 z-30 w-56 bg-white border border-stone-200 rounded-xl shadow-xl p-2 space-y-1 text-xs">
-                                        <div className="flex items-center justify-between px-1 pb-1 border-b border-stone-100">
-                                          <span className="text-[10px] font-extrabold text-stone-500 uppercase">
-                                            ეტაპის შემსრულებლები
-                                          </span>
-                                          <button
-                                            type="button"
-                                            onClick={() => setEditingStageAssigneesId(null)}
-                                            className="text-stone-400 hover:text-stone-600 cursor-pointer"
-                                          >
-                                            <X size={12} />
-                                          </button>
-                                        </div>
-                                        <div className="max-h-44 overflow-y-auto space-y-0.5">
-                                          {users.map((u) => {
-                                            const stageAssigneeIds = (stage.assignments || [])
-                                              .map((a) => a.user?.id)
-                                              .filter(Boolean) as string[];
-                                            const isChecked = stageAssigneeIds.includes(u.id);
-                                            return (
-                                              <label
-                                                key={u.id}
-                                                className="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-stone-50 cursor-pointer"
-                                              >
-                                                <input
-                                                  type="checkbox"
-                                                  checked={isChecked}
-                                                  onChange={() => {
-                                                    const nextIds = isChecked
-                                                      ? stageAssigneeIds.filter((id) => id !== u.id)
-                                                      : [...stageAssigneeIds, u.id];
-                                                    handleUpdateStageAssignees(stage.id, nextIds);
-                                                  }}
-                                                  className="rounded border-stone-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
-                                                />
-                                                <span className="font-semibold text-stone-800 truncate flex-1">
-                                                  {u.name}
-                                                </span>
-                                                {u.id === currentUser.id && (
-                                                  <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">
-                                                    ჩემზე
-                                                  </span>
-                                                )}
-                                              </label>
-                                            );
-                                          })}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                  {stage.deadline && (
-                                    <>
-                                      <span>•</span>
-                                      <span className={`flex items-center gap-0.5 font-semibold ${
-                                        isStageOverdue ? "text-rose-600 font-bold" : "text-stone-600"
-                                      }`}>
-                                        <Calendar size={11} className="text-stone-400" />
-                                        <span>
-                                          {formatGeorgianDateShort(stage.deadline)}
-                                        </span>
-                                        {stage.deadlineLocked && (
-                                          <Lock size={10} className="text-stone-400" />
-                                        )}
-                                      </span>
-                                    </>
-                                  )}
-
-                                  {/* Request Deadline Change Button */}
-                                  {!stage.isCompleted && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setTargetRequestStageId(stage.id);
-                                        setReqNewDeadline(
-                                          stage.deadline ? stage.deadline.split("T")[0] : ""
-                                        );
-                                        setIsDeadlineRequestModalOpen(true);
-                                      }}
-                                      className="ml-1 px-1.5 py-0.5 bg-stone-100 hover:bg-blue-50 text-stone-600 hover:text-blue-700 border border-stone-200 hover:border-blue-200 rounded text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-                                      title="დედლაინის შეცვლის მოთხოვნა"
-                                    >
-                                      <Clock size={10} />
-                                      <span>ვადის მოთხოვნა</span>
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Stage Controls: Move Up/Down, Complete, Delete */}
-                            <div className="flex items-center gap-1">
-                              {/* Move Up / Down Buttons */}
-                              <div className="flex items-center bg-stone-100 rounded-lg p-0.5">
-                                <button
-                                  onClick={() => handleMoveStage(sIdx, "up")}
-                                  disabled={sIdx === 0}
-                                  className="p-1 hover:bg-white rounded text-stone-500 hover:text-stone-900 disabled:opacity-30 cursor-pointer"
-                                  title="ზემოთ აწევა"
-                                >
-                                  <ArrowUp size={12} />
-                                </button>
-                                <button
-                                  onClick={() => handleMoveStage(sIdx, "down")}
-                                  disabled={sIdx === task.stages.length - 1}
-                                  className="p-1 hover:bg-white rounded text-stone-500 hover:text-stone-900 disabled:opacity-30 cursor-pointer"
-                                  title="ქვემოთ ჩამოწევა"
-                                >
-                                  <ArrowDown size={12} />
-                                </button>
-                              </div>
-
-                              {/* Complete Stage Action Button */}
-                              {stage.isActive && !stage.isCompleted && (
-                                <button
-                                  onClick={() => handleCompleteStage(stage.id)}
-                                  disabled={!canCompleteStage}
-                                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                    canCompleteStage
-                                      ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
-                                      : "bg-stone-200 text-stone-400 cursor-not-allowed"
-                                  }`}
-                                  title={
-                                    canCompleteStage
-                                      ? "ეტაპის დასრულება და ჰენდოფი"
-                                      : "ეტაპის დასასრულებლად ჯერ შეასრულეთ მისი ყველა საბტასკი"
-                                  }
-                                >
-                                  <CheckCircle2 size={13} />
-                                  <span>დასრულება</span>
-                                </button>
-                              )}
-
-                              <button
-                                onClick={() => handleDeleteStage(stage.id)}
-                                className="p-1 text-stone-400 hover:text-rose-600 rounded hover:bg-stone-100 transition-colors cursor-pointer"
-                                title="ეტაპის წაშლა"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Stage Subtasks Checklist */}
-                          <div className="p-3 space-y-2 bg-white/50">
-                            {(!stage.subtasks || stage.subtasks.length === 0) ? (
-                              <div className="text-[11px] text-stone-400 italic py-1">
-                                ეტაპში საბტასკები არ არის დამატებული.
-                              </div>
-                            ) : (
-                              stage.subtasks.map((st) => (
-                                <div
-                                  key={st.id}
-                                  className={`flex items-start justify-between gap-2 p-2 rounded-xl border text-xs transition-colors ${
-                                    st.status === SubtaskStatus.DONE
-                                      ? "bg-emerald-50/40 border-emerald-200/60"
-                                      : st.status === SubtaskStatus.CANCELLED
-                                      ? "bg-stone-50 border-stone-200 opacity-50 line-through"
-                                      : "bg-white border-stone-200/80 hover:border-stone-300"
-                                  }`}
-                                >
-                                  {/* Checkbox & Title */}
-                                  <div className="flex items-start gap-2 flex-1">
-                                    <button
-                                      onClick={() => handleToggleSubtask(st)}
-                                      className="mt-0.5 text-stone-400 hover:text-emerald-600 transition-colors cursor-pointer"
-                                    >
-                                      {st.status === SubtaskStatus.DONE ? (
-                                        <CheckCircle2
-                                          size={16}
-                                          className="text-emerald-600 fill-emerald-100"
-                                        />
-                                      ) : (
-                                        <Circle size={16} />
-                                      )}
-                                    </button>
-
-                                    <div className="flex-1">
-                                      <div
-                                        className={`font-semibold ${
-                                          st.status === SubtaskStatus.DONE
-                                            ? "text-stone-500 line-through"
-                                            : "text-stone-900"
-                                        }`}
-                                      >
-                                        {st.title}
-                                      </div>
-
-                                      {/* Subtask Meta: Assignees, Deadline, Completer */}
-                                      <div className="flex items-center gap-2 text-[10px] text-stone-500 mt-1 flex-wrap">
-                                        {/* Multi Assignees Avatars */}
-                                        <div className="flex items-center -space-x-1">
-                                          {(st.assignments || []).map((a) => (
-                                            <div
-                                              key={a.user?.id || Math.random()}
-                                              className="w-4 h-4 rounded-full bg-stone-200 text-stone-700 font-bold text-[9px] flex items-center justify-center border border-white"
-                                              title={a.user?.name}
-                                            >
-                                              {a.user?.name ? a.user.name.charAt(0) : "?"}
-                                            </div>
-                                          ))}
-                                        </div>
-
-                                        {st.deadline && (
-                                          <span className="flex items-center gap-0.5 text-stone-600 font-medium">
-                                            <Calendar size={10} className="text-stone-400" />
-                                            <span>
-                                              {formatGeorgianDateShort(st.deadline)}
-                                            </span>
-                                            {st.deadlineLocked && (
-                                              <Lock size={9} className="text-stone-400" />
-                                            )}
-                                          </span>
-                                        )}
-
-                                        {st.status === SubtaskStatus.DONE &&
-                                          st.completedBy && (
-                                            <span className="text-emerald-700 font-medium">
-                                              შესრულდა: {st.completedBy.name}
-                                            </span>
-                                          )}
-                                      </div>
+                                      ))}
                                     </div>
-                                  </div>
-
-                                  {/* Subtask Actions */}
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    {st.status !== SubtaskStatus.CANCELLED && (
-                                      <button
-                                        onClick={() => handleCancelSubtask(st.id)}
-                                        className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100 transition-colors cursor-pointer"
-                                        title="გაუქმება"
-                                      >
-                                        <Ban size={12} />
-                                      </button>
-                                    )}
-                                    <button
-                                      onClick={() => handleDeleteSubtask(st.id)}
-                                      className="p-1 text-stone-400 hover:text-rose-600 rounded hover:bg-stone-100 transition-colors cursor-pointer"
-                                      title="წაშლა"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))
-                            )}
-
-                            {/* Stage Subtask Form or Trigger */}
-                            {showAddSubtask && targetStageId === stage.id ? (
-                              renderSubtaskForm(true)
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setTargetStageId(stage.id);
-                                  setShowAddSubtask(true);
-                                  if (stage.assignments && stage.assignments.length > 0) {
-                                    const stageUserIds = stage.assignments
-                                      .map((a) => a.user?.id)
-                                      .filter(Boolean) as string[];
-                                    setNewSubtaskAssigneeIds(stageUserIds);
-                                  } else {
-                                    setNewSubtaskAssigneeIds([]);
-                                  }
-                                }}
-                                className="w-full flex items-center justify-center gap-1 py-1.5 text-[11px] font-bold text-stone-600 hover:text-orange-600 hover:bg-orange-50/50 rounded-lg border border-dashed border-stone-200 transition-all cursor-pointer"
-                              >
-                                <Plus size={12} />
-                                <span>საბტასკის დამატება ეტაპზე</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Direct Subtasks Checklist Section (stageId: null) */}
-              <div className="pt-4 border-t border-stone-200 space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-xs font-black text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>ქვე-დავალებები (ჩეკლისტი)</span>
-                      <span className="text-[11px] font-bold text-stone-400">
-                        ({task?.subtasks?.length || 0})
-                      </span>
-                    </h3>
-                    <p className="text-[11px] text-stone-400 mt-0.5">
-                      მცირე ნაბიჯები, რომელთა მონიშვნაც შესაძლებელია შესრულებისას
-                    </p>
-                  </div>
-                  {(!showAddSubtask || targetStageId !== null) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTargetStageId(null);
-                        setShowAddSubtask(true);
-                        setNewSubtaskAssigneeIds([]);
-                      }}
-                      className="flex items-center gap-1 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-full transition-colors cursor-pointer shrink-0"
-                    >
-                      <Plus size={13} strokeWidth={2.5} />
-                      <span>დამატება</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Subtasks List */}
-                {task?.subtasks && task.subtasks.length > 0 ? (
-                  <div className="space-y-2">
-                    {task.subtasks.map((st) => (
-                      <div
-                        key={st.id}
-                        className={`flex items-start justify-between gap-2 p-2.5 rounded-xl border text-xs transition-colors ${
-                          st.status === SubtaskStatus.DONE
-                            ? "bg-emerald-50/40 border-emerald-200/60"
-                            : st.status === SubtaskStatus.CANCELLED
-                            ? "bg-stone-50 border-stone-200 opacity-50 line-through"
-                            : "bg-white border-stone-200/80 hover:border-stone-300"
-                        }`}
-                      >
-                        <div className="flex items-start gap-2 flex-1">
-                          <button
-                            onClick={() => handleToggleSubtask(st)}
-                            className="mt-0.5 text-stone-400 hover:text-emerald-600 transition-colors cursor-pointer"
-                          >
-                            {st.status === SubtaskStatus.DONE ? (
-                              <CheckCircle2
-                                size={16}
-                                className="text-emerald-600 fill-emerald-100"
-                              />
-                            ) : (
-                              <Circle size={16} />
-                            )}
-                          </button>
-
-                          <div className="flex-1">
-                            <div
-                              className={`font-semibold ${
-                                st.status === SubtaskStatus.DONE
-                                  ? "text-stone-500 line-through"
-                                  : "text-stone-900"
-                              }`}
-                            >
-                              {st.title}
-                            </div>
-
-                            <div className="flex items-center gap-2 text-[10px] text-stone-500 mt-1 flex-wrap">
-                              <div className="flex items-center -space-x-1">
-                                {(st.assignments || []).map((a) => (
-                                  <div
-                                    key={a.user?.id || Math.random()}
-                                    className="w-4 h-4 rounded-full bg-stone-200 text-stone-700 font-bold text-[9px] flex items-center justify-center border border-white"
-                                    title={a.user?.name}
-                                  >
-                                    {a.user?.name ? a.user.name.charAt(0) : "?"}
-                                  </div>
-                                ))}
-                              </div>
-
-                              {st.deadline && (
-                                <span className="flex items-center gap-0.5 text-stone-600 font-medium">
-                                  <Calendar size={10} className="text-stone-400" />
-                                  <span>{formatGeorgianDateShort(st.deadline)}</span>
-                                  {st.deadlineLocked && (
-                                    <Lock size={9} className="text-stone-400" />
                                   )}
-                                </span>
-                              )}
 
-                              {st.status === SubtaskStatus.DONE && st.completedBy && (
-                                <span className="text-emerald-700 font-medium">
-                                  შესრულდა: {st.completedBy.name}
-                                </span>
+                                  {st.deadline && (
+                                    <span className="flex items-center gap-0.5 text-stone-600 font-medium">
+                                      <Calendar size={10} className="text-stone-400" />
+                                      <span>{formatGeorgianDateShort(st.deadline)}</span>
+                                      {st.deadlineLocked && (
+                                        <Lock size={9} className="text-stone-400" />
+                                      )}
+                                    </span>
+                                  )}
+
+                                  {st.status === SubtaskStatus.DONE && st.completedBy && (
+                                    <span className="text-emerald-700 font-medium">
+                                      შესრულდა: {st.completedBy.name}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              {st.status !== SubtaskStatus.CANCELLED && (
+                                <button
+                                  onClick={() => handleCancelSubtask(st.id)}
+                                  className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100 transition-colors cursor-pointer"
+                                  title="გაუქმება"
+                                >
+                                  <Ban size={12} />
+                                </button>
                               )}
+                              <button
+                                onClick={() => handleDeleteSubtask(st.id)}
+                                className="p-1 text-stone-400 hover:text-rose-600 rounded hover:bg-stone-100 transition-colors cursor-pointer"
+                                title="წაშლა"
+                              >
+                                <Trash2 size={12} />
+                              </button>
                             </div>
                           </div>
-                        </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          {st.status !== SubtaskStatus.CANCELLED && (
-                            <button
-                              onClick={() => handleCancelSubtask(st.id)}
-                              className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100 transition-colors cursor-pointer"
-                              title="გაუქმება"
-                            >
-                              <Ban size={12} />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDeleteSubtask(st.id)}
-                            className="p-1 text-stone-400 hover:text-rose-600 rounded hover:bg-stone-100 transition-colors cursor-pointer"
-                            title="წაშლა"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-[11px] text-stone-400 italic">
-                    დამოუკიდებელი საბტასკები არ არის.
-                  </div>
-                )}
+                    )}
 
-                {/* Independent subtask form rendered directly inside this section */}
-                {showAddSubtask && targetStageId === null && renderSubtaskForm(false)}
-              </div>
-            </>
-          )}
+                    {/* Subtask creation form */}
+                    {showAddSubtask && renderSubtaskForm()}
+                  </div>
+                );
+              })()
+          }
         </div>
           ) : activeTab === "comments" ? (
             /* TAB: კომენტარები (Modular Component) */

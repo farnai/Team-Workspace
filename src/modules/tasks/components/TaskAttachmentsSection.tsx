@@ -207,7 +207,7 @@ export function TaskAttachmentsSection({
         </div>
 
         {/* Uploaded Files List */}
-        {files.length > 0 ? (
+        {files.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {files.map((att) => {
               const isImage = att.mimeType.startsWith("image/");
@@ -280,10 +280,6 @@ export function TaskAttachmentsSection({
                 </div>
               );
             })}
-          </div>
-        ) : (
-          <div className="p-4 text-center bg-stone-50 rounded-xl text-stone-400 text-[11px] italic">
-            მიმაგრებული ფაილები არ არის.
           </div>
         )}
       </div>
@@ -360,7 +356,7 @@ export function TaskAttachmentsSection({
         )}
 
         {/* External Links List */}
-        {links.length > 0 ? (
+        {links.length > 0 && (
           <div className="space-y-2">
             {links.map((att) => {
               const canManage = att.userId === currentUser.id || isAdmin;
@@ -405,28 +401,51 @@ export function TaskAttachmentsSection({
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-                          <ExternalLink size={15} />
-                        </div>
-                        <div className="min-w-0 space-y-0.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-extrabold text-stone-900 truncate">
-                              {att.originalName}
-                            </span>
-                            {att.url && (
+                      {att.url ? (
+                        <a
+                          href={att.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2.5 min-w-0 flex-1 group/link cursor-pointer"
+                        >
+                          <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                            <ExternalLink size={15} />
+                          </div>
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-extrabold text-stone-900 group-hover/link:text-orange-600 group-hover/link:underline truncate transition-colors">
+                                {att.originalName}
+                              </span>
                               <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-stone-100 text-stone-600 border border-stone-200">
                                 {getDomainFromUrl(att.url)}
                               </span>
-                            )}
+                            </div>
+                            <div className="text-[10px] text-stone-400 flex items-center gap-1.5">
+                              <span>{att.user.name}</span>
+                              <span>•</span>
+                              <span>{formatGeorgianDate(att.createdAt)}</span>
+                            </div>
                           </div>
-                          <div className="text-[10px] text-stone-400 flex items-center gap-1.5">
-                            <span>{att.user.name}</span>
-                            <span>•</span>
-                            <span>{formatGeorgianDate(att.createdAt)}</span>
+                        </a>
+                      ) : (
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                            <ExternalLink size={15} />
+                          </div>
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-extrabold text-stone-900 truncate">
+                                {att.originalName}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-stone-400 flex items-center gap-1.5">
+                              <span>{att.user.name}</span>
+                              <span>•</span>
+                              <span>{formatGeorgianDate(att.createdAt)}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
 
                       <div className="flex items-center gap-1 shrink-0">
                         {att.url && (
@@ -468,10 +487,6 @@ export function TaskAttachmentsSection({
                 </div>
               );
             })}
-          </div>
-        ) : (
-          <div className="p-4 text-center bg-stone-50 rounded-xl text-stone-400 text-[11px] italic">
-            გარე ბმულები არ არის დამატებული.
           </div>
         )}
       </div>

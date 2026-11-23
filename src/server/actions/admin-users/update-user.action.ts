@@ -36,7 +36,20 @@ export async function updateUserAction(id: string, input: unknown, adminUser?: U
 
   const dataToUpdate: Prisma.UserUpdateInput = {};
   if (data.isActive !== undefined) dataToUpdate.isActive = data.isActive;
-  if (data.name !== undefined) dataToUpdate.name = data.name;
+  if (data.name !== undefined) dataToUpdate.name = data.name.trim();
+  if (data.email !== undefined) {
+    const normalizedEmail = data.email.trim().toLowerCase();
+    if (normalizedEmail !== targetUser.email.toLowerCase()) {
+      const existingByEmail = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true },
+      });
+      if (existingByEmail && existingByEmail.id !== id) {
+        throw new ValidationError('ეს ელ.ფოსტა უკვე გამოყენებულია სხვა მომხმარებლის მიერ');
+      }
+      dataToUpdate.email = normalizedEmail;
+    }
+  }
   if (data.role !== undefined) dataToUpdate.role = data.role;
   if (data.department !== undefined) dataToUpdate.department = data.department;
   if (data.password) {
@@ -84,12 +97,14 @@ export async function updateUserAction(id: string, input: unknown, adminUser?: U
     oldValues: {
       isActive: targetUser.isActive,
       name: targetUser.name,
+      email: targetUser.email,
       role: targetUser.role,
       department: targetUser.department,
     },
     newValues: {
       isActive: updatedUser.isActive,
       name: updatedUser.name,
+      email: updatedUser.email,
       role: updatedUser.role,
       department: updatedUser.department,
     },

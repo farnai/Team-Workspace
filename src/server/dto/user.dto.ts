@@ -15,6 +15,7 @@ export const updateUserDto = z.object({
   isActive: z.boolean().optional(),
   password: z.string().min(6, 'პაროლი უნდა იყოს მინიმუმ 6 სიმბოლო').optional(),
   name: z.string().min(2, 'სახელი უნდა შედგებოდეს მინიმუმ 2 სიმბოლოსგან').optional(),
+  email: z.string().email('არასწორი ელ.ფოსტა').optional(),
   role: z.nativeEnum(Role).optional(),
   department: z.nativeEnum(Department).optional(),
 });
