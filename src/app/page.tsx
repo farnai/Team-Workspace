@@ -101,6 +101,7 @@ export default function WorkspacePage({
   const [tasks, setTasks] = useState<BacklogTask[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreateQaModalOpen, setIsCreateQaModalOpen] = useState(false);
+  const [editingQaTask, setEditingQaTask] = useState<BacklogTask | null>(null);
   const [createTaskDefaultProjectId, setCreateTaskDefaultProjectId] = useState<string | undefined>(undefined);
   const [createTaskDefaultDepartment, setCreateTaskDefaultDepartment] = useState<Department | undefined>(undefined);
   const [createTaskDefaultType, setCreateTaskDefaultType] = useState<TaskType | undefined>(undefined);
@@ -434,6 +435,7 @@ export default function WorkspacePage({
         onOpenNewTask={handleOpenNewTask}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        tasks={tasks}
         currentDate={currentDate}
         onDateChange={setCurrentDate}
         onLogout={handleLogout}
@@ -550,8 +552,14 @@ export default function WorkspacePage({
                 tasks={tasks}
                 onSelectTask={handleSelectTask}
                 selectedTaskId={selectedTaskId}
-                onOpenNewTask={() => setIsCreateQaModalOpen(true)}
-                onEditTask={handleEditTask}
+                onOpenNewTask={() => {
+                  setEditingQaTask(null);
+                  setIsCreateQaModalOpen(true);
+                }}
+                onEditTask={(t) => {
+                  setEditingQaTask(t);
+                  setIsCreateQaModalOpen(true);
+                }}
                 onStatusChange={handleStatusChange}
                 onDeleteTask={handleTaskDelete}
                 onTaskUpdated={handleTaskSaved}
@@ -677,13 +685,17 @@ export default function WorkspacePage({
         />
       )}
 
-      {/* Dedicated QA Check Creation Modal */}
+      {/* Dedicated QA Check Creation / Edit Modal */}
       {isCreateQaModalOpen && (
         <QaCheckModal
           isOpen={isCreateQaModalOpen}
-          onClose={() => setIsCreateQaModalOpen(false)}
+          onClose={() => {
+            setIsCreateQaModalOpen(false);
+            setEditingQaTask(null);
+          }}
           onSuccess={handleTaskSaved}
           projects={projects}
+          editingTask={editingQaTask}
         />
       )}
 
@@ -746,13 +758,17 @@ export default function WorkspacePage({
         />
       )}
 
-      {/* Dedicated QA Check Creation Modal */}
+      {/* Dedicated QA Check Creation / Edit Modal */}
       {isCreateQaModalOpen && (
         <QaCheckModal
           isOpen={isCreateQaModalOpen}
-          onClose={() => setIsCreateQaModalOpen(false)}
+          onClose={() => {
+            setIsCreateQaModalOpen(false);
+            setEditingQaTask(null);
+          }}
           onSuccess={handleTaskSaved}
           projects={projects}
+          editingTask={editingQaTask}
         />
       )}
     </div>

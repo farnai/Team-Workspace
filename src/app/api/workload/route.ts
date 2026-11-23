@@ -127,11 +127,12 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Load all tasks with assignments, stages, and subtasks
+    // Load all non-cancelled tasks with assignments, stages, and subtasks
     const taskWhere: {
+      status: { not: "CANCELLED" };
       projectId?: string;
       department?: "DEVELOPMENT" | "CONTENT" | "QA";
-    } = projectId ? { projectId } : {};
+    } = projectId ? { projectId, status: { not: "CANCELLED" } } : { status: { not: "CANCELLED" } };
     if (
       departmentParam === "DEVELOPMENT" ||
       departmentParam === "CONTENT" ||
@@ -230,39 +231,11 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        // For IN_PROGRESS or PLANNED tasks:
-        // Distinguish active vs waiting workflow stages
-        if (t.stages.length > 0) {
-          const activeStage = t.stages.find((s) => s.isActive && !s.isCompleted);
-          const isUserInActiveStage = activeStage?.assignments.some(
-            (a) => a.userId === u.id
-          );
-          const isUserInWaitingStage = t.stages.some(
-            (s) =>
-              !s.isActive &&
-              !s.isCompleted &&
-              s.assignments.some((a) => a.userId === u.id)
-          );
-
-          if (isUserInActiveStage) {
-            activeTasks.push(t);
-          } else if (isUserInWaitingStage) {
-            waitingTasks.push(t);
-          } else {
-            // User is directly assigned to task without specific active/waiting stage
-            if (t.status === "IN_PROGRESS") {
-              activeTasks.push(t);
-            } else {
-              plannedTasks.push(t);
-            }
-          }
+        // For IN_PROGRESS, PLANNED, or BACKLOG tasks:
+        if (t.status === "IN_PROGRESS") {
+          activeTasks.push(t);
         } else {
-          // No stages
-          if (t.status === "IN_PROGRESS") {
-            activeTasks.push(t);
-          } else {
-            plannedTasks.push(t);
-          }
+          plannedTasks.push(t);
         }
       }
 
@@ -300,8 +273,17 @@ export async function GET(req: NextRequest) {
         }[] = [];
 
         for (const t of userTasks) {
-          const rawStart = t.startDate || t.deadline || t.createdAt;
-          const rawEnd = t.deadline || t.startDate || t.createdAt;
+          // Dateless tasks (e.g. unscheduled BACKLOG) must not clutter the date grid
+          if (!t.startDate && !t.deadline) continue;
+
+          const isActiveQaRun =
+            (t.department === "QA" || t.type === "QA") &&
+            t.status === "IN_PROGRESS" &&
+            Boolean(t.startDate) &&
+            !t.deadline;
+
+          const rawStart = t.startDate || t.deadline!;
+          const rawEnd = isActiveQaRun ? now : t.deadline || t.startDate!;
           const start = startOfDay(new Date(rawStart));
           const end = endOfDay(new Date(rawEnd));
 
@@ -327,26 +309,10 @@ export async function GET(req: NextRequest) {
               userState = "PAUSED";
             } else if (t.status === "BLOCKED") {
               userState = "BLOCKED";
-            } else if (t.stages.length > 0) {
-              const activeStage = t.stages.find((s) => s.isActive && !s.isCompleted);
-              const inActive = activeStage?.assignments.some((a) => a.userId === u.id);
-              const inWaiting = t.stages.some(
-                (s) =>
-                  !s.isActive &&
-                  !s.isCompleted &&
-                  s.assignments.some((a) => a.userId === u.id)
-              );
-              if (inActive) {
-                userState = "ACTIVE";
-              } else if (inWaiting) {
-                userState = "WAITING";
-              } else if (t.status === "PLANNED") {
-                userState = "PLANNED";
-              } else {
-                userState = "ACTIVE";
-              }
-            } else if (t.status === "PLANNED") {
+            } else if (t.status === "PLANNED" || t.status === "BACKLOG") {
               userState = "PLANNED";
+            } else {
+              userState = "ACTIVE";
             }
 
             dayAssignments.push({

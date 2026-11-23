@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import { Logo } from "@/components/ui/Logo";
 import {
@@ -12,6 +12,7 @@ import {
   LogOut,
   Shield,
   Menu,
+  X,
 } from "lucide-react";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
 
@@ -22,6 +23,18 @@ export interface HeaderNotification {
   message: string;
   isRead: boolean;
   createdAt?: string;
+}
+
+export interface SearchableTaskItem {
+  id: string;
+  taskNumber: number;
+  title: string;
+  description?: string | null;
+  type: string;
+  department?: string;
+  status: string;
+  project?: { name: string } | null;
+  assignments?: { user?: { name: string } | null }[];
 }
 
 interface HeaderProps {
@@ -35,6 +48,7 @@ interface HeaderProps {
   onOpenNewTask: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  tasks?: SearchableTaskItem[];
   currentDate: Date;
   onDateChange: (newDate: Date) => void;
   onLogout: () => void;
@@ -50,6 +64,7 @@ export function Header({
   onOpenNewTask,
   searchQuery,
   onSearchChange,
+  tasks = [],
   currentDate,
   onDateChange,
   onLogout,
@@ -61,6 +76,54 @@ export function Header({
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setIsSearchOpen(true);
+      } else if (e.key === "Escape") {
+        setIsSearchOpen(false);
+      }
+    };
+    const onClickOutside = (e: MouseEvent) => {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(e.target as Node)
+      ) {
+        setIsSearchOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onClickOutside);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onClickOutside);
+    };
+  }, []);
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const normalizedNum = q.replace(/^#/, "");
+    return tasks
+      .filter((t) => {
+        if (t.status === "CANCELLED") return false;
+        const matchTitle = t.title.toLowerCase().includes(q);
+        const matchNum = String(t.taskNumber).includes(normalizedNum);
+        const matchDesc = t.description?.toLowerCase().includes(q);
+        const matchProject = t.project?.name.toLowerCase().includes(q);
+        const matchUser = (t.assignments || []).some((a) =>
+          a.user?.name.toLowerCase().includes(q)
+        );
+        return matchTitle || matchNum || matchDesc || matchProject || matchUser;
+      })
+      .slice(0, 8);
+  }, [tasks, searchQuery]);
 
   const handleNotificationClick = async (n: HeaderNotification) => {
     if (!n.isRead) {
@@ -152,21 +215,90 @@ export function Header({
       </div>
 
       {/* Center: Global Search */}
-      <div className="flex-1 max-w-md mx-8 relative">
+      <div ref={searchContainerRef} className="flex-1 max-w-md mx-8 relative">
         <div className="relative flex items-center">
           <Search size={16} className="absolute left-3.5 text-stone-400" />
           <input
+            ref={searchInputRef}
             id="global-search-input"
             type="text"
             value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onFocus={() => setIsSearchOpen(true)}
+            onChange={(e) => {
+              onSearchChange(e.target.value);
+              setIsSearchOpen(true);
+            }}
             placeholder="ძებნა (ტასკი, ადამიანი, ID...)"
             className="w-full pl-9 pr-14 py-2 bg-stone-50/80 border border-stone-200/90 rounded-full text-xs placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
           />
-          <kbd className="absolute right-3 px-1.5 py-0.5 text-[10px] font-semibold text-stone-400 bg-white border border-stone-200 rounded shadow-2xs pointer-events-none">
-            Ctrl K
-          </kbd>
+          {searchQuery ? (
+            <button
+              type="button"
+              onClick={() => {
+                onSearchChange("");
+                searchInputRef.current?.focus();
+              }}
+              className="absolute right-3 p-0.5 text-stone-400 hover:text-stone-700 rounded-full cursor-pointer"
+              title="გასუფთავება"
+            >
+              <X size={14} />
+            </button>
+          ) : (
+            <kbd className="absolute right-3 px-1.5 py-0.5 text-[10px] font-semibold text-stone-400 bg-white border border-stone-200 rounded shadow-2xs pointer-events-none">
+              Ctrl K
+            </kbd>
+          )}
         </div>
+
+        {/* Live Global Search Dropdown */}
+        {isSearchOpen && searchQuery.trim().length > 0 && (
+          <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-stone-200 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in duration-100">
+            {searchResults.length === 0 ? (
+              <div className="px-4 py-5 text-center text-xs text-stone-400">
+                შედეგები ვერ მოიძებნა („{searchQuery.trim()}“)
+              </div>
+            ) : (
+              <div className="divide-y divide-stone-100 max-h-80 overflow-y-auto">
+                {searchResults.map((t) => {
+                  const isQa = t.department === "QA" || t.type === "QA";
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        if (onSelectTask) onSelectTask(t.id);
+                        setIsSearchOpen(false);
+                      }}
+                      className="w-full px-3.5 py-2.5 text-left hover:bg-orange-50/60 transition-colors flex items-center justify-between gap-2 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`text-[10px] font-black font-mono px-1.5 py-0.5 rounded shrink-0 ${
+                            isQa
+                              ? "bg-stone-700 text-white"
+                              : "bg-orange-50 text-orange-700 border border-orange-200/70"
+                          }`}
+                        >
+                          {isQa ? "QA" : `#${t.taskNumber}`}
+                        </span>
+                        <span className="text-xs font-bold text-stone-900 truncate">
+                          {t.title}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-stone-400">
+                        {t.project?.name && (
+                          <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 font-semibold">
+                            {t.project.name}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Right Controls */}

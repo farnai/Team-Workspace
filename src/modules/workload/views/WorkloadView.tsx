@@ -19,6 +19,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { formatGeorgianDateShort } from "@/lib/dateUtils";
+import { getTbilisiTodayString } from "@/lib/date";
+import { format, addDays } from "date-fns";
 import { Department } from "@prisma/client";
 import { DepartmentBadge } from "@/lib/departments";
 
@@ -180,13 +182,13 @@ export function WorkloadDashboard({
   useEffect(() => {
     let active = true;
 
-    const today = new Date();
-    today.setDate(today.getDate() + startDateOffset);
-    const startStr = today.toISOString().split("T")[0];
+    const tbilisiTodayStr = getTbilisiTodayString();
+    const [ty, tm, td] = tbilisiTodayStr.split("-").map(Number);
+    const startDay = addDays(new Date(ty, tm - 1, td), startDateOffset);
+    const startStr = format(startDay, "yyyy-MM-dd");
 
-    const endDay = new Date(today);
-    endDay.setDate(endDay.getDate() + daysPeriod - 1);
-    const endStr = endDay.toISOString().split("T")[0];
+    const endDay = addDays(startDay, daysPeriod - 1);
+    const endStr = format(endDay, "yyyy-MM-dd");
 
     let url = `/api/workload?startDate=${startStr}&endDate=${endStr}&days=${daysPeriod}`;
     if (selectedProjectId !== "ALL") url += `&projectId=${selectedProjectId}`;
@@ -227,7 +229,7 @@ export function WorkloadDashboard({
   const teamTotals = workloads.reduce(
     (acc, w) => {
       acc.totalActive += w.stats.activeCount;
-      acc.totalQueued += w.stats.queuedCount;
+      acc.totalQueued += w.stats.plannedCount + w.stats.queuedCount;
       acc.totalPaused += w.stats.pausedCount;
       acc.totalBlocked += w.stats.blockedCount;
       acc.totalOverdue += w.stats.overdueCount;
@@ -311,8 +313,7 @@ export function WorkloadDashboard({
             </h1>
           </div>
           <p className="text-xs text-stone-500 mt-1 font-medium">
-            გუნდის წევრების რეალური დავალებები, ეტაპების მოლოდინის სტატუსი და განრიგის
-            კონფლიქტები.
+            გუნდის წევრების მიმდინარე დავალებები, დატვირთვა და განრიგის კონფლიქტები.
           </p>
         </div>
 
@@ -442,7 +443,7 @@ export function WorkloadDashboard({
 
         <div className="p-3.5 bg-white rounded-2xl border border-stone-200/90 shadow-2xs space-y-1">
           <div className="flex items-center justify-between text-stone-500 text-[10px] font-bold uppercase tracking-wider">
-            <span>მოლოდინში (ეტაპები)</span>
+            <span>დაგეგმილი</span>
             <Clock size={13} className="text-stone-500" />
           </div>
           <div className="text-xl font-black text-stone-800">
@@ -861,7 +862,7 @@ export function WorkloadDashboard({
                           <div className="flex items-center gap-1 text-[10px] text-stone-400 mt-0.5 font-medium">
                             <span>აქტიური: {item.stats.activeCount}</span>
                             <span>•</span>
-                            <span>რიგში: {item.stats.queuedCount}</span>
+                            <span>დაგეგმილი: {item.stats.plannedCount}</span>
                           </div>
                         </div>
                       </div>
@@ -894,29 +895,39 @@ export function WorkloadDashboard({
                           {/* Task Chips */}
                           {(cell.assignments || []).map((task) => {
                             const isSelected = selectedTaskId === task.id;
+                            const isQa = task.type === "QA";
                             return (
                               <div
                                 key={`${task.id}-${cell.date}`}
                                 onClick={() => onSelectTask(task.id)}
                                 className={`p-1.5 rounded-lg border text-[10px] cursor-pointer transition-all shadow-2xs ${
                                   isSelected ? "ring-2 ring-orange-500 font-extrabold" : ""
-                                } ${getAssignmentBadgeClass(
-                                  task.userState
-                                )}`}
+                                } ${
+                                  isQa
+                                    ? "bg-stone-100 text-stone-800 border-stone-300 hover:bg-stone-200/70"
+                                    : getAssignmentBadgeClass(task.userState)
+                                }`}
                                 title={`#${task.taskNumber} ${task.title} • სტატუსი: ${getUserStateLabel(
                                   task.userState
                                 )}`}
                               >
                                 <div className="flex items-center justify-between gap-1">
-                                  <span className="font-mono font-bold shrink-0">
-                                    #{task.taskNumber}
-                                  </span>
+                                  <div className="flex items-center gap-1 min-w-0">
+                                    {isQa && (
+                                      <span className="text-[8px] font-black px-1 rounded bg-stone-700 text-white uppercase shrink-0">
+                                        QA
+                                      </span>
+                                    )}
+                                    <span className="font-mono font-bold shrink-0">
+                                      #{task.taskNumber}
+                                    </span>
+                                  </div>
                                   <span className="text-[8px] font-black uppercase px-1 rounded bg-white/70">
                                     {getUserStateLabel(task.userState)}
                                   </span>
                                 </div>
                                 <div className="font-bold truncate mt-0.5">
-                                  {task.title}
+                                  {isQa ? `ტესტირება: ${task.title}` : task.title}
                                 </div>
                               </div>
                             );

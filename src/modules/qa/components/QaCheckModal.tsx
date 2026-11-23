@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   X,
   CheckSquare,
@@ -12,6 +12,7 @@ import {
   ListChecks,
 } from "lucide-react";
 import { Department, Priority, TaskStatus, TaskType } from "@prisma/client";
+import type { BacklogTask } from "@/components/SharedBacklog";
 
 interface ProjectOption {
   id: string;
@@ -19,11 +20,22 @@ interface ProjectOption {
   color?: string | null;
 }
 
+interface QaBlockDraft {
+  id?: string;
+  title: string;
+}
+
+interface QaLinkDraft {
+  id?: string;
+  url: string;
+}
+
 interface QaCheckModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void | Promise<void>;
   projects: ProjectOption[];
+  editingTask?: BacklogTask | null;
 }
 
 export function QaCheckModal({
@@ -31,26 +43,73 @@ export function QaCheckModal({
   onClose,
   onSuccess,
   projects,
+  editingTask = null,
 }: QaCheckModalProps) {
-  const [title, setTitle] = useState("");
-  const [projectId, setProjectId] = useState(projects[0]?.id || "");
-  const [description, setDescription] = useState("");
-  const [blocks, setBlocks] = useState<string[]>([]);
+  const isEdit = Boolean(editingTask);
+
+  const [title, setTitle] = useState(editingTask?.title || "");
+  const [projectId, setProjectId] = useState(
+    editingTask?.projectId || projects[0]?.id || ""
+  );
+  const [description, setDescription] = useState(editingTask?.description || "");
+  const [blocks, setBlocks] = useState<QaBlockDraft[]>(() =>
+    (editingTask?.subtasks || []).map((s) => ({
+      id: s.id,
+      title: s.title || "",
+    }))
+  );
+  const [removedBlockIds, setRemovedBlockIds] = useState<string[]>([]);
   const [newBlockTitle, setNewBlockTitle] = useState("");
-  const [links, setLinks] = useState<string[]>([]);
+  const [links, setLinks] = useState<QaLinkDraft[]>([]);
+  const [removedLinkIds, setRemovedLinkIds] = useState<string[]>([]);
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const blockInputRef = useRef<HTMLInputElement>(null);
+
+  // Load existing attachments (links) when editing
+  useEffect(() => {
+    if (!isOpen || !editingTask) return;
+    let active = true;
+    fetch(`/api/tasks/${editingTask.id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active || !data?.task) return;
+        const extLinks = (data.task.attachments || [])
+          .filter((a: { isExternal?: boolean; url?: string | null }) => a.isExternal && a.url)
+          .map((a: { id: string; url: string }) => ({ id: a.id, url: a.url }));
+        setLinks(extLinks);
+        if (Array.isArray(data.task.subtasks)) {
+          setBlocks(
+            data.task.subtasks.map((s: { id: string; title: string }) => ({
+              id: s.id,
+              title: s.title,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isOpen, editingTask]);
 
   if (!isOpen) return null;
 
   const handleAddBlock = () => {
     const trimmed = newBlockTitle.trim();
     if (!trimmed) return;
-    setBlocks((prev) => [...prev, trimmed]);
+    setBlocks((prev) => [...prev, { title: trimmed }]);
     setNewBlockTitle("");
     blockInputRef.current?.focus();
+  };
+
+  const handleRemoveBlock = (idx: number) => {
+    const target = blocks[idx];
+    if (target?.id) {
+      setRemovedBlockIds((prev) => [...prev, target.id!]);
+    }
+    setBlocks((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleAddLink = () => {
@@ -60,8 +119,16 @@ export function QaCheckModal({
       trimmed.startsWith("http://") || trimmed.startsWith("https://")
         ? trimmed
         : `https://${trimmed}`;
-    setLinks((prev) => [...prev, normalized]);
+    setLinks((prev) => [...prev, { url: normalized }]);
     setNewLinkUrl("");
+  };
+
+  const handleRemoveLink = (idx: number) => {
+    const target = links[idx];
+    if (target?.id) {
+      setRemovedLinkIds((prev) => [...prev, target.id!]);
+    }
+    setLinks((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -75,49 +142,93 @@ export function QaCheckModal({
 
     const finalBlocks = [...blocks];
     if (newBlockTitle.trim()) {
-      finalBlocks.push(newBlockTitle.trim());
+      finalBlocks.push({ title: newBlockTitle.trim() });
     }
 
     const finalLinks = [...links];
     if (newLinkUrl.trim()) {
       const trimmed = newLinkUrl.trim();
-      finalLinks.push(
-        trimmed.startsWith("http://") || trimmed.startsWith("https://")
-          ? trimmed
-          : `https://${trimmed}`
-      );
+      finalLinks.push({
+        url:
+          trimmed.startsWith("http://") || trimmed.startsWith("https://")
+            ? trimmed
+            : `https://${trimmed}`,
+      });
     }
 
     try {
       setIsSubmitting(true);
-      const res = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim(),
-          projectId: projectId || undefined,
-          priority: Priority.MEDIUM,
-          department: Department.QA,
-          type: TaskType.QA,
-          status: TaskStatus.BACKLOG,
-          description: description.trim() || null,
-          startDate: null,
-          deadline: null,
-          assigneeIds: [],
-          blocks: finalBlocks,
-          links: finalLinks.map((url) => ({ name: "", url })),
-        }),
-      });
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || "QA გვერდის დამატება ვერ მოხერხდა");
+      if (isEdit && editingTask) {
+        const newLinksOnly = finalLinks
+          .filter((l) => !l.id)
+          .map((l) => ({ name: "", url: l.url }));
+
+        const patchRes = await fetch(`/api/tasks/${editingTask.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title.trim(),
+            projectId: projectId || undefined,
+            description: description.trim() || null,
+            links: newLinksOnly,
+          }),
+        });
+        const patchData = await patchRes.json().catch(() => ({}));
+        if (!patchRes.ok) {
+          throw new Error(patchData.error || "QA ტესტის განახლება ვერ მოხერხდა");
+        }
+
+        // Delete removed links
+        for (const attId of removedLinkIds) {
+          await fetch(`/api/attachments/${attId}`, { method: "DELETE" });
+        }
+
+        // Delete removed blocks
+        for (const subId of removedBlockIds) {
+          await fetch(`/api/subtasks/${subId}`, { method: "DELETE" });
+        }
+
+        // Create newly added blocks
+        for (const blk of finalBlocks) {
+          if (!blk.id && blk.title.trim()) {
+            await fetch(`/api/tasks/${editingTask.id}/subtasks`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title: blk.title.trim() }),
+            });
+          }
+        }
+      } else {
+        const res = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title.trim(),
+            projectId: projectId || undefined,
+            priority: Priority.MEDIUM,
+            department: Department.QA,
+            type: TaskType.QA,
+            status: TaskStatus.BACKLOG,
+            description: description.trim() || null,
+            startDate: null,
+            deadline: null,
+            assigneeIds: [],
+            blocks: finalBlocks.map((b) => b.title),
+            links: finalLinks.map((l) => ({ name: "", url: l.url })),
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || "QA ტესტის დამატება ვერ მოხერხდა");
+        }
       }
 
       await onSuccess();
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "შეცდომა შექმნისას");
+      setError(err instanceof Error ? err.message : "შეცდომა შენახვისას");
     } finally {
       setIsSubmitting(false);
     }
@@ -139,10 +250,14 @@ export function QaCheckModal({
             </div>
             <div>
               <h2 className="text-sm font-black text-stone-900">
-                ახალი QA შემოწმება (გვერდი / მოდული)
+                {isEdit
+                  ? "QA ტესტის რედაქტირება"
+                  : "ახალი QA ტესტი (გვერდი / მოდული)"}
               </h2>
               <p className="text-[11px] text-stone-500">
-                დაამატეთ გვერდი და მისი შესამოწმებელი ბლოკები რეგულარული ტესტირებისთვის
+                {isEdit
+                  ? "შეცვალეთ გვერდის დასახელება, ბმულები ან შესამოწმებელი ბლოკები"
+                  : "დაამატეთ გვერდი და მისი შესამოწმებელი ბლოკები რეგულარული ტესტირებისთვის"}
               </p>
             </div>
           </div>
@@ -207,13 +322,13 @@ export function QaCheckModal({
               <div className="space-y-1">
                 {links.map((l, idx) => (
                   <div
-                    key={idx}
+                    key={l.id || idx}
                     className="flex items-center justify-between gap-2 px-3 py-1.5 bg-stone-50 border border-stone-200 rounded-xl"
                   >
-                    <span className="text-stone-700 truncate">{l}</span>
+                    <span className="text-stone-700 truncate">{l.url}</span>
                     <button
                       type="button"
-                      onClick={() => setLinks((prev) => prev.filter((_, i) => i !== idx))}
+                      onClick={() => handleRemoveLink(idx)}
                       className="p-1 text-stone-400 hover:text-rose-600 cursor-pointer"
                     >
                       <Trash2 size={12} />
@@ -258,18 +373,18 @@ export function QaCheckModal({
               <div className="space-y-1.5">
                 {blocks.map((block, idx) => (
                   <div
-                    key={idx}
+                    key={block.id || idx}
                     className="flex items-center justify-between gap-2 px-3 py-1.5 bg-white border border-stone-200 rounded-xl"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                         #{idx + 1}
                       </span>
-                      <span className="font-semibold text-stone-800 truncate">{block}</span>
+                      <span className="font-semibold text-stone-800 truncate">{block.title}</span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setBlocks((prev) => prev.filter((_, i) => i !== idx))}
+                      onClick={() => handleRemoveBlock(idx)}
                       className="p-1 text-stone-400 hover:text-rose-600 rounded cursor-pointer shrink-0"
                       title="წაშლა"
                     >
@@ -336,7 +451,7 @@ export function QaCheckModal({
               className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-xs disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
             >
               {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-              <span>გვერდის დამატება</span>
+              <span>{isEdit ? "ცვლილებების შენახვა" : "გვერდის დამატება"}</span>
             </button>
           </div>
         </form>

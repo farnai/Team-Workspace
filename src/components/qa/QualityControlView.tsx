@@ -434,19 +434,8 @@ export function QualityControlView({
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer"
           >
             <Plus size={15} strokeWidth={2.5} />
-            <span>ახალი QA შემოწმება</span>
+            <span>ახალი QA ტესტი</span>
           </button>
-
-          {onNavigateToTimeline && (
-            <button
-              onClick={onNavigateToTimeline}
-              className="px-3 py-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-              title="თაიმლაინი"
-            >
-              <Calendar size={13} className="text-stone-500" />
-              <span className="hidden sm:inline">თაიმლაინი</span>
-            </button>
-          )}
         </div>
       </div>
 
