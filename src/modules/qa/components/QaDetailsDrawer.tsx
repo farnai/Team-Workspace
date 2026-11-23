@@ -605,8 +605,8 @@ export function QaDetailsDrawer({
                   />
                   <button
                     type="submit"
-                    disabled={isAddingBlock || !newBlockTitle.trim()}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
+                    disabled={isAddingBlock}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                   >
                     <Plus size={13} />
                     <span>დამატება</span>

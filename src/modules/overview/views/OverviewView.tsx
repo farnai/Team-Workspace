@@ -392,9 +392,15 @@ export function OverviewDashboard({
 
                   {/* Status Pill */}
                   {item.currentWork ? (
-                    <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 shrink-0">
-                      აქტიურია
-                    </span>
+                    item.currentWork.type === "QA" ? (
+                      <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-stone-700 text-white border border-stone-700 shrink-0">
+                        ტესტს აკეთებს
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 shrink-0">
+                        აქტიურია
+                      </span>
+                    )
                   ) : item.nextScheduledWork ? (
                     <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60 shrink-0">
                       მოლოდინში
@@ -520,9 +526,15 @@ export function OverviewDashboard({
                     </td>
                     <td className="py-2 px-3">
                       {item.currentWork ? (
-                        <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                          აქტიური
-                        </span>
+                        item.currentWork.type === "QA" ? (
+                          <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-stone-700 text-white">
+                            ტესტს აკეთებს
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                            აქტიური
+                          </span>
+                        )
                       ) : item.nextScheduledWork ? (
                         <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
                           მოლოდინში
@@ -535,11 +547,16 @@ export function OverviewDashboard({
                     </td>
                     <td className="py-2 px-3 max-w-xs truncate font-semibold text-stone-800">
                       {item.currentWork ? (
-                        <span>
-                          <span className="font-mono text-orange-600 font-bold mr-1">
+                        <span className="inline-flex items-center gap-1">
+                          {item.currentWork.type === "QA" && (
+                            <span className="text-[9px] font-black px-1 py-0.2 rounded bg-stone-700 text-white uppercase">
+                              QA
+                            </span>
+                          )}
+                          <span className="font-mono text-orange-600 font-bold">
                             #{item.currentWork.taskNumber}
                           </span>
-                          {item.currentWork.title}
+                          <span>{item.currentWork.title}</span>
                         </span>
                       ) : item.nextScheduledWork ? (
                         <span className="text-stone-500 italic">

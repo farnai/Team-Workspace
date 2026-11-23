@@ -24,6 +24,8 @@ import {
   XCircle,
   History,
   X,
+  Folder,
+  ArrowLeft,
 } from "lucide-react";
 import { TaskStatus, Priority, Department, TaskType } from "@prisma/client";
 import { BacklogTask } from "@/components/SharedBacklog";
@@ -77,7 +79,8 @@ export function QualityControlView({
   externalSearchQuery,
   onNavigateToTimeline,
 }: QualityControlViewProps) {
-  // Filters State
+  // Filters & Project Grouping State
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProject, setSelectedProject] = useState<string>("ALL");
   const [selectedUser, setSelectedUser] = useState<string>("ALL");
@@ -96,6 +99,8 @@ export function QualityControlView({
   const [blockNotes, setBlockNotes] = useState<Record<string, string>>({});
   const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
   const [finishingTaskId, setFinishingTaskId] = useState<string | null>(null);
+  const [newBlockDrafts, setNewBlockDrafts] = useState<Record<string, string>>({});
+  const [addingBlockTaskId, setAddingBlockTaskId] = useState<string | null>(null);
 
   const toggleChecklist = (taskId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -180,7 +185,8 @@ export function QualityControlView({
       }
 
       // Project Filter
-      if (selectedProject !== "ALL" && t.projectId !== selectedProject) {
+      const effectiveProject = activeProjectId || selectedProject;
+      if (effectiveProject !== "ALL" && t.projectId !== effectiveProject) {
         return false;
       }
 
@@ -203,7 +209,7 @@ export function QualityControlView({
 
       return true;
     });
-  }, [qaTasks, searchQuery, externalSearchQuery, selectedProject, selectedUser, selectedStatus]);
+  }, [qaTasks, searchQuery, externalSearchQuery, activeProjectId, selectedProject, selectedUser, selectedStatus]);
 
   // Overall Statistics for KPI Cards
   const stats = useMemo(() => {
@@ -335,6 +341,29 @@ export function QualityControlView({
     }
   };
 
+  const handleAddBlockInline = async (taskId: string) => {
+    const title = (newBlockDrafts[taskId] || "").trim();
+    if (!title || addingBlockTaskId) return;
+    setAddingBlockTaskId(taskId);
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/subtasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (res.ok) {
+        setNewBlockDrafts((prev) => ({ ...prev, [taskId]: "" }));
+        if (onTaskUpdated) {
+          await onTaskUpdated();
+        }
+      }
+    } catch (err) {
+      console.error("Failed to add QA block:", err);
+    } finally {
+      setAddingBlockTaskId(null);
+    }
+  };
+
   // Helper for Task Code (e.g. SSP-8)
   const getTaskCode = (task: BacklogTask) => {
     if (task.project?.name) {
@@ -439,50 +468,7 @@ export function QualityControlView({
         </div>
       </div>
 
-      {/* 2. Top Summary KPI Widgets */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
-        <div className="bg-white p-3.5 rounded-2xl border border-stone-200/90 shadow-2xs">
-          <span className="text-[11px] font-bold text-stone-500 block mb-1">სულ გვერდები</span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-stone-900">{stats.total}</span>
-            <span className="text-[11px] font-bold text-stone-400">
-              გვერდი / {stats.totalSubtasksCount} ბლოკი
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white p-3.5 rounded-2xl border border-stone-200/90 shadow-2xs">
-          <span className="text-[11px] font-bold text-blue-600 block mb-1">ტესტირებაშია / რიგში</span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-blue-700">{stats.inProgress}</span>
-            <span className="text-[11px] font-bold text-amber-600">
-              {stats.planned} შესამოწმებელი
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white p-3.5 rounded-2xl border border-emerald-200/70 shadow-2xs">
-          <span className="text-[11px] font-bold text-emerald-600 block mb-1">მზადაა / ჩაბარდა (Pass)</span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-emerald-700">{stats.passedPages}</span>
-            <span className="text-[11px] font-bold text-emerald-600">
-              {stats.passedSubtasksCount}/{stats.totalSubtasksCount} ბლოკი გამართულია
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white p-3.5 rounded-2xl border border-rose-200/70 shadow-2xs">
-          <span className="text-[11px] font-bold text-rose-600 block mb-1">ჩავარდა / დაზიანებაა (Failed)</span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-rose-700">{stats.failedPages}</span>
-            <span className="text-[11px] font-bold text-rose-600">
-              {stats.failedSubtasksCount} დაზიანებული ბლოკი
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Control & Filter Bar */}
+      {/* 2. Control & Search Bar */}
       <div className="bg-white p-3 rounded-2xl border border-stone-200/90 shadow-2xs shrink-0 flex items-center gap-2 flex-wrap">
         {/* Search Input */}
         <div className="relative flex-1 min-w-[200px] max-w-md">
@@ -491,7 +477,7 @@ export function QualityControlView({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="ძებნა (გვერდი, შემოწმების სფერო, ტესტერი)..."
+            placeholder="ძებნა (გვერდი, ბლოკი)..."
             className="w-full pl-9 pr-7 py-1.5 bg-stone-50 border border-stone-200 hover:border-stone-300 rounded-xl text-xs font-normal text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
           />
           {searchQuery && (
@@ -508,7 +494,11 @@ export function QualityControlView({
         <div className="relative">
           <select
             value={selectedProject}
-            onChange={(e) => setSelectedProject(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSelectedProject(val);
+              setActiveProjectId(val === "ALL" ? null : val);
+            }}
             className="appearance-none bg-stone-50 border border-stone-200 hover:border-stone-300 rounded-xl pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
           >
             <option value="ALL">ყველა პროექტი</option>
@@ -523,61 +513,130 @@ export function QualityControlView({
             className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400"
           />
         </div>
-
-        {/* Tester / Assignee Filter */}
-        <div className="relative">
-          <select
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
-            className="appearance-none bg-stone-50 border border-stone-200 hover:border-stone-300 rounded-xl pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-          >
-            <option value="ALL">ყველა ტესტერი</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={12}
-            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400"
-          />
-        </div>
-
-        {/* Status / Condition Filter */}
-        <div className="relative">
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value as StatusFilter)}
-            className="appearance-none bg-stone-50 border border-stone-200 hover:border-stone-300 rounded-xl pl-3 pr-7 py-1.5 text-xs font-normal text-stone-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-          >
-            <option value="ALL">ყველა მდგომარეობა</option>
-            <option value="IN_PROGRESS">ტესტირებაშია (In Testing)</option>
-            <option value="PLANNED">შესამოწმებელია (Pending)</option>
-            <option value="DONE">მზადაა / ჩაბარდა (Passed)</option>
-            <option value="PAUSED_OR_BLOCKED">ჩავარდა / დაზიანებაა (Failed / Paused)</option>
-          </select>
-          <ChevronDown
-            size={12}
-            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400"
-          />
-        </div>
       </div>
 
-      {/* 4. Single-Line List of QA Tasks (One Line Per Task — No Kanban Columns) */}
+      {/* 4. Project Groups Grid (Initial View) OR QA Tests List inside selected Project */}
       <div className="flex-1 overflow-y-auto space-y-3 min-h-0 pr-1">
-        {filteredQATasks.length === 0 ? (
-          <div className="p-12 text-center bg-white rounded-2xl border border-stone-200/90 text-stone-400 text-xs">
-            ხარისხის კონტროლის დავალებები არ მოიძებნა
-          </div>
+        {!activeProjectId && selectedProject === "ALL" ? (
+          projects.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-2xl border border-stone-200/90 text-stone-400 text-xs">
+              პროექტები ვერ მოიძებნა
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {projects.map((proj) => {
+                const projQaTasks = filteredQATasks.filter((t) => t.projectId === proj.id);
+                const totalBlocks = projQaTasks.reduce(
+                  (acc, t) => acc + (t.subtasks?.length || 0),
+                  0
+                );
+                const activeCount = projQaTasks.filter(
+                  (t) => t.status === TaskStatus.IN_PROGRESS
+                ).length;
+                const failedRuns = projQaTasks.filter((t) => {
+                  const lastRun = (t.auditEvents || []).find(
+                    (ev) => ev.action === "TEST_RUN_RECORDED"
+                  );
+                  return lastRun?.newValues?.status === "FAILED";
+                }).length;
+                const passedRuns = projQaTasks.filter((t) => {
+                  const lastRun = (t.auditEvents || []).find(
+                    (ev) => ev.action === "TEST_RUN_RECORDED"
+                  );
+                  return lastRun?.newValues?.status === "PASSED";
+                }).length;
+
+                return (
+                  <div
+                    key={proj.id}
+                    onClick={() => {
+                      setActiveProjectId(proj.id);
+                      setSelectedProject(proj.id);
+                    }}
+                    className="bg-white rounded-2xl border border-stone-200/90 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer p-5 flex flex-col justify-between gap-4 group"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-2xs"
+                            style={{ backgroundColor: proj.color || "#059669" }}
+                          >
+                            <Folder size={17} />
+                          </div>
+                          <h3 className="text-sm font-black text-stone-900 group-hover:text-emerald-700 transition-colors truncate">
+                            {proj.name}
+                          </h3>
+                        </div>
+                        <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                          {projQaTasks.length} გვერდი
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-stone-500 pt-3 border-t border-stone-100 flex-wrap gap-2">
+                      <span className="font-semibold">{totalBlocks} ბლოკი</span>
+                      <div className="flex items-center gap-2.5 font-bold">
+                        {activeCount > 0 && (
+                          <span className="text-blue-600">{activeCount} მიმდინარე</span>
+                        )}
+                        {passedRuns > 0 && (
+                          <span className="text-emerald-700">✓ {passedRuns} გამართული</span>
+                        )}
+                        {failedRuns > 0 && (
+                          <span className="text-rose-600">✕ {failedRuns} დაზიანებული</span>
+                        )}
+                        {activeCount === 0 && passedRuns === 0 && failedRuns === 0 && (
+                          <span className="text-emerald-700 group-hover:translate-x-0.5 transition-transform">
+                            გახსნა →
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
         ) : (
-          filteredQATasks.map((task) => {
+          <>
+            {/* Back to Projects Breadcrumb */}
+            <div className="flex items-center justify-between gap-3 bg-white px-4 py-2.5 rounded-xl border border-stone-200/90 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveProjectId(null);
+                    setSelectedProject("ALL");
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <ArrowLeft size={13} />
+                  <span>ყველა პროექტი</span>
+                </button>
+                <span className="text-stone-300">/</span>
+                <span className="text-sm font-black text-stone-900">
+                  {projects.find((p) => p.id === (activeProjectId || selectedProject))?.name ||
+                    "პროექტი"}
+                </span>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  {filteredQATasks.length} გვერდი
+                </span>
+              </div>
+            </div>
+
+            {filteredQATasks.length === 0 ? (
+              <div className="p-12 text-center bg-white rounded-2xl border border-stone-200/90 text-stone-400 text-xs">
+                ამ პროექტში QA ტესტები ჯერ არ არის დამატებული
+              </div>
+            ) : (
+              filteredQATasks.map((task) => {
             const isSelected = selectedTaskId === task.id;
             const taskCode = getTaskCode(task);
             const isChecklistOpen = Boolean(expandedChecklists[task.id]);
             const isHistoryOpen = Boolean(expandedHistory[task.id]);
             const taskHistory = task.auditEvents || [];
-            const latestHistory = taskHistory.find((ev) => ev.action === "TEST_RUN_RECORDED") || taskHistory[0];
+            const latestHistory = taskHistory.find((ev) => ev.action === "TEST_RUN_RECORDED");
             const lastRunVerdict =
               taskHistory.find((ev) => ev.action === "TEST_RUN_RECORDED")?.newValues?.status as
                 | string
@@ -687,8 +746,10 @@ export function QualityControlView({
                           <span className="truncate max-w-[180px]" title={`${formatNumericTbilisiDate(latestHistory.createdAt)} — ${latestHistory.actor.name}`}>
                             {formatNumericTbilisiDate(latestHistory.createdAt)} • {latestHistory.actor.name}
                           </span>
+                        ) : task.status === TaskStatus.IN_PROGRESS ? (
+                          <span className="text-blue-600">მიმდინარეობს...</span>
                         ) : (
-                          <span>{formatTestingPeriod(task.startDate, task.deadline)}</span>
+                          <span className="text-stone-400 font-medium italic">ჯერ ტესტი არ ჩატარებულა</span>
                         )}
                       </div>
                     </div>
@@ -731,22 +792,20 @@ export function QualityControlView({
                     </div>
 
                     {/* 4. Checklist & History Triggers */}
-                    {totalSubtasks > 0 && (
-                      <button
-                        type="button"
-                        onClick={(e) => toggleChecklist(task.id, e)}
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
-                          isChecklistOpen
-                            ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                            : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
-                        }`}
-                        title="გვერდის ბლოკების ტესტირება"
-                      >
-                        <ListCheck size={14} className={isChecklistOpen ? "text-emerald-600" : "text-stone-400"} />
-                        <span>ბლოკები ({totalSubtasks})</span>
-                        {isChecklistOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => toggleChecklist(task.id, e)}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                        isChecklistOpen
+                          ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                          : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
+                      }`}
+                      title="გვერდის ბლოკების ტესტირება"
+                    >
+                      <ListCheck size={14} className={isChecklistOpen ? "text-emerald-600" : "text-stone-400"} />
+                      <span>ბლოკები ({totalSubtasks})</span>
+                      {isChecklistOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
 
                     {taskHistory.length > 0 && (
                       <button
@@ -828,7 +887,7 @@ export function QualityControlView({
                 </div>
 
                 {/* Inline Expandable Checklist Panel (No stages — Pass / Failed per page block) */}
-                {isChecklistOpen && totalSubtasks > 0 && (
+                {isChecklistOpen && (
                   <div
                     className="px-5 pb-4 pt-2 bg-stone-50/80 border-t border-stone-200/80 space-y-2.5 animate-in fade-in duration-150"
                     onClick={(e) => e.stopPropagation()}
@@ -953,6 +1012,37 @@ export function QualityControlView({
                       })}
                     </div>
 
+                    {/* Inline Add Block Input */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={newBlockDrafts[task.id] || ""}
+                        onChange={(e) =>
+                          setNewBlockDrafts((prev) => ({
+                            ...prev,
+                            [task.id]: e.target.value,
+                          }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddBlockInline(task.id);
+                          }
+                        }}
+                        placeholder="ახალი შესამოწმებელი ბლოკის დამატება..."
+                        className="flex-1 px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                      <button
+                        type="button"
+                        disabled={addingBlockTaskId === task.id}
+                        onClick={() => handleAddBlockInline(task.id)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        <Plus size={13} />
+                        <span>დამატება</span>
+                      </button>
+                    </div>
+
                     {(task.status === TaskStatus.IN_PROGRESS || testedSubtasks > 0) && (
                       <div className="flex items-center justify-between gap-3 pt-2 border-t border-stone-200/80">
                         <span className="text-[11px] text-stone-500 font-medium">
@@ -1046,6 +1136,37 @@ export function QualityControlView({
                       })}
                     </div>
 
+                    {/* Inline Add Block Input */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={newBlockDrafts[task.id] || ""}
+                        onChange={(e) =>
+                          setNewBlockDrafts((prev) => ({
+                            ...prev,
+                            [task.id]: e.target.value,
+                          }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddBlockInline(task.id);
+                          }
+                        }}
+                        placeholder="ახალი შესამოწმებელი ბლოკის დამატება..."
+                        className="flex-1 px-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                      <button
+                        type="button"
+                        disabled={addingBlockTaskId === task.id}
+                        onClick={() => handleAddBlockInline(task.id)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        <Plus size={13} />
+                        <span>დამატება</span>
+                      </button>
+                    </div>
+
                     {(task.status === TaskStatus.IN_PROGRESS || testedSubtasks > 0) && (
                       <div className="flex items-center justify-between gap-3 pt-2 border-t border-stone-200/80">
                         <span className="text-[11px] text-stone-500 font-medium">
@@ -1069,6 +1190,8 @@ export function QualityControlView({
               </div>
             );
           })
+        )}
+          </>
         )}
       </div>
 
