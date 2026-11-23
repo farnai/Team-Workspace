@@ -134,11 +134,9 @@ export function KanbanBoard({
         const isQA = task.department === Department.QA || task.type === TaskType.QA;
         if (!isQA) return false;
       } else {
-        // In Backlog View: when "ALL" is selected, exclude QA tasks so they don't mix!
-        if (selectedDepartment === "ALL") {
-          const isQA = task.department === Department.QA || task.type === TaskType.QA;
-          if (isQA) return false;
-        }
+        // In Backlog View: strictly exclude QA checks so QA remains a separate section
+        const isQA = task.department === Department.QA || task.type === TaskType.QA;
+        if (isQA) return false;
       }
 
       // Search query (from global header or internal input)
@@ -674,7 +672,6 @@ export function KanbanBoard({
                 <option value="ALL">ყველა გუნდი (Dev & Content)</option>
                 <option value="DEVELOPMENT">💻 დეველოპმენტი</option>
                 <option value="CONTENT">✍️ კონტენტი</option>
-                <option value="QA">🛡️ ხარისხის კონტროლი</option>
               </>
             )}
           </select>

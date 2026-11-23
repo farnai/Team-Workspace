@@ -16,6 +16,8 @@ import { CalendarSettings } from "@/components/settings/CalendarSettings";
 import { ArchiveView } from "@/components/archive/ArchiveView";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { QualityControlView } from "@/components/qa/QualityControlView";
+import { QaCheckModal } from "@/modules/qa/components/QaCheckModal";
+import { QaDetailsDrawer } from "@/modules/qa/components/QaDetailsDrawer";
 import { ReportsDashboard } from "@/components/reports/ReportsDashboard";
 import { ActivityLogDashboard } from "@/components/audit/ActivityLogDashboard";
 import { ProjectsView } from "@/components/projects/ProjectsView";
@@ -98,6 +100,7 @@ export default function WorkspacePage({
   // Backlog & Modals State
   const [tasks, setTasks] = useState<BacklogTask[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreateQaModalOpen, setIsCreateQaModalOpen] = useState(false);
   const [createTaskDefaultProjectId, setCreateTaskDefaultProjectId] = useState<string | undefined>(undefined);
   const [createTaskDefaultDepartment, setCreateTaskDefaultDepartment] = useState<Department | undefined>(undefined);
   const [createTaskDefaultType, setCreateTaskDefaultType] = useState<TaskType | undefined>(undefined);
@@ -547,7 +550,7 @@ export default function WorkspacePage({
                 tasks={tasks}
                 onSelectTask={handleSelectTask}
                 selectedTaskId={selectedTaskId}
-                onOpenNewTask={() => handleOpenNewTask(undefined, Department.QA, TaskType.QA)}
+                onOpenNewTask={() => setIsCreateQaModalOpen(true)}
                 onEditTask={handleEditTask}
                 onStatusChange={handleStatusChange}
                 onDeleteTask={handleTaskDelete}
@@ -674,22 +677,56 @@ export default function WorkspacePage({
         />
       )}
 
-      {/* Task Details Drawer */}
-      {isDrawerOpen && selectedTaskId && (
-        <TaskDetailsDrawer
-          taskId={selectedTaskId}
-          isOpen={isDrawerOpen}
-          onClose={() => {
-            setIsDrawerOpen(false);
-            setSelectedTaskId(null);
-          }}
-          onTaskUpdated={handleTaskSaved}
-          onEditTask={(t) => handleEditTask(t as unknown as BacklogTask)}
-          currentUser={currentUser}
-          users={users}
+      {/* Dedicated QA Check Creation Modal */}
+      {isCreateQaModalOpen && (
+        <QaCheckModal
+          isOpen={isCreateQaModalOpen}
+          onClose={() => setIsCreateQaModalOpen(false)}
+          onSuccess={handleTaskSaved}
           projects={projects}
         />
       )}
+
+      {/* Task or QA Details Drawer */}
+      {isDrawerOpen && selectedTaskId && (() => {
+        const selectedTaskObj = tasks.find((t) => t.id === selectedTaskId);
+        const isSelectedQa =
+          selectedTaskObj?.department === Department.QA ||
+          selectedTaskObj?.type === TaskType.QA ||
+          currentView === "qa";
+
+        if (isSelectedQa) {
+          return (
+            <QaDetailsDrawer
+              taskId={selectedTaskId}
+              isOpen={isDrawerOpen}
+              onClose={() => {
+                setIsDrawerOpen(false);
+                setSelectedTaskId(null);
+              }}
+              onUpdated={handleTaskSaved}
+              currentUser={currentUser}
+              users={users}
+            />
+          );
+        }
+
+        return (
+          <TaskDetailsDrawer
+            taskId={selectedTaskId}
+            isOpen={isDrawerOpen}
+            onClose={() => {
+              setIsDrawerOpen(false);
+              setSelectedTaskId(null);
+            }}
+            onTaskUpdated={handleTaskSaved}
+            onEditTask={(t) => handleEditTask(t as unknown as BacklogTask)}
+            currentUser={currentUser}
+            users={users}
+            projects={projects}
+          />
+        );
+      })()}
 
       {/* Task Quick Edit Modal */}
       {isEditModalOpen && (
@@ -706,6 +743,16 @@ export default function WorkspacePage({
           projects={projects}
           users={users}
           onProjectsUpdated={refreshProjects}
+        />
+      )}
+
+      {/* Dedicated QA Check Creation Modal */}
+      {isCreateQaModalOpen && (
+        <QaCheckModal
+          isOpen={isCreateQaModalOpen}
+          onClose={() => setIsCreateQaModalOpen(false)}
+          onSuccess={handleTaskSaved}
+          projects={projects}
         />
       )}
     </div>

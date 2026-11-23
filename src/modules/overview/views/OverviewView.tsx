@@ -410,19 +410,32 @@ export function OverviewDashboard({
                 {item.currentWork ? (
                   <div
                     onClick={() => onSelectTask(item.currentWork!.taskId)}
-                    className="mt-2 p-2 bg-stone-50/80 hover:bg-stone-100/80 rounded-lg border border-stone-200/70 transition-colors cursor-pointer space-y-1 group/task"
+                    className={`mt-2 p-2 rounded-lg border transition-colors cursor-pointer space-y-1 group/task ${
+                      item.currentWork.type === "QA"
+                        ? "bg-stone-100/90 hover:bg-stone-200/70 border-stone-300/80"
+                        : "bg-stone-50/80 hover:bg-stone-100/80 border-stone-200/70"
+                    }`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-[9.5px] font-mono font-bold text-orange-600 bg-orange-50 px-1 py-0.2 rounded shrink-0">
-                        #{item.currentWork.taskNumber}
-                      </span>
+                      <div className="flex items-center gap-1 min-w-0">
+                        {item.currentWork.type === "QA" && (
+                          <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-stone-700 text-white uppercase shrink-0">
+                            QA
+                          </span>
+                        )}
+                        <span className="text-[9.5px] font-mono font-bold text-orange-600 bg-orange-50 px-1 py-0.2 rounded shrink-0">
+                          #{item.currentWork.taskNumber}
+                        </span>
+                      </div>
                       <span className="text-[10px] text-stone-400 truncate font-medium">
                         {item.currentWork.projectName}
                       </span>
                     </div>
 
                     <div className="text-xs font-bold text-stone-900 group-hover/task:text-blue-600 truncate transition-colors">
-                      {item.currentWork.title}
+                      {item.currentWork.type === "QA"
+                        ? `ტესტირება: ${item.currentWork.title}`
+                        : item.currentWork.title}
                     </div>
 
                     {item.currentWork.stageTitle && (

@@ -67,6 +67,7 @@ export async function startQaRunAction(taskId: string, actor: User) {
             blocks: existing.subtasks.map((s) => ({
               title: s.title,
               status: s.status === SubtaskStatus.DONE ? 'PASSED' : s.status === SubtaskStatus.CANCELLED ? 'FAILED' : 'TODO',
+              ...(s.description ? { note: s.description } : {}),
             })),
           },
           reason:
@@ -82,6 +83,7 @@ export async function startQaRunAction(taskId: string, actor: User) {
       where: { taskId },
       data: {
         status: SubtaskStatus.TODO,
+        description: null,
         completedById: null,
         completedAt: null,
       },

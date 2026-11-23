@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
-import { TaskType, TaskStatus, Prisma } from "@prisma/client";
+import { TaskType, TaskStatus, Department, Prisma } from "@prisma/client";
 import { formatGeorgianDate } from "@/lib/dateUtils";
 
 export async function GET(req: NextRequest) {
@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
 
     const where: Prisma.TaskWhereInput = {
       status: TaskStatus.DONE,
+      type: { not: TaskType.QA },
+      department: { not: Department.QA },
     };
 
     const andConditions: Prisma.TaskWhereInput[] = [];

@@ -9,6 +9,8 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Lock,
 } from "lucide-react";
 import {
@@ -235,6 +237,7 @@ export function VerticalTimeline({
     if (today) return today.date;
     return todayDateStr;
   });
+  const [expandedQaDays, setExpandedQaDays] = useState<Record<string, boolean>>({});
 
   const effectiveActiveDateKey = (() => {
     if (dates.length > 0) {
@@ -620,9 +623,120 @@ export function VerticalTimeline({
 
                 {/* Mode 1: Schedule Mode */}
                 {mode === "schedule" ? (
-                  hasTasks && (
+                  hasTasks && (() => {
+                    const regularTasks = filteredTasks.filter(
+                      (t) => t.type !== "QA" && t.department !== "QA"
+                    );
+                    const qaTasks = filteredTasks.filter(
+                      (t) => t.type === "QA" || t.department === "QA"
+                    );
+                    const isQaExpanded = Boolean(expandedQaDays[day.date]);
+                    const qaTesters = Array.from(
+                      new Map(
+                        qaTasks
+                          .flatMap((qt) =>
+                            qt.responsibleUsers && qt.responsibleUsers.length > 0
+                              ? qt.responsibleUsers
+                              : qt.assignees || []
+                          )
+                          .map((u) => [u.id, u])
+                      ).values()
+                    );
+
+                    return (
                     <div className="space-y-1.5">
-                      {filteredTasks.map((t) => {
+                      {qaTasks.length > 0 && (
+                        <div className="rounded-xl border border-stone-300/90 bg-stone-100/80 overflow-hidden">
+                          <div
+                            onClick={() => {
+                              if (qaTasks.length === 1) {
+                                onSelectTask(qaTasks[0].id);
+                              } else {
+                                setExpandedQaDays((prev) => ({
+                                  ...prev,
+                                  [day.date]: !prev[day.date],
+                                }));
+                              }
+                            }}
+                            className="px-3 py-2 flex items-center justify-between gap-2 cursor-pointer hover:bg-stone-200/50 transition-colors text-xs"
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-stone-700 text-white uppercase tracking-wider shrink-0">
+                                QA
+                              </span>
+                              <span className="font-bold text-stone-800 truncate">
+                                {qaTasks.length === 1
+                                  ? `ტესტირება მიმდინარეობს: ${qaTasks[0].title}`
+                                  : `ტესტირება მიმდინარეობს (${qaTasks.length} გვერდი)`}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {qaTesters.length > 0 && (
+                                <div className="flex items-center gap-1.5">
+                                  <div className="flex -space-x-1">
+                                    {qaTesters.map((u) => (
+                                      <div
+                                        key={u.id}
+                                        className="w-5 h-5 rounded-full bg-stone-300 border border-white flex items-center justify-center text-[8px] font-black text-stone-800"
+                                        title={u.name}
+                                      >
+                                        {u.name.charAt(0)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <span className="text-[11px] font-semibold text-stone-700 hidden sm:inline">
+                                    {qaTesters.map((u) => u.name).join(", ")}
+                                  </span>
+                                </div>
+                              )}
+
+                              {qaTasks.length > 1 && (
+                                <span className="text-stone-500">
+                                  {isQaExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {qaTasks.length > 1 && isQaExpanded && (
+                            <div className="px-3 pb-2.5 pt-1 border-t border-stone-200/80 space-y-1 bg-white/70">
+                              {qaTasks.map((qt) => {
+                                const testers =
+                                  qt.responsibleUsers && qt.responsibleUsers.length > 0
+                                    ? qt.responsibleUsers
+                                    : qt.assignees || [];
+                                return (
+                                  <div
+                                    key={qt.id}
+                                    onClick={() => onSelectTask(qt.id)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 hover:border-stone-400 flex items-center justify-between gap-2 cursor-pointer text-xs transition-colors"
+                                  >
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="text-[9px] font-black px-1 py-0.2 rounded bg-stone-200 text-stone-700 uppercase shrink-0">
+                                        QA
+                                      </span>
+                                      <span className="font-semibold text-stone-800 truncate">
+                                        {qt.title}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0 text-[10px] text-stone-500">
+                                      {testers.length > 0 && (
+                                        <span className="font-medium">
+                                          {testers.map((u) => u.name).join(", ")}
+                                        </span>
+                                      )}
+                                      <span className="font-bold text-stone-700">{qt.progress}%</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {regularTasks.map((t) => {
                         const isSelected = selectedTaskId === t.id;
                         const typeBadge = getTimelineTaskTypeBadge(t.type, t.department);
 
@@ -832,7 +946,8 @@ export function VerticalTimeline({
                         );
                       })}
                     </div>
-                  )
+                    );
+                  })()
                 ) : (
                   /* Mode 2: Activity Mode (Historical Truth) */
                   <div className="space-y-1.5">

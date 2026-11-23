@@ -13,7 +13,6 @@ import {
   X,
   Code2,
   PenTool,
-  ShieldCheck,
   Trash2,
   Edit3,
   UserX,
@@ -492,18 +491,6 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                         >
                           <PenTool size={13} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleChangeDepartment(user, Department.QA)}
-                          title="ხარისხის კონტროლი (QA)"
-                          className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                            user.department === Department.QA
-                              ? "bg-emerald-600 text-white shadow-2xs"
-                              : "text-stone-400 hover:text-emerald-600 hover:bg-white"
-                          }`}
-                        >
-                          <ShieldCheck size={13} />
-                        </button>
                       </div>
                     </td>
 
@@ -670,7 +657,7 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                 <label className="block text-xs font-bold text-stone-700 mb-1">
                   გუნდი / მიმართულება *
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setNewUserDepartment(Department.DEVELOPMENT)}
@@ -694,18 +681,6 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                   >
                     <PenTool size={13} className={newUserDepartment === Department.CONTENT ? "text-white" : "text-purple-600"} />
                     <span>კონტენტი</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewUserDepartment(Department.QA)}
-                    className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      newUserDepartment === Department.QA
-                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20"
-                        : "bg-white text-stone-700 border-stone-200 hover:bg-emerald-50/50"
-                    }`}
-                  >
-                    <ShieldCheck size={13} className={newUserDepartment === Department.QA ? "text-white" : "text-emerald-600"} />
-                    <span>QA</span>
                   </button>
                 </div>
               </div>
@@ -849,7 +824,7 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                 <label className="block text-xs font-bold text-stone-700 mb-1">
                   გუნდი / მიმართულება *
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setEditUserDepartment(Department.DEVELOPMENT)}
@@ -873,18 +848,6 @@ export function AdminUsersManagement({ currentAdminId }: AdminUsersManagementPro
                   >
                     <PenTool size={13} className={editUserDepartment === Department.CONTENT ? "text-white" : "text-purple-600"} />
                     <span>კონტენტი</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditUserDepartment(Department.QA)}
-                    className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      editUserDepartment === Department.QA
-                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20"
-                        : "bg-white text-stone-700 border-stone-200 hover:bg-emerald-50/50"
-                    }`}
-                  >
-                    <ShieldCheck size={13} className={editUserDepartment === Department.QA ? "text-white" : "text-emerald-600"} />
-                    <span>QA</span>
                   </button>
                 </div>
               </div>

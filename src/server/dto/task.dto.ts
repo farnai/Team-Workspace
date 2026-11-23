@@ -28,6 +28,7 @@ export const createTaskDto = z.object({
   assigneeIds: z.array(z.string()).default([]),
   assignees: z.array(assigneeStageInputDto).optional(),
   links: z.array(linkItemDto).default([]),
+  blocks: z.array(z.string().trim().min(1)).optional(),
 })
 
 export type CreateTaskDto = z.infer<typeof createTaskDto>

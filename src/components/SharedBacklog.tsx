@@ -48,6 +48,7 @@ export interface BacklogTask {
   subtasks?: {
     id: string;
     title?: string;
+    description?: string | null;
     status: string;
     deadline?: string | null;
     completedAt?: string | null;
@@ -72,6 +73,7 @@ export interface BacklogTask {
     subtasks?: {
     id: string;
     title?: string;
+    description?: string | null;
     status: string;
     deadline?: string | null;
     completedAt?: string | null;

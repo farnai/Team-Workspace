@@ -31,7 +31,7 @@ export type TaskSummary = Task & {
       }>;
     }
   >;
-  subtasks?: Array<Pick<Subtask, 'id' | 'title' | 'status' | 'deadline'>>;
+  subtasks?: Array<Pick<Subtask, 'id' | 'title' | 'description' | 'status' | 'deadline'>>;
 };
 
 export type TaskDetails = Task & {

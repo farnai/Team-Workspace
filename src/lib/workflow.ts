@@ -25,7 +25,7 @@ export async function calculateAndSyncTaskProgress(
     client.subtask.findMany({
       where: { taskId },
       orderBy: { position: "asc" },
-      select: { title: true, status: true },
+      select: { title: true, status: true, description: true },
     }),
   ]);
 
@@ -94,38 +94,7 @@ export async function calculateAndSyncTaskProgress(
       data: updateData,
     });
 
-    const transitionedToVerdict =
-      untestedBlocks === 0 &&
-      totalBlocks > 0 &&
-      task?.status !== TaskStatus.CANCELLED &&
-      ((failedBlocks > 0 && task?.status !== TaskStatus.BLOCKED) ||
-        (failedBlocks === 0 && task?.status !== TaskStatus.DONE));
-
-    if (actorId && transitionedToVerdict) {
-      await logAuditEvent({
-        taskId,
-        actorId,
-        action: "TEST_RUN_RECORDED",
-        entityType: "QA_PAGE_RUN",
-        entityId: taskId,
-        newValues: {
-          status: failedBlocks > 0 ? "FAILED" : "PASSED",
-          passedCount: passedBlocks,
-          failedCount: failedBlocks,
-          totalCount: totalBlocks,
-          blocks: subtasks.map((s) => ({
-            title: s.title,
-            status: s.status === SubtaskStatus.DONE ? "PASSED" : "FAILED",
-          })),
-        },
-        reason:
-          failedBlocks > 0
-            ? `ტესტი ჩავარდა — ${passedBlocks}/${totalBlocks} გამართული, ${failedBlocks} დაზიანება`
-            : `ტესტი წარმატებულია — ${passedBlocks}/${totalBlocks} ბლოკი გამართულია`,
-        tx: tx,
-      });
-    }
-
+    void actorId;
     return calculatedProgress;
   }
 

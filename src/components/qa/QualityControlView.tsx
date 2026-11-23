@@ -93,6 +93,9 @@ export function QualityControlView({
 
   // Local optimistic subtasks state for immediate checklist check/uncheck
   const [subtaskTogglingId, setSubtaskTogglingId] = useState<string | null>(null);
+  const [blockNotes, setBlockNotes] = useState<Record<string, string>>({});
+  const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
+  const [finishingTaskId, setFinishingTaskId] = useState<string | null>(null);
 
   const toggleChecklist = (taskId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -270,6 +273,68 @@ export function QualityControlView({
     }
   };
 
+  const handleSaveBlockNote = async (subtaskId: string, noteValue: string) => {
+    const trimmed = noteValue.trim();
+    setSavingNoteId(subtaskId);
+    try {
+      await fetch(`/api/subtasks/${subtaskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: trimmed || null }),
+      });
+      if (onTaskUpdated) {
+        await onTaskUpdated();
+      }
+    } catch (err) {
+      console.error("Failed to save QA block note:", err);
+    } finally {
+      setSavingNoteId(null);
+    }
+  };
+
+  const handleFinishTest = async (task: BacklogTask, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (finishingTaskId) return;
+    setFinishingTaskId(task.id);
+    try {
+      // Save any pending block notes before finalizing the run
+      for (const st of task.subtasks || []) {
+        const draft = blockNotes[st.id];
+        if (draft !== undefined && draft.trim() !== (st.description || "").trim()) {
+          await fetch(`/api/subtasks/${st.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ description: draft.trim() || null }),
+          });
+        }
+      }
+
+      const res = await fetch(`/api/tasks/${task.id}/qa-finish`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "ტესტის დასრულება ვერ მოხერხდა");
+      }
+
+      setExpandedChecklists((prev) => ({ ...prev, [task.id]: false }));
+      setBlockNotes((prev) => {
+        const next = { ...prev };
+        for (const st of task.subtasks || []) {
+          delete next[st.id];
+        }
+        return next;
+      });
+      if (onTaskUpdated) {
+        await onTaskUpdated();
+      }
+    } catch (err) {
+      console.error("Failed to finish QA test:", err);
+    } finally {
+      setFinishingTaskId(null);
+    }
+  };
+
   // Helper for Task Code (e.g. SSP-8)
   const getTaskCode = (task: BacklogTask) => {
     if (task.project?.name) {
@@ -303,48 +368,40 @@ export function QualityControlView({
   const getStatusBadge = (
     status: TaskStatus,
     failedSubtasks = 0,
-    untestedSubtasks = 0
+    lastRunVerdict?: string
   ) => {
-    void untestedSubtasks;
-    switch (status) {
-      case TaskStatus.DONE:
+    if (status === TaskStatus.IN_PROGRESS) {
+      if (failedSubtasks > 0) {
         return {
-          label: "✅ მზადაა — ტესტი ჩაბარდა (Passed)",
-          badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300 font-bold",
-          dotColor: "bg-emerald-500",
-        };
-      case TaskStatus.BLOCKED:
-        return {
-          label: "❌ ტესტი ჩავარდა — დაზიანებაა (Failed)",
-          badgeClass: "bg-rose-50 text-rose-700 border-rose-300 font-bold",
+          label: `⚠️ ტესტირებაშია (${failedSubtasks} დაზიანება)`,
+          badgeClass: "bg-amber-50 text-rose-700 border-amber-300 font-bold",
           dotColor: "bg-rose-500",
         };
-      case TaskStatus.IN_PROGRESS:
-        if (failedSubtasks > 0) {
-          return {
-            label: `⚠️ ტესტირებაშია (${failedSubtasks} დაზიანება)`,
-            badgeClass: "bg-amber-50 text-rose-700 border-amber-300 font-bold",
-            dotColor: "bg-rose-500",
-          };
-        }
-        return {
-          label: "🔵 ტესტირებაშია (In Testing)",
-          badgeClass: "bg-blue-50 text-blue-700 border-blue-300 font-bold",
-          dotColor: "bg-blue-500",
-        };
-      case TaskStatus.PAUSED:
-        return {
-          label: "⏸️ შეჩერებულია (Paused)",
-          badgeClass: "bg-amber-50 text-amber-700 border-amber-300 font-bold",
-          dotColor: "bg-amber-500",
-        };
-      default:
-        return {
-          label: "⚪ შესამოწმებელია (Pending)",
-          badgeClass: "bg-stone-100 text-stone-700 border-stone-300 font-bold",
-          dotColor: "bg-stone-400",
-        };
+      }
+      return {
+        label: "🔵 ტესტირებაშია",
+        badgeClass: "bg-blue-50 text-blue-700 border-blue-300 font-bold",
+        dotColor: "bg-blue-500",
+      };
     }
+
+    if (lastRunVerdict === "PASSED") {
+      return {
+        label: "✅ ბოლო ტესტი: გაიარა",
+        badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300 font-bold",
+        dotColor: "bg-emerald-500",
+      };
+    }
+
+    if (lastRunVerdict === "FAILED") {
+      return {
+        label: "❌ ბოლო ტესტი: ჩავარდა",
+        badgeClass: "bg-rose-50 text-rose-700 border-rose-300 font-bold",
+        dotColor: "bg-rose-500",
+      };
+    }
+
+    return null;
   };
 
   return (
@@ -531,7 +588,11 @@ export function QualityControlView({
             const isChecklistOpen = Boolean(expandedChecklists[task.id]);
             const isHistoryOpen = Boolean(expandedHistory[task.id]);
             const taskHistory = task.auditEvents || [];
-            const latestHistory = taskHistory[0];
+            const latestHistory = taskHistory.find((ev) => ev.action === "TEST_RUN_RECORDED") || taskHistory[0];
+            const lastRunVerdict =
+              taskHistory.find((ev) => ev.action === "TEST_RUN_RECORDED")?.newValues?.status as
+                | string
+                | undefined;
 
             const subtasks = task.subtasks || [];
             const totalSubtasks = subtasks.length;
@@ -543,7 +604,7 @@ export function QualityControlView({
               totalSubtasks > 0
                 ? Math.round((testedSubtasks / totalSubtasks) * 100)
                 : task.progress;
-            const statusMeta = getStatusBadge(task.status, failedSubtasks, untestedSubtasks);
+            const statusMeta = getStatusBadge(task.status, failedSubtasks, lastRunVerdict);
 
             const primaryTester = task.assignments?.[0]?.user;
 
@@ -572,30 +633,15 @@ export function QualityControlView({
                         </span>
                       )}
 
-                      {/* Priority Tag */}
-                      <span
-                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border shrink-0 ${
-                          task.priority === Priority.CRITICAL
-                            ? "bg-rose-50 text-rose-700 border-rose-200"
-                            : task.priority === Priority.HIGH
-                            ? "bg-orange-50 text-orange-700 border-orange-200"
-                            : "bg-stone-50 text-stone-600 border-stone-200"
-                        }`}
-                      >
-                        {task.priority === Priority.HIGH
-                          ? "მაღალი"
-                          : task.priority === Priority.CRITICAL
-                          ? "კრიტიკული"
-                          : "საშუალო"}
-                      </span>
-
-                      {/* Status / Condition Pill */}
-                      <span
-                        className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 ${statusMeta.badgeClass}`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${statusMeta.dotColor}`} />
-                        <span>{statusMeta.label}</span>
-                      </span>
+                      {/* Status / Last Run Pill (only when in testing or has a previous run verdict) */}
+                      {statusMeta && (
+                        <span
+                          className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 ${statusMeta.badgeClass}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${statusMeta.dotColor}`} />
+                          <span>{statusMeta.label}</span>
+                        </span>
+                      )}
                     </div>
 
                     {/* Module / Page Title */}
@@ -613,12 +659,12 @@ export function QualityControlView({
 
                   {/* Right Meta Column: Tester, Testing Dates, Progress, Checklist Toggle & Actions */}
                   <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 lg:gap-6 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-stone-100">
-                    {/* 1. Tester (ვის ეკუთვნის) */}
-                    <div className="min-w-[120px]">
-                      <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider mb-1">
-                        ტესტერი
-                      </span>
-                      {primaryTester ? (
+                    {/* 1. Active Tester (only shown while a test run is active) */}
+                    {primaryTester && (
+                      <div className="min-w-[120px]">
+                        <span className="text-[10px] font-bold text-stone-400 block uppercase tracking-wider mb-1">
+                          ამოწმებს
+                        </span>
                         <div className="flex items-center gap-1.5">
                           <div className="w-5 h-5 rounded-full bg-stone-200 border border-white flex items-center justify-center text-[8px] font-black text-stone-700 overflow-hidden shadow-2xs shrink-0">
                             {primaryTester.avatarUrl ? (
@@ -638,10 +684,8 @@ export function QualityControlView({
                             {primaryTester.name}
                           </span>
                         </div>
-                      ) : (
-                        <span className="text-xs text-stone-400 italic">დაუნიშნავი</span>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     {/* 2. Testing Dates (ბოლო ტესტირება: თარიღი + ვინ გააკეთა) */}
                     <div className="min-w-[155px]">
@@ -763,15 +807,15 @@ export function QualityControlView({
                       ) : (
                         <button
                           type="button"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            await onStatusChange(task.id, TaskStatus.DONE);
-                          }}
-                          className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
-                          title="ტესტირების დასრულება"
+                          disabled={finishingTaskId === task.id}
+                          onClick={(e) => handleFinishTest(task, e)}
+                          className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+                          title="ტესტის დასრულება და ისტორიაში შენახვა"
                         >
                           <CheckCircle2 size={13} />
-                          <span className="hidden sm:inline">დასრულება</span>
+                          <span className="hidden sm:inline">
+                            {finishingTaskId === task.id ? "ინახება..." : "ტესტის დასრულება"}
+                          </span>
                         </button>
                       )}
 
@@ -817,10 +861,14 @@ export function QualityControlView({
                         const isPassed = st.status === "DONE";
                         const isFailed = st.status === "CANCELLED";
                         const isBusy = subtaskTogglingId === st.id;
+                        const noteValue =
+                          blockNotes[st.id] !== undefined
+                            ? blockNotes[st.id]
+                            : st.description || "";
                         return (
                           <div
                             key={st.id}
-                            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs transition-colors ${
+                            className={`p-2.5 rounded-xl border text-xs transition-colors space-y-2 ${
                               isFailed
                                 ? "bg-rose-50/70 border-rose-300 text-rose-950 shadow-2xs"
                                 : isPassed
@@ -828,58 +876,112 @@ export function QualityControlView({
                                 : "bg-white border-stone-200 text-stone-800 hover:border-stone-300"
                             }`}
                           >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <span className="text-[10px] font-black font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200 shrink-0">
-                                #{idx + 1}
-                              </span>
-                              <span
-                                className={`font-semibold leading-snug ${
-                                  isFailed
-                                    ? "text-rose-900"
-                                    : isPassed
-                                    ? "text-emerald-900"
-                                    : "text-stone-800"
-                                }`}
-                              >
-                                {st.title}
-                              </span>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="text-[10px] font-black font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200 shrink-0">
+                                  #{idx + 1}
+                                </span>
+                                <span
+                                  className={`font-semibold leading-snug ${
+                                    isFailed
+                                      ? "text-rose-900"
+                                      : isPassed
+                                      ? "text-emerald-900"
+                                      : "text-stone-800"
+                                  }`}
+                                >
+                                  {st.title}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={(e) => handleSetBlockStatus(st.id, "DONE", st.status, e)}
+                                  className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-all cursor-pointer disabled:opacity-50 ${
+                                    isPassed
+                                      ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+                                      : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                                  }`}
+                                  title="ბლოკი გამართულია (Pass)"
+                                >
+                                  <CheckCircle2 size={12} />
+                                  <span>მზადაა</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={(e) => handleSetBlockStatus(st.id, "CANCELLED", st.status, e)}
+                                  className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-all cursor-pointer disabled:opacity-50 ${
+                                    isFailed
+                                      ? "bg-rose-600 text-white border-rose-600 shadow-2xs"
+                                      : "bg-white text-rose-700 border-rose-200 hover:bg-rose-50"
+                                  }`}
+                                  title="ბლოკში დაფიქსირდა დაზიანება / ბაგი (Failed)"
+                                >
+                                  <XCircle size={12} />
+                                  <span>დაზიანებაა</span>
+                                </button>
+                              </div>
                             </div>
 
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={(e) => handleSetBlockStatus(st.id, "DONE", st.status, e)}
-                                className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-all cursor-pointer disabled:opacity-50 ${
-                                  isPassed
-                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
-                                    : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                                }`}
-                                title="ბლოკი გამართულია (Pass)"
-                              >
-                                <CheckCircle2 size={12} />
-                                <span>მზადაა</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={(e) => handleSetBlockStatus(st.id, "CANCELLED", st.status, e)}
-                                className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-all cursor-pointer disabled:opacity-50 ${
-                                  isFailed
-                                    ? "bg-rose-600 text-white border-rose-600 shadow-2xs"
-                                    : "bg-white text-rose-700 border-rose-200 hover:bg-rose-50"
-                                }`}
-                                title="ბლოკში დაფიქსირდა დაზიანება / ბაგი (Failed)"
-                              >
-                                <XCircle size={12} />
-                                <span>დაზიანებაა</span>
-                              </button>
-                            </div>
+                            {isFailed && (
+                              <div className="flex items-center gap-1.5 pt-0.5">
+                                <input
+                                  type="text"
+                                  value={noteValue}
+                                  onChange={(e) =>
+                                    setBlockNotes((prev) => ({
+                                      ...prev,
+                                      [st.id]: e.target.value,
+                                    }))
+                                  }
+                                  onBlur={() => {
+                                    if (noteValue.trim() !== (st.description || "").trim()) {
+                                      handleSaveBlockNote(st.id, noteValue);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleSaveBlockNote(st.id, noteValue);
+                                    }
+                                  }}
+                                  placeholder="რა ხარვეზია? (არასავალდებულო)..."
+                                  className="flex-1 px-2.5 py-1 bg-white border border-rose-200 rounded-lg text-[11px] text-rose-950 placeholder-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                                />
+                                {savingNoteId === st.id && (
+                                  <span className="text-[10px] text-rose-600 font-semibold shrink-0">
+                                    ინახება...
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
+
+                    {(task.status === TaskStatus.IN_PROGRESS || testedSubtasks > 0) && (
+                      <div className="flex items-center justify-between gap-3 pt-2 border-t border-stone-200/80">
+                        <span className="text-[11px] text-stone-500 font-medium">
+                          დასრულებისას შედეგი შეინახება რეესტრის ისტორიაში და გვერდი დაბრუნდება საწყის მდგომარეობაში.
+                        </span>
+                        <button
+                          type="button"
+                          disabled={finishingTaskId === task.id}
+                          onClick={(e) => handleFinishTest(task, e)}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50 shrink-0"
+                        >
+                          <CheckCircle2 size={14} />
+                          <span>
+                            {finishingTaskId === task.id ? "ინახება..." : "ტესტის დასრულება"}
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -897,7 +999,7 @@ export function QualityControlView({
                       {taskHistory.map((ev) => {
                         const runVerdict = ev.newValues?.status as string | undefined;
                         const runBlocks = Array.isArray(ev.newValues?.blocks)
-                          ? (ev.newValues.blocks as Array<{ title?: string; status?: string }>)
+                          ? (ev.newValues.blocks as Array<{ title?: string; status?: string; note?: string }>)
                           : [];
 
                         return (
@@ -945,6 +1047,7 @@ export function QualityControlView({
                                     }`}
                                   >
                                     {b.status === "PASSED" ? "✓" : b.status === "FAILED" ? "✕" : "•"} {b.title}
+                                    {b.note ? ` — ${b.note}` : ""}
                                   </span>
                                 ))}
                               </div>
@@ -953,6 +1056,25 @@ export function QualityControlView({
                         );
                       })}
                     </div>
+
+                    {(task.status === TaskStatus.IN_PROGRESS || testedSubtasks > 0) && (
+                      <div className="flex items-center justify-between gap-3 pt-2 border-t border-stone-200/80">
+                        <span className="text-[11px] text-stone-500 font-medium">
+                          დასრულებისას შედეგი შეინახება რეესტრის ისტორიაში და გვერდი დაბრუნდება საწყის მდგომარეობაში.
+                        </span>
+                        <button
+                          type="button"
+                          disabled={finishingTaskId === task.id}
+                          onClick={(e) => handleFinishTest(task, e)}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50 shrink-0"
+                        >
+                          <CheckCircle2 size={14} />
+                          <span>
+                            {finishingTaskId === task.id ? "ინახება..." : "ტესტის დასრულება"}
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

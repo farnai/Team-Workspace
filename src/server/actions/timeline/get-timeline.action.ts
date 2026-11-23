@@ -115,10 +115,17 @@ export async function getTimelineAction(rawInput: unknown) {
           : t.assignments.map((a) => a.user)
 
       // Effective dates: ONLY from scheduled dates or stage dates. NEVER use createdAt!
+      const isActiveQaRun =
+        (t.department === 'QA' || t.type === 'QA') &&
+        t.status === 'IN_PROGRESS' &&
+        Boolean(t.startDate) &&
+        !t.deadline
+
       const effectiveStart =
         t.startDate || t.deadline || activeStage?.startDate || activeStage?.deadline
-      const effectiveEnd =
-        t.deadline || t.startDate || activeStage?.deadline || activeStage?.startDate
+      const effectiveEnd = isActiveQaRun
+        ? new Date()
+        : t.deadline || t.startDate || activeStage?.deadline || activeStage?.startDate
 
       // Dateless tasks MUST NOT appear in the schedule timeline
       if (!effectiveStart || !effectiveEnd) {

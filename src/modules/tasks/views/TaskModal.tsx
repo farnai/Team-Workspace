@@ -1233,7 +1233,6 @@ function TaskModalForm({
                     <option value={TaskType.FEATURE}>Feature (ფუნქციონალი)</option>
                     <option value={TaskType.BUG}>Bug (ხარვეზი)</option>
                     <option value={TaskType.HOTFIX}>Hotfix (სასწრაფო)</option>
-                    <option value={TaskType.QA}>QA (შემოწმება / ტესტირება)</option>
                   </select>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 import 'server-only'
 import type { User } from '@prisma/client'
-import { Department, TaskStatus, TaskType } from '@prisma/client'
+import { Department, SubtaskStatus, TaskStatus, TaskType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auditRepository } from '@/server/repositories/audit.repository'
 import { AppError } from '@/server/http/errors'
@@ -160,6 +160,35 @@ export async function createTaskAction(input: CreateTaskDto, actor: User) {
       }
     }
 
+    if (input.blocks && input.blocks.length > 0) {
+      await tx.subtask.createMany({
+        data: input.blocks.map((title, idx) => ({
+          taskId: created.id,
+          position: idx,
+          title,
+          status: SubtaskStatus.TODO,
+        })),
+      })
+    }
+
+    const isQaTask = input.department === Department.QA || input.type === TaskType.QA
+
+    if (resolvedAssignees.length > 0) {
+      const recipientIds = Array.from(new Set(resolvedAssignees.map((a) => a.userId))).filter(
+        (uid) => uid !== actor.id
+      )
+      for (const uid of recipientIds) {
+        await tx.notification.create({
+          data: {
+            userId: uid,
+            taskId: created.id,
+            title: isQaTask ? 'ახალი QA შემოწმება გადმოგეცათ' : 'ახალი დავალება გადმოგეცათ',
+            message: `${actor.name}-მა მოგანიჭათ ${isQaTask ? 'QA შემოწმება' : 'დავალება'}: #${created.taskNumber} (${created.title})`,
+          },
+        })
+      }
+    }
+
     await auditRepository.log(
       {
         taskId: created.id,
@@ -173,8 +202,9 @@ export async function createTaskAction(input: CreateTaskDto, actor: User) {
           department: created.department,
           status: created.status,
           deadline: created.deadline,
+          blocksCount: input.blocks?.length || 0,
         },
-        reason: 'ახალი დავალების შექმნა',
+        reason: isQaTask ? 'ახალი QA შემოწმების შექმნა' : 'ახალი დავალების შექმნა',
       },
       tx
     )
@@ -185,6 +215,7 @@ export async function createTaskAction(input: CreateTaskDto, actor: User) {
         project: true,
         assignments: { include: { user: true } },
         stages: { include: { assignments: { include: { user: true } } } },
+        subtasks: { orderBy: { position: 'asc' } },
       },
     })
   })
